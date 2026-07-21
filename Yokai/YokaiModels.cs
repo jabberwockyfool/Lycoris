@@ -62,6 +62,34 @@ namespace Lycoris.Yokai
         /// <summary>Original chara_base field values (index -&gt; value) for clobber-safe saving (base records are shared).</summary>
         internal System.Collections.Generic.Dictionary<int, int?> BaseOriginal = new System.Collections.Generic.Dictionary<int, int?>();
 
+        /// <summary>All editable chara_base fields as (field index -&gt; current value). Drives both the
+        /// original snapshot at load and the clobber-safe write at save.</summary>
+        internal System.Collections.Generic.IEnumerable<System.Collections.Generic.KeyValuePair<int, int?>> BaseFieldValues(YokaiSchema s)
+        {
+            yield return KV(s.Base_FileNamePrefixIndex, FileNamePrefix);
+            yield return KV(s.Base_FileNameNumberIndex, FileNameNumber);
+            yield return KV(s.Base_FileNameVariantIndex, FileNameVariant);
+            yield return KV(s.Base_MedalPosXIndex, MedalPosX);
+            yield return KV(s.Base_MedalPosYIndex, MedalPosY);
+            yield return KV(s.Base_RankIndex, Rank);
+            yield return KV(s.Base_TribeIndex, Tribe);
+            yield return KV(s.Base_RoleIndex, Role);
+            yield return KV(s.Base_FavoriteFoodIndex, FavoriteFood);
+            yield return KV(s.Base_HatedFoodIndex, HatedFood);
+            yield return KV(s.Base_IsRareIndex, IsRare ? 1 : 0);
+            yield return KV(s.Base_IsLegendIndex, IsLegend ? 1 : 0);
+            yield return KV(s.Base_IsPionnerIndex, IsPionner ? 1 : 0);
+            yield return KV(s.Base_IsCommandantIndex, IsCommandant ? 1 : 0);
+            yield return KV(s.Base_IsClassicIndex, IsClassic ? 1 : 0);
+            yield return KV(s.Base_IsMericanIndex, IsMerican ? 1 : 0);
+            yield return KV(s.Base_IsDevaIndex, IsDeva ? 1 : 0);
+            yield return KV(s.Base_IsMysteryIndex, IsMystery ? 1 : 0);
+            yield return KV(s.Base_IsTreasureIndex, IsTreasure ? 1 : 0);
+        }
+
+        private static System.Collections.Generic.KeyValuePair<int, int?> KV(int k, int? v) =>
+            new System.Collections.Generic.KeyValuePair<int, int?>(k, v);
+
         // --- chara_scale: Scale1..Scale7 (may be shared by BaseHash) ---
         private readonly double?[] _scale = new double?[8];      // indices 1..7 used
         private readonly double?[] _scaleOrig = new double?[8];

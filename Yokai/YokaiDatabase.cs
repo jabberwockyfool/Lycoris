@@ -55,8 +55,9 @@ namespace Lycoris.Yokai
         /// <summary>skill_text key -&gt; name, for the move-name resolver.</summary>
         public Dictionary<int, string> SkillNames { get; private set; } = new Dictionary<int, string>();
 
-        /// <summary>face_icon folders searched for .xi icons (mod first, then reference).</summary>
+        /// <summary>face_icon / medal_icon folders searched for .xi icons (mod first, then reference).</summary>
         private readonly List<string> _faceIconDirs = new List<string>();
+        private readonly List<string> _medalIconDirs = new List<string>();
         public int IconCount { get; private set; }
 
         public YokaiDatabase(YokaiSchema schema = null)
@@ -106,8 +107,9 @@ namespace Lycoris.Yokai
             _itemTextFile = FindResolver(folder, referenceFolder, Schema.ItemTextFilePrefix, null);
 
             _faceIconDirs.Clear();
-            AddFaceIconDirs(folder);
-            if (referenceFolder != null) AddFaceIconDirs(referenceFolder);
+            _medalIconDirs.Clear();
+            AddIconDirs(folder);
+            if (referenceFolder != null) AddIconDirs(referenceFolder);
 
             if (ParamFile == null)
                 throw new FileNotFoundException(
@@ -116,35 +118,54 @@ namespace Lycoris.Yokai
             LoadAll();
         }
 
-        private void AddFaceIconDirs(string root)
+        private void AddIconDirs(string root)
         {
             try
             {
                 foreach (var d in Directory.EnumerateDirectories(root, "face_icon", SearchOption.AllDirectories))
                     if (!_faceIconDirs.Contains(d)) _faceIconDirs.Add(d);
+                foreach (var d in Directory.EnumerateDirectories(root, "medal_icon", SearchOption.AllDirectories))
+                    if (!_medalIconDirs.Contains(d)) _medalIconDirs.Add(d);
             }
             catch { /* ignore */ }
         }
 
-        /// <summary>Compute the icon base name and locate its .xi across the face_icon folders.</summary>
+        /// <summary>Compute the icon base name and locate its .xi across the face_icon / medal_icon folders.</summary>
         private void ResolveIcon(YokaiInfo y)
         {
             if (!y.FileNamePrefix.HasValue || !y.FileNameNumber.HasValue || !y.FileNameVariant.HasValue) return;
             y.IconBaseName = IconNaming.GetFileModelText(y.FileNamePrefix.Value, y.FileNameNumber.Value, y.FileNameVariant.Value);
             if (y.IconBaseName == null) return;
 
-            // Primary name, then a variant-0 fallback (base form) if the exact variant is absent.
             string fallback = IconNaming.GetFileModelText(y.FileNamePrefix.Value, y.FileNameNumber.Value, 0);
-            foreach (var name in new[] { y.IconBaseName, fallback })
+            y.IconFile = FindIcon(_faceIconDirs, y.IconBaseName, fallback, countIt: true);
+            y.MedalIconFile = FindIcon(_medalIconDirs, y.IconBaseName, fallback, countIt: false);
+        }
+
+        private string FindIcon(List<string> dirs, string name, string fallback, bool countIt)
+        {
+            foreach (var n in new[] { name, fallback })
             {
-                if (name == null) continue;
-                foreach (var dir in _faceIconDirs)
+                if (n == null) continue;
+                foreach (var dir in dirs)
                 {
-                    string p = Path.Combine(dir, name + ".xi");
-                    if (File.Exists(p)) { y.IconFile = p; IconCount++; return; }
+                    string p = Path.Combine(dir, n + ".xi");
+                    if (File.Exists(p)) { if (countIt) IconCount++; return p; }
                 }
             }
+            return null;
         }
+
+        /// <summary>The first medal_icon folder inside the mod (write target), or null.</summary>
+        public string ModMedalIconDir => _medalIconDirs.Count > 0 ? _medalIconDirs[0] : null;
+
+        /// <summary>The medal atlas (face_icon/face_icon.xi) — mod preferred, else reference — or null.</summary>
+        public string FaceAtlasFile =>
+            _faceIconDirs.Select(d => Path.Combine(d, "face_icon.xi")).FirstOrDefault(File.Exists);
+
+        /// <summary>Where a modified atlas is written (mod's face_icon folder), or null.</summary>
+        public string ModFaceAtlasTarget =>
+            ModFaceIconDir != null ? Path.Combine(ModFaceIconDir, "face_icon.xi") : null;
 
         /// <summary>The first face_icon folder inside the mod (write target for replaced icons), or null.</summary>
         public string ModFaceIconDir => _faceIconDirs.Count > 0 ? _faceIconDirs[0] : null;
@@ -276,6 +297,21 @@ namespace Lycoris.Yokai
                     y.FileNamePrefix = baseEntry.GetInt(Schema.Base_FileNamePrefixIndex);
                     y.FileNameNumber = baseEntry.GetInt(Schema.Base_FileNameNumberIndex);
                     y.FileNameVariant = baseEntry.GetInt(Schema.Base_FileNameVariantIndex);
+                    y.MedalPosX = baseEntry.GetInt(Schema.Base_MedalPosXIndex);
+                    y.MedalPosY = baseEntry.GetInt(Schema.Base_MedalPosYIndex);
+                    y.FavoriteFood = baseEntry.GetInt(Schema.Base_FavoriteFoodIndex);
+                    y.HatedFood = baseEntry.GetInt(Schema.Base_HatedFoodIndex);
+                    y.Role = baseEntry.GetInt(Schema.Base_RoleIndex);
+                    y.IsRare = (baseEntry.GetInt(Schema.Base_IsRareIndex) ?? 0) != 0;
+                    y.IsLegend = (baseEntry.GetInt(Schema.Base_IsLegendIndex) ?? 0) != 0;
+                    y.IsPionner = (baseEntry.GetInt(Schema.Base_IsPionnerIndex) ?? 0) != 0;
+                    y.IsCommandant = (baseEntry.GetInt(Schema.Base_IsCommandantIndex) ?? 0) != 0;
+                    y.IsClassic = (baseEntry.GetInt(Schema.Base_IsClassicIndex) ?? 0) != 0;
+                    y.IsMerican = (baseEntry.GetInt(Schema.Base_IsMericanIndex) ?? 0) != 0;
+                    y.IsDeva = (baseEntry.GetInt(Schema.Base_IsDevaIndex) ?? 0) != 0;
+                    y.IsMystery = (baseEntry.GetInt(Schema.Base_IsMysteryIndex) ?? 0) != 0;
+                    y.IsTreasure = (baseEntry.GetInt(Schema.Base_IsTreasureIndex) ?? 0) != 0;
+                    foreach (var kv in y.BaseFieldValues(Schema)) y.BaseOriginal[kv.Key] = baseEntry.GetInt(kv.Key);
                     ResolveIcon(y);
 
                     if (nounByKey.TryGetValue(y.NameHash, out T2bEntry ne))
@@ -384,14 +420,13 @@ namespace Lycoris.Yokai
                 pv += SetInt(y.SourceEntry, Schema.EvolveOffsetIndex, y.EvolveOffset);
             }
 
-            // Base fields (rank/tribe) — base records can be shared, so only write rows that
-            // actually changed them, and only their changed field.
+            // Charabase fields (rank, tribe, model, medal pos, food, role, status flags) — base records
+            // can be shared, so write each field only for the row that actually changed it.
             int bv = 0;
             foreach (var y in Yokai.Where(y => y.BaseEntry != null))
-            {
-                if (y.IsNew || y.RankChanged) bv += SetInt(y.BaseEntry, Schema.Base_RankIndex, y.Rank);
-                if (y.IsNew || y.TribeChanged) bv += SetInt(y.BaseEntry, Schema.Base_TribeIndex, y.Tribe);
-            }
+                foreach (var kv in y.BaseFieldValues(Schema))
+                    if (!y.BaseOriginal.TryGetValue(kv.Key, out int? orig) || kv.Value != orig)
+                        bv += SetInt(y.BaseEntry, kv.Key, kv.Value);
 
             // Scale records are keyed by BaseHash and can be shared — write only changed values,
             // preserving each slot's original int/float type so unedited files stay byte-identical.
@@ -460,6 +495,7 @@ namespace Lycoris.Yokai
                 y.OriginalDescription = y.Description;
                 y.OriginalRank = y.Rank;
                 y.OriginalTribe = y.Tribe;
+                foreach (var kv in y.BaseFieldValues(Schema)) y.BaseOriginal[kv.Key] = kv.Value;
                 y.OriginalEvolveTarget = y.EvolveTargetHash;
                 y.OriginalEvolveLevel = y.EvolveLevel;
                 y.OriginalEvolveOffset = y.EvolveOffset;
