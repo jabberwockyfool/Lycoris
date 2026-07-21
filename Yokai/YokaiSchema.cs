@@ -19,7 +19,8 @@ namespace Lycoris.Yokai
         public string TextFilePrefix = "chara_text";       // names   (glob excludes chara_desc_text*)
         public string DescFilePrefix = "chara_desc_text";  // descriptions
         public string ScaleFilePrefix = "chara_scale";     // model scale, keyed by BaseHash
-        public string SkillTextFilePrefix = "skill_text";  // skill/move name text container
+        public string SkillTextFilePrefix = "skill_text";  // skill/move NAME text container (NOUN)
+        public string SkillDescTextFilePrefix = "skill_desc_text"; // skill DESCRIPTION text container (TEXT_INFO)
         public string AbilityFilePrefix = "chara_ability"; // ability config (exclude *_text)
         public string AbilityTextFilePrefix = "chara_ability_text";
         public string SkillConfigFilePrefix = "skill_config"; // maps move hash -> skill name hash

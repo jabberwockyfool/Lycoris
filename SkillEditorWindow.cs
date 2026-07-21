@@ -34,12 +34,15 @@ namespace Lycoris
             // Toolbar
             var add = new Button { Content = "+ Ajouter", Padding = new Thickness(10, 4, 10, 4) };
             add.Click += (s, e) => AddSkill();
+            var dup = new Button { Content = "Dupliquer", Padding = new Thickness(10, 4, 10, 4), Margin = new Thickness(6, 0, 0, 0) };
+            dup.Click += (s, e) => DuplicateSkill();
             var del = new Button { Content = "Supprimer", Padding = new Thickness(10, 4, 10, 4), Margin = new Thickness(6, 0, 0, 0) };
             del.Click += (s, e) => DeleteSkill();
             var save = new Button { Content = "Sauver le mod", Padding = new Thickness(10, 4, 10, 4), Margin = new Thickness(6, 0, 0, 0) };
             save.Click += (s, e) => Save();
             var toolbar = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(6) };
             toolbar.Children.Add(add);
+            toolbar.Children.Add(dup);
             toolbar.Children.Add(del);
             toolbar.Children.Add(save);
             UpdateCount();
@@ -123,6 +126,7 @@ namespace Lycoris
             _fields.Children.Add(ReadOnlyRow("SkillConfigID", "SkillIdHex"));
             _fields.Children.Add(ReadOnlyRow("NameID", "NameIDHex"));
             _fields.Children.Add(TextRow("Nom", "Name", 260));
+            _fields.Children.Add(DescRow());
             _fields.Children.Add(ComboRow("Type", "SkillType", YokaiEnums.SkillTypes));
             _fields.Children.Add(ComboRow("Élément", "Element", YokaiEnums.Attributes));
             _fields.Children.Add(NumRow("Puissance", "Power"));
@@ -163,6 +167,16 @@ namespace Lycoris
 
         private static FrameworkElement NumRow(string label, string path) => TextRow(label, path, 90);
 
+        private static FrameworkElement DescRow()
+        {
+            var sp = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 2, 0, 2) };
+            sp.Children.Add(Label("Description"));
+            var tb = new TextBox { Width = 300, Height = 56, AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
+            tb.SetBinding(TextBox.TextProperty, new Binding("Description") { UpdateSourceTrigger = UpdateSourceTrigger.LostFocus });
+            sp.Children.Add(tb);
+            return sp;
+        }
+
         private static FrameworkElement ComboRow(string label, string path, System.Collections.IEnumerable source)
         {
             var sp = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 2, 0, 2) };
@@ -192,6 +206,25 @@ namespace Lycoris
                 _status.Text = $"Skill ajouté: {s.DisplayName} ({s.SkillIdHex}). Édite puis « Sauver le mod ».";
             }
             catch (Exception ex) { MessageBox.Show(ex.Message, "Ajout de skill", MessageBoxButton.OK, MessageBoxImage.Warning); }
+        }
+
+        private void DuplicateSkill()
+        {
+            var src = _list.SelectedItem as SkillInfo;
+            if (src == null) return;
+            // flush any pending edit on the source before cloning it
+            var f = System.Windows.Input.Keyboard.FocusedElement as UIElement;
+            f?.RaiseEvent(new RoutedEventArgs(LostFocusEvent));
+            try
+            {
+                var s = _db.DuplicateSkill(src);
+                _view.Refresh();
+                UpdateCount();
+                _list.SelectedItem = s;
+                _list.ScrollIntoView(s);
+                _status.Text = $"Dupliqué: {s.DisplayName} ({s.SkillIdHex}). Édite puis « Sauver le mod ».";
+            }
+            catch (Exception ex) { MessageBox.Show(ex.Message, "Duplication de skill", MessageBoxButton.OK, MessageBoxImage.Warning); }
         }
 
         private void DeleteSkill()

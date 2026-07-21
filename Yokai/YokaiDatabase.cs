@@ -24,6 +24,7 @@ namespace Lycoris.Yokai
         public T2bFile DescData { get; private set; }
         public T2bFile ScaleData { get; private set; }
         public T2bFile SkillTextData { get; private set; }
+        public T2bFile SkillDescTextData { get; private set; }
         public T2bFile AbilityData { get; private set; }
         public T2bFile AbilityTextData { get; private set; }
         public T2bFile SkillConfigData { get; private set; }
@@ -55,6 +56,7 @@ namespace Lycoris.Yokai
         public string DescFile { get; private set; }
         public string ScaleFile { get; private set; }
         public string SkillTextFile { get; private set; }
+        public string SkillDescTextFile { get; private set; }
         public string AbilityFile { get; private set; }
         public string AbilityTextFile { get; private set; }
         public string SkillConfigFile { get; private set; }
@@ -82,6 +84,9 @@ namespace Lycoris.Yokai
 
         /// <summary>Set when a skill is added or removed, so SaveSkills writes even with no field edits.</summary>
         private bool _skillStructureDirty;
+
+        /// <summary>Set when a skill_desc_text entry is added/removed/edited, so that file is (re)written.</summary>
+        private bool _skillDescDirty;
 
         public YokaiDatabase(YokaiSchema schema = null)
         {
@@ -115,7 +120,8 @@ namespace Lycoris.Yokai
             ScaleFile = FindNewest(folder, Schema.ScaleFilePrefix);
 
             // Read-only resolvers: mod folder, else reference folder.
-            SkillTextFile = FindResolver(folder, referenceFolder, Schema.SkillTextFilePrefix, null);
+            SkillTextFile = FindResolver(folder, referenceFolder, Schema.SkillTextFilePrefix, "desc");
+            SkillDescTextFile = FindResolver(folder, referenceFolder, Schema.SkillDescTextFilePrefix, null);
             AbilityTextFile = FindResolver(folder, referenceFolder, Schema.AbilityTextFilePrefix, null);
             AbilityFile = FindResolver(folder, referenceFolder, Schema.AbilityFilePrefix, "text");
             SkillConfigFile = FindResolver(folder, referenceFolder, Schema.SkillConfigFilePrefix, null);
@@ -247,7 +253,7 @@ namespace Lycoris.Yokai
         public void LoadParamFile(string paramFilePath)
         {
             ParamFile = paramFilePath;
-            BaseFile = TextFile = DescFile = ScaleFile = SkillTextFile = null;
+            BaseFile = TextFile = DescFile = ScaleFile = SkillTextFile = SkillDescTextFile = null;
             AbilityFile = AbilityTextFile = SkillConfigFile = null;
             HackslashFile = BattleFile = _hsTechnicFile = _hsTechnicTextFile = null;
             _hsAbilityFile = _hsAbilityTextFile = _itemConfigFile = _itemTextFile = null;
@@ -265,6 +271,7 @@ namespace Lycoris.Yokai
             DescData = DescFile != null ? T2bReader.ReadFile(DescFile) : null;
             ScaleData = ScaleFile != null ? T2bReader.ReadFile(ScaleFile) : null;
             SkillTextData = SkillTextFile != null ? T2bReader.ReadFile(SkillTextFile) : null;
+            SkillDescTextData = SkillDescTextFile != null ? T2bReader.ReadFile(SkillDescTextFile) : null;
             AbilityData = AbilityFile != null ? T2bReader.ReadFile(AbilityFile) : null;
             AbilityTextData = AbilityTextFile != null ? T2bReader.ReadFile(AbilityTextFile) : null;
             SkillConfigData = SkillConfigFile != null ? T2bReader.ReadFile(SkillConfigFile) : null;
@@ -464,17 +471,17 @@ namespace Lycoris.Yokai
         {
             Skills.Clear();
             _skillStructureDirty = false;
+            _skillDescDirty = false;
             if (SkillConfigData == null) return;
 
             var nounByKey = new Dictionary<int, T2bEntry>();
             var textByKey = new Dictionary<int, T2bEntry>();
             if (SkillTextData != null)
-            {
                 foreach (var e in SkillTextData.Records(Schema.NounRecord))
                 { int? k = e.FirstIntKey(); if (k.HasValue && !nounByKey.ContainsKey(k.Value)) nounByKey[k.Value] = e; }
-                foreach (var e in SkillTextData.Records(Schema.DescRecord))
+            if (SkillDescTextData != null)
+                foreach (var e in SkillDescTextData.Records(Schema.DescRecord)) // descriptions live in skill_desc_text
                 { int? k = e.FirstIntKey(); if (k.HasValue && !textByKey.ContainsKey(k.Value)) textByKey[k.Value] = e; }
-            }
 
             foreach (var e in SkillConfigData.Records(Schema.SkillConfigRecord))
             {
@@ -505,11 +512,11 @@ namespace Lycoris.Yokai
             }
         }
 
-        /// <summary>Apply skill edits and write skill_config (+ skill_text names) into the mod (only if changed).</summary>
+        /// <summary>Apply skill edits and write skill_config (+ skill_text names + skill_desc_text) into the mod.</summary>
         public int SaveSkills()
         {
             if (SkillConfigData == null ||
-                (!_skillStructureDirty && !Skills.Any(s => s.IsDirty || s.NameChanged || s.DescriptionChanged)))
+                (!_skillStructureDirty && !_skillDescDirty && !Skills.Any(s => s.IsDirty || s.NameChanged || s.DescriptionChanged)))
                 return 0;
             int n = 0;
             foreach (var s in Skills.Where(x => x.Entry != null))
@@ -529,8 +536,25 @@ namespace Lycoris.Yokai
             bool textDirty = _skillStructureDirty;
             foreach (var s in Skills.Where(x => x.NameEntry != null && x.NameChanged))
             { n += SetText(s.NameEntry, Schema.NounTextIndex, s.Name); textDirty = true; }
-            foreach (var s in Skills.Where(x => x.DescEntry != null && x.DescriptionChanged))
-            { n += SetText(s.DescEntry, Schema.DescTextIndex, s.Description); textDirty = true; }
+
+            // Descriptions live in skill_desc_text (TEXT_INFO). Edit the existing entry, or create one
+            // (with a fresh DescID) for a skill that had none.
+            bool descDirty = _skillDescDirty;
+            foreach (var s in Skills.Where(x => x.DescriptionChanged))
+            {
+                if (s.DescEntry != null)
+                { n += SetText(s.DescEntry, Schema.DescTextIndex, s.Description); descDirty = true; }
+                else if (!string.IsNullOrEmpty(s.Description) && SkillDescTextData != null)
+                {
+                    var de = MakeDescEntry(s.Name, s.Description, out int descId);
+                    if (de != null)
+                    {
+                        s.DescEntry = de; s.DescID = descId;
+                        n += SetInt(s.Entry, Schema.Skill_DescIdIndex, descId);
+                        descDirty = true;
+                    }
+                }
+            }
 
             if (!IsUnderMod(SkillConfigFile)) SkillConfigFile = MirrorToMod(SkillConfigFile);
             T2bWriter.WriteFile(SkillConfigData, SkillConfigFile);
@@ -539,59 +563,102 @@ namespace Lycoris.Yokai
                 if (!IsUnderMod(SkillTextFile)) SkillTextFile = MirrorToMod(SkillTextFile);
                 T2bWriter.WriteFile(SkillTextData, SkillTextFile);
             }
+            if (SkillDescTextData != null && descDirty)
+            {
+                if (!IsUnderMod(SkillDescTextFile)) SkillDescTextFile = MirrorToMod(SkillDescTextFile);
+                T2bWriter.WriteFile(SkillDescTextData, SkillDescTextFile);
+            }
             foreach (var s in Skills) { s.IsDirty = false; s.OriginalName = s.Name; s.OriginalDescription = s.Description; }
-            if (_skillStructureDirty && n == 0) n = 1;
+            if ((_skillStructureDirty || _skillDescDirty) && n == 0) n = 1;
             _skillStructureDirty = false;
+            _skillDescDirty = false;
             return n;
         }
 
+        /// <summary>Clone a TEXT_INFO template into skill_desc_text with a fresh key + the given text.</summary>
+        private T2bEntry MakeDescEntry(string forName, string text, out int descId)
+        {
+            descId = 0;
+            var tpl = SkillDescTextData?.Records(Schema.DescRecord).FirstOrDefault();
+            if (tpl == null) return null;
+            descId = UniqueHash("lycoris_skill_" + Sanitize(forName) + "_desc",
+                ExistingFirstKeys(SkillDescTextData.Records(Schema.DescRecord)));
+            var de = tpl.Clone();
+            SetIntForce(de, Schema.DescKeyIndex, descId);
+            SetText(de, Schema.DescTextIndex, text ?? "");
+            InsertIntoGroup(SkillDescTextData, Schema.DescGroupBegin, Schema.DescGroupEnd, de);
+            _skillDescDirty = true;
+            return de;
+        }
+
         /// <summary>
-        /// Create a new skill in skill_config (plus its name in skill_text NOUN). Clones a real
-        /// SKILL_CONFIG_INFO record as a valid template and generates collision-free IDs. Persisted on the
-        /// next <see cref="SaveSkills"/>. Returns the created <see cref="SkillInfo"/>.
+        /// Create a new skill in skill_config (plus its name in skill_text NOUN, and a description in
+        /// skill_desc_text if given). Clones a template record and generates collision-free IDs. Persisted
+        /// on the next <see cref="SaveSkills"/>. Returns the created <see cref="SkillInfo"/>.
         /// </summary>
         public SkillInfo AddSkill(string name, int skillType)
         {
-            if (SkillConfigData == null)
-                throw new InvalidOperationException("skill_config non chargé.");
-            var tpl = SkillConfigData.Records(Schema.SkillConfigRecord).FirstOrDefault();
+            var tpl = SkillConfigData?.Records(Schema.SkillConfigRecord).FirstOrDefault();
             if (tpl == null) throw new InvalidOperationException("Aucun skill modèle dans skill_config.");
+            return CreateSkill(tpl, name, skillType, null, applyDefaults: true);
+        }
+
+        /// <summary>Duplicate an existing skill: same fields (incl. description), a new name/ID pair.</summary>
+        public SkillInfo DuplicateSkill(SkillInfo src)
+        {
+            if (src?.Entry == null) throw new InvalidOperationException("Aucun skill à dupliquer.");
+            string name = (string.IsNullOrEmpty(src.Name) ? src.SkillIdHex : src.Name) + " (copie)";
+            return CreateSkill(src.Entry, name, src.SkillType, src.Description, applyDefaults: false);
+        }
+
+        /// <summary>Shared record-builder for AddSkill/DuplicateSkill. Clones <paramref name="template"/>.</summary>
+        private SkillInfo CreateSkill(T2bEntry template, string name, int? skillType, string description, bool applyDefaults)
+        {
+            if (SkillConfigData == null) throw new InvalidOperationException("skill_config non chargé.");
 
             string code = "lycoris_skill_" + Sanitize(name);
             int id = UniqueHash(code, ExistingKeys(SkillConfigData.Records(Schema.SkillConfigRecord), Schema.Skill_IdIndex));
             int nameHash = UniqueHash(code + "_name",
                 SkillTextData != null ? ExistingFirstKeys(SkillTextData.Records(Schema.NounRecord)) : new HashSet<int>());
 
-            var rec = tpl.Clone();
+            var rec = template.Clone();
             SetIntForce(rec, Schema.Skill_IdIndex, id);
-            SetIntForce(rec, Schema.Skill_TypeIndex, skillType);
             SetIntForce(rec, Schema.Skill_NameHashIndex, nameHash);
-            SetIntForce(rec, Schema.Skill_DescIdIndex, 0);
-            SetIntForce(rec, Schema.Skill_PowerIndex, 30);
-            SetIntForce(rec, Schema.Skill_HitsIndex, 1);
+            if (skillType.HasValue) SetIntForce(rec, Schema.Skill_TypeIndex, skillType.Value);
+            if (applyDefaults)
+            {
+                SetIntForce(rec, Schema.Skill_PowerIndex, 30);
+                SetIntForce(rec, Schema.Skill_HitsIndex, 1);
+            }
+
+            // Description entry (skill_desc_text), only when there is text to store.
+            int descId = 0;
+            T2bEntry descEntry = null;
+            if (!string.IsNullOrEmpty(description))
+                descEntry = MakeDescEntry(name, description, out descId);
+            SetIntForce(rec, Schema.Skill_DescIdIndex, descId);
+
             InsertIntoGroup(SkillConfigData, Schema.SkillConfigGroupBegin, Schema.SkillConfigGroupEnd, rec);
 
+            // Name entry (skill_text NOUN).
             T2bEntry nounEntry = null;
-            if (SkillTextData != null)
+            var nounTpl = SkillTextData?.Records(Schema.NounRecord).FirstOrDefault();
+            if (nounTpl != null)
             {
-                var nounTpl = SkillTextData.Records(Schema.NounRecord).FirstOrDefault();
-                if (nounTpl != null)
-                {
-                    nounEntry = nounTpl.Clone();
-                    SetIntForce(nounEntry, Schema.NounKeyIndex, nameHash);
-                    SetText(nounEntry, Schema.NounTextIndex, name ?? "");
-                    InsertIntoGroup(SkillTextData, Schema.NounGroupBegin, Schema.NounGroupEnd, nounEntry);
-                }
+                nounEntry = nounTpl.Clone();
+                SetIntForce(nounEntry, Schema.NounKeyIndex, nameHash);
+                SetText(nounEntry, Schema.NounTextIndex, name ?? "");
+                InsertIntoGroup(SkillTextData, Schema.NounGroupBegin, Schema.NounGroupEnd, nounEntry);
             }
 
             var s = new SkillInfo
             {
                 Entry = rec,
                 SkillConfigID = id,
-                SkillType = skillType,
-                EffectID = rec.GetInt(Schema.Skill_EffectIdIndex),
                 NameID = nameHash,
-                DescID = 0,
+                DescID = descId,
+                SkillType = rec.GetInt(Schema.Skill_TypeIndex),
+                EffectID = rec.GetInt(Schema.Skill_EffectIdIndex),
                 SkillGrowth = rec.GetInt(Schema.Skill_GrowthIndex),
                 Power = rec.GetInt(Schema.Skill_PowerIndex),
                 Hits = rec.GetInt(Schema.Skill_HitsIndex),
@@ -601,8 +668,11 @@ namespace Lycoris.Yokai
                 SoultimateRange = rec.GetInt(Schema.Skill_SoulRangeIndex),
                 SkillAbility = rec.GetInt(Schema.Skill_AbilityIndex),
                 NameEntry = nounEntry,
+                DescEntry = descEntry,
                 Name = name,
-                OriginalName = null,   // force the name to be written on save
+                Description = description ?? "",
+                OriginalName = null,          // force the name/description to be written on save
+                OriginalDescription = null,
                 IsDirty = true,
             };
             Skills.Add(s);
@@ -611,8 +681,8 @@ namespace Lycoris.Yokai
         }
 
         /// <summary>
-        /// Delete a skill: removes its skill_config record, and its skill_text name entry only when no
-        /// remaining skill still references it. Persisted on the next SaveSkills.
+        /// Delete a skill: removes its skill_config record, and its skill_text name / skill_desc_text
+        /// description entries only when no remaining skill still references them. Persisted on next SaveSkills.
         /// </summary>
         public void RemoveSkill(SkillInfo s)
         {
@@ -623,6 +693,8 @@ namespace Lycoris.Yokai
 
             if (SkillTextData != null && s.NameEntry != null && Skills.All(o => o.NameID != s.NameID))
                 RemoveEntry(SkillTextData, s.NameEntry, Schema.NounGroupBegin);
+            if (SkillDescTextData != null && s.DescEntry != null && Skills.All(o => o.DescID != s.DescID))
+            { RemoveEntry(SkillDescTextData, s.DescEntry, Schema.DescGroupBegin); _skillDescDirty = true; }
             _skillStructureDirty = true;
         }
 
