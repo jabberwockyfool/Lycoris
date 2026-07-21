@@ -26,6 +26,7 @@
             <Button x:Name="AddButton" Content="+ Ajouter" Padding="10,4" Margin="6,0,0,0" Click="AddButton_Click" IsEnabled="False"/>
             <Button x:Name="DeleteButton" Content="Supprimer" Padding="10,4" Margin="6,0,0,0" Click="DeleteButton_Click" IsEnabled="False"/>
             <Button x:Name="SaveButton" Content="Sauver le mod" Padding="10,4" Margin="6,0,0,0" Click="SaveButton_Click" IsEnabled="False"/>
+            <Button x:Name="ItemsButton" Content="Items…" Padding="10,4" Margin="6,0,0,0" Click="ItemsButton_Click" IsEnabled="False"/>
         </StackPanel>
 
         <!-- Selector -->

@@ -91,6 +91,7 @@ namespace Lycoris
                 SaveButton.IsEnabled = _db.ParamFile != null;
                 AddButton.IsEnabled = _db.BaseData != null && _db.TextData != null && _db.DescData != null;
                 DeleteButton.IsEnabled = _db.ParamFile != null;
+                ItemsButton.IsEnabled = _db.Items.Count > 0;
                 StatusText.Text = status;
             }
             catch (Exception ex)
@@ -460,6 +461,16 @@ namespace Lycoris
             {
                 MessageBox.Show(ex.Message, "Ajout impossible", MessageBoxButton.OK, MessageBoxImage.Warning);
             }
+        }
+
+        private void ItemsButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (_db.Items.Count == 0)
+            {
+                MessageBox.Show("Aucun item chargé (item_config introuvable — vérifie le dossier de référence).", "Items");
+                return;
+            }
+            new ItemEditorWindow(this, _db) { Owner = this }.Show();
         }
 
         private void DeleteButton_Click(object sender, RoutedEventArgs e)
