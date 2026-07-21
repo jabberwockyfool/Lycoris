@@ -173,6 +173,8 @@ namespace Lycoris.Yokai
             DescTableCount = textByKey.Count;
             SkillTableCount = SkillNames.Count;
 
+            var evolveList = ParamData.Records(Schema.EvolveRecord).ToList();
+
             foreach (var e in ParamData.Records(Schema.ParamRecord))
             {
                 var y = new YokaiInfo
@@ -204,7 +206,18 @@ namespace Lycoris.Yokai
                     GuardPct = e.GetInt(Schema.GuardPctIndex),
                     SoultimateHash = e.GetInt(Schema.SoultimateHashIndex),
                     AbilityHash = e.GetInt(Schema.AbilityHashIndex),
+                    EvolveOffset = e.GetInt(Schema.EvolveOffsetIndex),
                 };
+
+                if (y.EvolveOffset.HasValue && y.EvolveOffset.Value >= 0 && y.EvolveOffset.Value < evolveList.Count)
+                {
+                    var ev = evolveList[y.EvolveOffset.Value];
+                    y.EvolveEntry = ev;
+                    y.EvolveTargetHash = ev.GetInt(Schema.Evolve_TargetIndex);
+                    y.EvolveLevel = ev.GetInt(Schema.Evolve_LevelIndex);
+                    y.OriginalEvolveTarget = y.EvolveTargetHash;
+                    y.OriginalEvolveLevel = y.EvolveLevel;
+                }
 
                 if (baseByHash.TryGetValue(y.BaseHash, out T2bEntry baseEntry))
                 {
@@ -248,7 +261,19 @@ namespace Lycoris.Yokai
                 y.IsDirty = false; // setters above flipped it; a freshly loaded row is clean
                 Yokai.Add(y);
             }
+
+            // Resolve evolution target names + build the yo-kai option list (for dropdowns).
+            var nameByParam = new Dictionary<int, string>();
+            foreach (var y in Yokai) if (!nameByParam.ContainsKey(y.ParamHash)) nameByParam[y.ParamHash] = y.DisplayName;
+            foreach (var y in Yokai)
+                if (y.EvolveTargetHash.HasValue && nameByParam.TryGetValue(y.EvolveTargetHash.Value, out string tn))
+                    y.EvolvesToName = tn;
+            YokaiOptions = Yokai.Select(y => new EnumEntry(y.ParamHash, y.DisplayName))
+                                .OrderBy(o => o.Name, StringComparer.OrdinalIgnoreCase).ToList();
         }
+
+        /// <summary>All yo-kai as (ParamHash, name) — for the evolution-target dropdown.</summary>
+        public List<EnumEntry> YokaiOptions { get; private set; } = new List<EnumEntry>();
 
         // ============================ Saving ============================
 
