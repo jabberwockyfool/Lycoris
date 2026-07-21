@@ -64,9 +64,11 @@ namespace Lycoris.Yokai
         public string ScaleGroupBegin = "CHARA_SCALE_INFO_LIST_BEG";
         public int Scale_BaseHashIndex = 0;
 
-        // Group-begin markers (value[0] = child count) for the delete-yokai path.
+        // Group markers (value[0] = child count) for delete + enable-BT/drops paths.
         public string HackslashGroupBegin = "HACKSLASH_CHARA_PARAM_INFO_LIST_BEG";
+        public string HackslashGroupEnd = "HACKSLASH_CHARA_PARAM_INFO_LIST_END";
         public string BattleGroupBegin = "BATTLE_CHARA_PARAM_INFO_LIST_BEG";
+        public string BattleGroupEnd = "BATTLE_CHARA_PARAM_INFO_LIST_END";
 
         // CHARA_PARAM_INFO_ field layout (YW3).
         public int ParamHashIndex = 0;

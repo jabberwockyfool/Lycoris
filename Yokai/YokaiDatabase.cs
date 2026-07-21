@@ -643,6 +643,8 @@ namespace Lycoris.Yokai
                 AbilityHash = paramTpl.GetInt(Schema.AbilityHashIndex),
             };
             Yokai.Add(y);
+            EnableBlasterT(y);   // new yo-kai get an editable Blaster-T + Drops entry
+            EnableDrops(y);
             return y;
         }
 
@@ -705,6 +707,53 @@ namespace Lycoris.Yokai
             if (DescData != null && y.DescEntry != null && y.DescriptionHash.HasValue
                 && Yokai.All(o => o.DescriptionHash != y.DescriptionHash))
                 RemoveEntry(DescData, y.DescEntry, Schema.DescGroupBegin);
+        }
+
+        /// <summary>
+        /// Create a Blaster-T (hackslash_chara_param) record for a yo-kai that lacks one, so its Blaster-T
+        /// tab becomes editable. Clones a valid template, keys it to the ParamHash, and redirects the file
+        /// to the mod (mirroring the reference) so SaveAll persists it there. Returns false if impossible.
+        /// </summary>
+        public bool EnableBlasterT(YokaiInfo y)
+        {
+            if (y.HasBlasterT) return true;
+            if (HackslashData == null) return false;
+            var tpl = HackslashData.Records(Schema.HackslashRecord).FirstOrDefault();
+            if (tpl == null) return false;
+
+            var entry = tpl.Clone();
+            SetIntForce(entry, 0, y.ParamHash);
+            InsertIntoGroup(HackslashData, Schema.HackslashGroupBegin, Schema.HackslashGroupEnd, entry);
+            y.HackslashEntry = entry;
+            y.BtAbilityHash = entry.GetInt(Schema.Hs_AbilityIndex);
+            y.BtSoultimateHash = entry.GetInt(Schema.Hs_SoultimateIndex);
+            y.BtAttackAHash = entry.GetInt(Schema.Hs_AttackAIndex);
+            y.BtAttackYHash = entry.GetInt(Schema.Hs_AttackYIndex);
+            y.BtAttackXHash = entry.GetInt(Schema.Hs_AttackXIndex);
+            if (!IsUnderMod(HackslashFile)) HackslashFile = MirrorToMod(HackslashFile);
+            return true;
+        }
+
+        /// <summary>Create a Drops (battle_chara_param) record for a yo-kai that lacks one.</summary>
+        public bool EnableDrops(YokaiInfo y)
+        {
+            if (y.HasDrops) return true;
+            if (BattleData == null) return false;
+            var tpl = BattleData.Records(Schema.BattleRecord).FirstOrDefault();
+            if (tpl == null) return false;
+
+            var entry = tpl.Clone();
+            SetIntForce(entry, 0, y.ParamHash);
+            InsertIntoGroup(BattleData, Schema.BattleGroupBegin, Schema.BattleGroupEnd, entry);
+            y.BattleEntry = entry;
+            y.Money = entry.GetInt(Schema.B_MoneyIndex);
+            y.Experience = entry.GetInt(Schema.B_ExpIndex);
+            y.Drop1Hash = entry.GetInt(Schema.B_Drop1Index);
+            y.Drop1Rate = entry.GetInt(Schema.B_Drop1RateIndex);
+            y.Drop2Hash = entry.GetInt(Schema.B_Drop2Index);
+            y.Drop2Rate = entry.GetInt(Schema.B_Drop2RateIndex);
+            if (!IsUnderMod(BattleFile)) BattleFile = MirrorToMod(BattleFile);
+            return true;
         }
 
         /// <summary>Remove an entry from a file and decrement its group's _BEG child count.</summary>

@@ -208,7 +208,12 @@ namespace Lycoris.Yokai
         public int? BtAttackYHash { get => _btAtkY; set => SetField(ref _btAtkY, value); }
         public int? BtAttackXHash { get => _btAtkX; set => SetField(ref _btAtkX, value); }
         public bool HasBlasterT => HackslashEntry != null;
-        internal Formats.T2bEntry HackslashEntry { get; set; }
+        private Formats.T2bEntry _hackslashEntry;
+        internal Formats.T2bEntry HackslashEntry
+        {
+            get => _hackslashEntry;
+            set { _hackslashEntry = value; OnPropertyChanged(nameof(HasBlasterT)); }
+        }
 
         // --- Drops / rewards (battle_chara_param, keyed by ParamHash) ---
         private int? _money, _exp, _drop1, _drop1Rate, _drop2, _drop2Rate;
@@ -219,7 +224,12 @@ namespace Lycoris.Yokai
         public int? Drop2Hash { get => _drop2; set => SetField(ref _drop2, value); }
         public int? Drop2Rate { get => _drop2Rate; set => SetField(ref _drop2Rate, value); }
         public bool HasDrops => BattleEntry != null;
-        internal Formats.T2bEntry BattleEntry { get; set; }
+        private Formats.T2bEntry _battleEntry;
+        internal Formats.T2bEntry BattleEntry
+        {
+            get => _battleEntry;
+            set { _battleEntry = value; OnPropertyChanged(nameof(HasDrops)); }
+        }
 
         public bool IsDirty { get; set; }
         public bool IsNew { get; set; }
