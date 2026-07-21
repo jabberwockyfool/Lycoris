@@ -1,0 +1,15 @@
+D:\cc\Lycoris\Lycoris\bin\Debug\Lycoris.exe.config
+D:\cc\Lycoris\Lycoris\bin\Debug\Lycoris.exe
+D:\cc\Lycoris\Lycoris\bin\Debug\Lycoris.pdb
+D:\cc\Lycoris\Lycoris\obj\Debug\Lycoris.csproj.AssemblyReference.cache
+D:\cc\Lycoris\Lycoris\obj\Debug\MainWindow.g.cs
+D:\cc\Lycoris\Lycoris\obj\Debug\App.g.cs
+D:\cc\Lycoris\Lycoris\obj\Debug\Lycoris_MarkupCompile.cache
+D:\cc\Lycoris\Lycoris\obj\Debug\Lycoris_MarkupCompile.lref
+D:\cc\Lycoris\Lycoris\obj\Debug\MainWindow.baml
+D:\cc\Lycoris\Lycoris\obj\Debug\Lycoris.g.resources
+D:\cc\Lycoris\Lycoris\obj\Debug\Lycoris.Properties.Resources.resources
+D:\cc\Lycoris\Lycoris\obj\Debug\Lycoris.csproj.GenerateResource.cache
+D:\cc\Lycoris\Lycoris\obj\Debug\Lycoris.csproj.CoreCompileInputs.cache
+D:\cc\Lycoris\Lycoris\obj\Debug\Lycoris.exe
+D:\cc\Lycoris\Lycoris\obj\Debug\Lycoris.pdb
