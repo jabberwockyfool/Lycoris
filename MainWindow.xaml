@@ -212,7 +212,10 @@
 
                         <!-- ================= Blaster T ================= -->
                         <TabItem Header="Blaster T">
-                            <Grid Margin="8" IsEnabled="{Binding HasBlasterT}">
+                          <StackPanel Margin="8">
+                            <Button x:Name="EnableBtButton" Content="Activer le Blaster T pour ce yo-kai"
+                                    HorizontalAlignment="Left" Padding="8,3" Margin="0,0,0,8" Click="EnableBt_Click"/>
+                            <Grid IsEnabled="{Binding HasBlasterT}">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="110"/>
                                     <ColumnDefinition Width="*"/>
@@ -236,11 +239,15 @@
                                 <ComboBox x:Name="BtAbilityCombo" Grid.Row="4" Grid.Column="1" IsTextSearchEnabled="True" Margin="0,2"
                                           SelectedValuePath="Key" DisplayMemberPath="Name" TextSearch.TextPath="Name" SelectedValue="{Binding BtAbilityHash}"/>
                             </Grid>
+                          </StackPanel>
                         </TabItem>
 
                         <!-- ================= Drops ================= -->
                         <TabItem Header="Drops">
-                            <StackPanel Margin="8" IsEnabled="{Binding HasDrops}">
+                          <StackPanel Margin="8">
+                            <Button x:Name="EnableDropsButton" Content="Activer les Drops pour ce yo-kai"
+                                    HorizontalAlignment="Left" Padding="8,3" Margin="0,0,0,8" Click="EnableDrops_Click"/>
+                            <StackPanel IsEnabled="{Binding HasDrops}">
                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
                                     <TextBlock Text="Argent" Width="70"/>
                                     <TextBox Text="{Binding Money}" Width="80"/>
@@ -266,6 +273,7 @@
                                     </StackPanel>
                                 </GroupBox>
                             </StackPanel>
+                          </StackPanel>
                         </TabItem>
 
                         <!-- ================= Trait ================= -->

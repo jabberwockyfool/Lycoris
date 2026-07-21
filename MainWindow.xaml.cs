@@ -150,6 +150,35 @@ namespace Lycoris
             _suppressEvolvable = true;
             EvolvableCheck.IsChecked = y != null && y.CanEvolve;
             _suppressEvolvable = false;
+
+            EnableBtButton.IsEnabled = y != null && !y.HasBlasterT;
+            EnableDropsButton.IsEnabled = y != null && !y.HasDrops;
+        }
+
+        private void EnableBt_Click(object sender, RoutedEventArgs e)
+        {
+            var y = Selector.SelectedItem as YokaiInfo;
+            if (y == null || y.HasBlasterT) return;
+            if (!_db.EnableBlasterT(y))
+            {
+                MessageBox.Show("hackslash_chara_param introuvable (fournis-le, ou ouvre un dossier de référence).", "Blaster T");
+                return;
+            }
+            EnableBtButton.IsEnabled = false;
+            StatusText.Text = $"Blaster T activé pour {y.DisplayName} — édite le moveset puis « Sauver le mod ».";
+        }
+
+        private void EnableDrops_Click(object sender, RoutedEventArgs e)
+        {
+            var y = Selector.SelectedItem as YokaiInfo;
+            if (y == null || y.HasDrops) return;
+            if (!_db.EnableDrops(y))
+            {
+                MessageBox.Show("battle_chara_param introuvable (fournis-le, ou ouvre un dossier de référence).", "Drops");
+                return;
+            }
+            EnableDropsButton.IsEnabled = false;
+            StatusText.Text = $"Drops activés pour {y.DisplayName} — édite puis « Sauver le mod ».";
         }
 
         private void EvolvableCheck_Changed(object sender, RoutedEventArgs e)
