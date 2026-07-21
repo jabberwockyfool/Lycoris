@@ -77,6 +77,7 @@ namespace Lycoris
                 GuardCombo.ItemsSource = _db.MoveOptions;
                 SoulCombo.ItemsSource = _db.MoveOptions;
                 AbilityCombo.ItemsSource = _db.AbilityOptions;
+                EvolveCombo.ItemsSource = _db.YokaiOptions;
 
                 RebuildView();
                 if (_view.CurrentItem == null) _view.MoveCurrentToFirst();

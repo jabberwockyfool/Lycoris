@@ -331,6 +331,14 @@ namespace Lycoris.Yokai
                 for (int i = 1; i <= 7; i++)
                     if (y.IsNew || y.ScaleChanged(i)) sv += SetScaleValue(y.ScaleEntry, i, y.GetScale(i));
 
+            // Evolution records live in chara_param; write only rows that changed theirs.
+            int ev = 0;
+            foreach (var y in Yokai.Where(y => y.EvolveEntry != null && (y.IsNew || y.EvolveChanged)))
+            {
+                ev += SetInt(y.EvolveEntry, Schema.Evolve_TargetIndex, y.EvolveTargetHash);
+                ev += SetInt(y.EvolveEntry, Schema.Evolve_LevelIndex, y.EvolveLevel);
+            }
+
             // Name/description records are shared too — same rule.
             int nv = 0;
             foreach (var y in Yokai.Where(y => y.NameEntry != null && (y.IsNew || y.NameChanged)))
@@ -354,9 +362,11 @@ namespace Lycoris.Yokai
                 y.OriginalDescription = y.Description;
                 y.OriginalRank = y.Rank;
                 y.OriginalTribe = y.Tribe;
+                y.OriginalEvolveTarget = y.EvolveTargetHash;
+                y.OriginalEvolveLevel = y.EvolveLevel;
                 y.SnapshotScale();
             }
-            return $"param:{pv}, base:{bv}, scale:{sv}, noms:{nv}, desc:{dv}";
+            return $"param:{pv}, base:{bv}, scale:{sv}, evo:{ev}, noms:{nv}, desc:{dv}";
         }
 
         /// <summary>Back-compat: save only the param file (stats/attack).</summary>

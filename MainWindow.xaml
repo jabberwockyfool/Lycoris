@@ -208,6 +208,17 @@
                                     <ComboBox Width="100" ItemsSource="{x:Static yk:YokaiEnums.Ranks}"
                                               SelectedValuePath="Key" DisplayMemberPath="Name" SelectedValue="{Binding Rank}"/>
                                 </StackPanel>
+                                <GroupBox Header="Évolution" Margin="0,0,0,6">
+                                    <StackPanel Orientation="Horizontal" Margin="4">
+                                        <TextBlock Text="Évolue en"/>
+                                        <ComboBox x:Name="EvolveCombo" Width="180" IsTextSearchEnabled="True"
+                                                  SelectedValuePath="Key" DisplayMemberPath="Name" TextSearch.TextPath="Name"
+                                                  SelectedValue="{Binding EvolveTargetHash}" IsEnabled="{Binding CanEvolve}"/>
+                                        <TextBlock Text="au niveau" Margin="12,0,4,0"/>
+                                        <TextBox Text="{Binding EvolveLevel}" Width="45" IsEnabled="{Binding CanEvolve}"/>
+                                        <TextBlock Text="{Binding EvolvesToName}" Margin="12,0,0,0" Foreground="#888"/>
+                                    </StackPanel>
+                                </GroupBox>
                                 <TextBlock Text="Description" Margin="0,4,0,2"/>
                                 <TextBox Text="{Binding Description, UpdateSourceTrigger=LostFocus}" AcceptsReturn="True"
                                          TextWrapping="Wrap" Height="90" VerticalScrollBarVisibility="Auto"/>
