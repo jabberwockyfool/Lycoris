@@ -74,6 +74,7 @@
     <Compile Include="Yokai\YokaiModels.cs" />
     <Compile Include="Yokai\YokaiDatabase.cs" />
     <Compile Include="AddYokaiDialog.cs" />
+    <Compile Include="AtlasPickerWindow.cs" />
     <Compile Include="App.xaml.cs">
       <DependentUpon>App.xaml</DependentUpon>
       <SubType>Code</SubType>

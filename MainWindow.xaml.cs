@@ -226,11 +226,30 @@ namespace Lycoris
             catch { return null; }
         }
 
-        private void RefreshMedalPreview_Click(object sender, RoutedEventArgs e)
+        private void PickMedal_Click(object sender, RoutedEventArgs e)
         {
             var y = Selector.SelectedItem as YokaiInfo;
-            CommitEdits(); // flush X/Y textboxes
-            MedalAtlasImage.Source = CropAtlasMedal(y);
+            CommitEdits();
+            string atlasPath = CurrentAtlasPath();
+            if (y == null || atlasPath == null)
+            {
+                MessageBox.Show("Atlas face_icon.xi introuvable (ouvre un dossier avec un face_icon).", "Atlas");
+                return;
+            }
+            try
+            {
+                var img = Imgc.Decode(System.IO.File.ReadAllBytes(atlasPath));
+                var atlasBmp = ToBitmap(img.Bgra, img.Width, img.Height);
+                var picker = new AtlasPickerWindow(this, atlasBmp, MedalCell, y.MedalPosX ?? 0, y.MedalPosY ?? 0);
+                if (picker.ShowDialog() == true)
+                {
+                    y.MedalPosX = picker.PickedX;
+                    y.MedalPosY = picker.PickedY;
+                    MedalAtlasImage.Source = CropAtlasMedal(y);
+                    StatusText.Text = $"{y.DisplayName} — médaille à ({picker.PickedX}, {picker.PickedY}).";
+                }
+            }
+            catch (Exception ex) { MessageBox.Show(ex.Message, "Atlas", MessageBoxButton.OK, MessageBoxImage.Error); }
         }
 
         private void ReplaceMedalIcon_Click(object sender, RoutedEventArgs e)

@@ -362,7 +362,7 @@
                                         <Border Width="48" Height="48" BorderBrush="#999" BorderThickness="1" Background="#F0F0F0" Margin="12,0,0,0">
                                             <Image x:Name="MedalAtlasImage" RenderOptions.BitmapScalingMode="NearestNeighbor"/>
                                         </Border>
-                                        <Button Content="Aperçu" Padding="6,2" Margin="6,0,0,0" VerticalAlignment="Center" Click="RefreshMedalPreview_Click"/>
+                                        <Button Content="Choisir dans l'atlas…" Padding="6,2" Margin="6,0,0,0" VerticalAlignment="Center" Click="PickMedal_Click"/>
                                         <Button Content="Remplacer par PNG" Padding="6,2" Margin="6,0,0,0" VerticalAlignment="Center" Click="ReplaceMedalAtlas_Click"/>
                                     </StackPanel>
                                 </GroupBox>
