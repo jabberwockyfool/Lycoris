@@ -197,6 +197,64 @@
                             </StackPanel>
                         </TabItem>
 
+                        <!-- ================= Blaster T ================= -->
+                        <TabItem Header="Blaster T">
+                            <Grid Margin="8" IsEnabled="{Binding HasBlasterT}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="110"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/>
+                                </Grid.RowDefinitions>
+                                <TextBlock Grid.Row="0" Grid.Column="0" Text="Attaque A"/>
+                                <ComboBox x:Name="BtAtkACombo" Grid.Row="0" Grid.Column="1" IsTextSearchEnabled="True" Margin="0,2"
+                                          SelectedValuePath="Key" DisplayMemberPath="Name" TextSearch.TextPath="Name" SelectedValue="{Binding BtAttackAHash}"/>
+                                <TextBlock Grid.Row="1" Grid.Column="0" Text="Attaque Y"/>
+                                <ComboBox x:Name="BtAtkYCombo" Grid.Row="1" Grid.Column="1" IsTextSearchEnabled="True" Margin="0,2"
+                                          SelectedValuePath="Key" DisplayMemberPath="Name" TextSearch.TextPath="Name" SelectedValue="{Binding BtAttackYHash}"/>
+                                <TextBlock Grid.Row="2" Grid.Column="0" Text="Attaque X"/>
+                                <ComboBox x:Name="BtAtkXCombo" Grid.Row="2" Grid.Column="1" IsTextSearchEnabled="True" Margin="0,2"
+                                          SelectedValuePath="Key" DisplayMemberPath="Name" TextSearch.TextPath="Name" SelectedValue="{Binding BtAttackXHash}"/>
+                                <TextBlock Grid.Row="3" Grid.Column="0" Text="Soultimate"/>
+                                <ComboBox x:Name="BtSoulCombo" Grid.Row="3" Grid.Column="1" IsTextSearchEnabled="True" Margin="0,2"
+                                          SelectedValuePath="Key" DisplayMemberPath="Name" TextSearch.TextPath="Name" SelectedValue="{Binding BtSoultimateHash}"/>
+                                <TextBlock Grid.Row="4" Grid.Column="0" Text="Ability"/>
+                                <ComboBox x:Name="BtAbilityCombo" Grid.Row="4" Grid.Column="1" IsTextSearchEnabled="True" Margin="0,2"
+                                          SelectedValuePath="Key" DisplayMemberPath="Name" TextSearch.TextPath="Name" SelectedValue="{Binding BtAbilityHash}"/>
+                            </Grid>
+                        </TabItem>
+
+                        <!-- ================= Drops ================= -->
+                        <TabItem Header="Drops">
+                            <StackPanel Margin="8" IsEnabled="{Binding HasDrops}">
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                    <TextBlock Text="Argent" Width="70"/>
+                                    <TextBox Text="{Binding Money}" Width="80"/>
+                                    <TextBlock Text="Exp" Width="40" Margin="16,0,0,0"/>
+                                    <TextBox Text="{Binding Experience}" Width="80"/>
+                                </StackPanel>
+                                <GroupBox Header="Drop 1">
+                                    <StackPanel Orientation="Horizontal" Margin="4">
+                                        <TextBlock Text="Objet" Width="60"/>
+                                        <ComboBox x:Name="Drop1Combo" Width="200" IsTextSearchEnabled="True"
+                                                  SelectedValuePath="Key" DisplayMemberPath="Name" TextSearch.TextPath="Name" SelectedValue="{Binding Drop1Hash}"/>
+                                        <TextBlock Text="Taux %" Width="55" Margin="16,0,4,0"/>
+                                        <TextBox Text="{Binding Drop1Rate}" Width="60"/>
+                                    </StackPanel>
+                                </GroupBox>
+                                <GroupBox Header="Drop 2" Margin="0,8,0,0">
+                                    <StackPanel Orientation="Horizontal" Margin="4">
+                                        <TextBlock Text="Objet" Width="60"/>
+                                        <ComboBox x:Name="Drop2Combo" Width="200" IsTextSearchEnabled="True"
+                                                  SelectedValuePath="Key" DisplayMemberPath="Name" TextSearch.TextPath="Name" SelectedValue="{Binding Drop2Hash}"/>
+                                        <TextBlock Text="Taux %" Width="55" Margin="16,0,4,0"/>
+                                        <TextBox Text="{Binding Drop2Rate}" Width="60"/>
+                                    </StackPanel>
+                                </GroupBox>
+                            </StackPanel>
+                        </TabItem>
+
                         <!-- ================= Trait ================= -->
                         <TabItem Header="Trait">
                             <StackPanel Margin="8">

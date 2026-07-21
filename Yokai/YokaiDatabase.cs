@@ -27,6 +27,17 @@ namespace Lycoris.Yokai
         public T2bFile AbilityData { get; private set; }
         public T2bFile AbilityTextData { get; private set; }
         public T2bFile SkillConfigData { get; private set; }
+        public T2bFile HackslashData { get; private set; }           // editable
+        public T2bFile BattleData { get; private set; }              // editable
+        private T2bFile _hsTechnicData, _hsTechnicTextData, _hsAbilityData, _hsAbilityTextData, _itemConfigData, _itemTextData;
+        public string HackslashFile { get; private set; }
+        public string BattleFile { get; private set; }
+        private string _hsTechnicFile, _hsTechnicTextFile, _hsAbilityFile, _hsAbilityTextFile, _itemConfigFile, _itemTextFile;
+        private string _modFolder;
+
+        public List<EnumEntry> TechnicOptions { get; private set; } = new List<EnumEntry>();
+        public List<EnumEntry> BtAbilityOptions { get; private set; } = new List<EnumEntry>();
+        public List<EnumEntry> ItemOptions { get; private set; } = new List<EnumEntry>();
 
         public string ParamFile { get; private set; }
         public string BaseFile { get; private set; }
@@ -69,6 +80,7 @@ namespace Lycoris.Yokai
             if (!Directory.Exists(folder))
                 throw new DirectoryNotFoundException(folder);
             ResolverFromReference.Clear();
+            _modFolder = folder;
 
             // Editable files: mod folder only (SaveAll writes these back).
             ParamFile = FindNewest(folder, Schema.ParamFilePrefix);
@@ -82,6 +94,16 @@ namespace Lycoris.Yokai
             AbilityTextFile = FindResolver(folder, referenceFolder, Schema.AbilityTextFilePrefix, null);
             AbilityFile = FindResolver(folder, referenceFolder, Schema.AbilityFilePrefix, "text");
             SkillConfigFile = FindResolver(folder, referenceFolder, Schema.SkillConfigFilePrefix, null);
+            // Editable Blaster-T / drops files (mod preferred; reference = read-only display).
+            HackslashFile = FindResolver(folder, referenceFolder, Schema.HackslashParamFilePrefix, null);
+            BattleFile = FindResolver(folder, referenceFolder, Schema.BattleParamFilePrefix, null);
+            // Blaster-T / item name resolvers (read-only).
+            _hsTechnicFile = FindResolver(folder, referenceFolder, Schema.HackslashTechnicFilePrefix, "text");
+            _hsTechnicTextFile = FindResolver(folder, referenceFolder, Schema.HackslashTechnicTextFilePrefix, null);
+            _hsAbilityFile = FindResolver(folder, referenceFolder, Schema.HackslashAbilityFilePrefix, "text");
+            _hsAbilityTextFile = FindResolver(folder, referenceFolder, Schema.HackslashAbilityTextFilePrefix, null);
+            _itemConfigFile = FindResolver(folder, referenceFolder, Schema.ItemConfigFilePrefix, null);
+            _itemTextFile = FindResolver(folder, referenceFolder, Schema.ItemTextFilePrefix, null);
 
             _faceIconDirs.Clear();
             AddFaceIconDirs(folder);
@@ -127,6 +149,11 @@ namespace Lycoris.Yokai
         /// <summary>The first face_icon folder inside the mod (write target for replaced icons), or null.</summary>
         public string ModFaceIconDir => _faceIconDirs.Count > 0 ? _faceIconDirs[0] : null;
 
+        /// <summary>True if a resolved file lives inside the opened mod folder (so it may be written).</summary>
+        private bool IsUnderMod(string path) =>
+            path != null && _modFolder != null &&
+            path.StartsWith(_modFolder, StringComparison.OrdinalIgnoreCase);
+
         private string FindResolver(string modFolder, string referenceFolder, string prefix, string exclude)
         {
             string inMod = FindNewest(modFolder, prefix, exclude);
@@ -146,6 +173,9 @@ namespace Lycoris.Yokai
             ParamFile = paramFilePath;
             BaseFile = TextFile = DescFile = ScaleFile = SkillTextFile = null;
             AbilityFile = AbilityTextFile = SkillConfigFile = null;
+            HackslashFile = BattleFile = _hsTechnicFile = _hsTechnicTextFile = null;
+            _hsAbilityFile = _hsAbilityTextFile = _itemConfigFile = _itemTextFile = null;
+            _modFolder = System.IO.Path.GetDirectoryName(paramFilePath);
             LoadAll();
         }
 
@@ -162,6 +192,23 @@ namespace Lycoris.Yokai
             AbilityData = AbilityFile != null ? T2bReader.ReadFile(AbilityFile) : null;
             AbilityTextData = AbilityTextFile != null ? T2bReader.ReadFile(AbilityTextFile) : null;
             SkillConfigData = SkillConfigFile != null ? T2bReader.ReadFile(SkillConfigFile) : null;
+            HackslashData = HackslashFile != null ? T2bReader.ReadFile(HackslashFile) : null;
+            BattleData = BattleFile != null ? T2bReader.ReadFile(BattleFile) : null;
+            _hsTechnicData = _hsTechnicFile != null ? T2bReader.ReadFile(_hsTechnicFile) : null;
+            _hsTechnicTextData = _hsTechnicTextFile != null ? T2bReader.ReadFile(_hsTechnicTextFile) : null;
+            _hsAbilityData = _hsAbilityFile != null ? T2bReader.ReadFile(_hsAbilityFile) : null;
+            _hsAbilityTextData = _hsAbilityTextFile != null ? T2bReader.ReadFile(_hsAbilityTextFile) : null;
+            _itemConfigData = _itemConfigFile != null ? T2bReader.ReadFile(_itemConfigFile) : null;
+            _itemTextData = _itemTextFile != null ? T2bReader.ReadFile(_itemTextFile) : null;
+
+            // Blaster-T technic/ability name maps + item name map (config[0]=key -> nameHash -> text).
+            var technicNames = BuildConfigMap(_hsTechnicData, Schema.HackslashTechnicRecord, BuildNounValueMap(_hsTechnicTextData), out var techOpts);
+            var btAbilityNames = BuildConfigMap(_hsAbilityData, Schema.AbilityConfigRecord, BuildNounValueMap(_hsAbilityTextData), out var btAbilOpts);
+            var itemNames = BuildConfigMap(_itemConfigData, null, BuildNounValueMap(_itemTextData), out var itemOpts);
+            TechnicOptions = techOpts; BtAbilityOptions = btAbilOpts; ItemOptions = itemOpts;
+
+            var hackslashByParam = BuildKeyMap(HackslashData, Schema.HackslashRecord);
+            var battleByParam = BuildKeyMap(BattleData, Schema.BattleRecord);
 
             var baseByHash = BuildBaseMap(BaseData);
             var nounByKey = BuildTextEntryMap(TextData);
@@ -254,6 +301,26 @@ namespace Lycoris.Yokai
 
                 ResolveMoves(y);
 
+                if (hackslashByParam.TryGetValue(y.ParamHash, out T2bEntry hsE))
+                {
+                    y.HackslashEntry = hsE;
+                    y.BtAbilityHash = hsE.GetInt(Schema.Hs_AbilityIndex);
+                    y.BtSoultimateHash = hsE.GetInt(Schema.Hs_SoultimateIndex);
+                    y.BtAttackAHash = hsE.GetInt(Schema.Hs_AttackAIndex);
+                    y.BtAttackYHash = hsE.GetInt(Schema.Hs_AttackYIndex);
+                    y.BtAttackXHash = hsE.GetInt(Schema.Hs_AttackXIndex);
+                }
+                if (battleByParam.TryGetValue(y.ParamHash, out T2bEntry bE))
+                {
+                    y.BattleEntry = bE;
+                    y.Money = bE.GetInt(Schema.B_MoneyIndex);
+                    y.Experience = bE.GetInt(Schema.B_ExpIndex);
+                    y.Drop1Hash = bE.GetInt(Schema.B_Drop1Index);
+                    y.Drop1Rate = bE.GetInt(Schema.B_Drop1RateIndex);
+                    y.Drop2Hash = bE.GetInt(Schema.B_Drop2Index);
+                    y.Drop2Rate = bE.GetInt(Schema.B_Drop2RateIndex);
+                }
+
                 y.OriginalName = y.Name;
                 y.OriginalDescription = y.Description;
                 y.OriginalRank = y.Rank;
@@ -339,6 +406,33 @@ namespace Lycoris.Yokai
                 ev += SetInt(y.EvolveEntry, Schema.Evolve_LevelIndex, y.EvolveLevel);
             }
 
+            // Blaster-T (hackslash_chara_param) and drops (battle_chara_param) — per-ParamHash unique,
+            // but only writable when the file is part of the mod (never the read-only reference copy).
+            int hs = 0;
+            bool hsSave = HackslashData != null && IsUnderMod(HackslashFile);
+            if (hsSave)
+                foreach (var y in Yokai.Where(y => y.HackslashEntry != null))
+                {
+                    hs += SetInt(y.HackslashEntry, Schema.Hs_AbilityIndex, y.BtAbilityHash);
+                    hs += SetInt(y.HackslashEntry, Schema.Hs_SoultimateIndex, y.BtSoultimateHash);
+                    hs += SetInt(y.HackslashEntry, Schema.Hs_AttackAIndex, y.BtAttackAHash);
+                    hs += SetInt(y.HackslashEntry, Schema.Hs_AttackYIndex, y.BtAttackYHash);
+                    hs += SetInt(y.HackslashEntry, Schema.Hs_AttackXIndex, y.BtAttackXHash);
+                }
+
+            int dr = 0;
+            bool btSave = BattleData != null && IsUnderMod(BattleFile);
+            if (btSave)
+                foreach (var y in Yokai.Where(y => y.BattleEntry != null))
+                {
+                    dr += SetInt(y.BattleEntry, Schema.B_MoneyIndex, y.Money);
+                    dr += SetInt(y.BattleEntry, Schema.B_ExpIndex, y.Experience);
+                    dr += SetInt(y.BattleEntry, Schema.B_Drop1Index, y.Drop1Hash);
+                    dr += SetInt(y.BattleEntry, Schema.B_Drop1RateIndex, y.Drop1Rate);
+                    dr += SetInt(y.BattleEntry, Schema.B_Drop2Index, y.Drop2Hash);
+                    dr += SetInt(y.BattleEntry, Schema.B_Drop2RateIndex, y.Drop2Rate);
+                }
+
             // Name/description records are shared too — same rule.
             int nv = 0;
             foreach (var y in Yokai.Where(y => y.NameEntry != null && (y.IsNew || y.NameChanged)))
@@ -353,6 +447,8 @@ namespace Lycoris.Yokai
             if (TextData != null) T2bWriter.WriteFile(TextData, TextFile);
             if (DescData != null) T2bWriter.WriteFile(DescData, DescFile);
             if (ScaleData != null) T2bWriter.WriteFile(ScaleData, ScaleFile);
+            if (hsSave) T2bWriter.WriteFile(HackslashData, HackslashFile);
+            if (btSave) T2bWriter.WriteFile(BattleData, BattleFile);
 
             foreach (var y in Yokai)
             {
@@ -366,7 +462,7 @@ namespace Lycoris.Yokai
                 y.OriginalEvolveLevel = y.EvolveLevel;
                 y.SnapshotScale();
             }
-            return $"param:{pv}, base:{bv}, scale:{sv}, evo:{ev}, noms:{nv}, desc:{dv}";
+            return $"param:{pv}, base:{bv}, scale:{sv}, evo:{ev}, blasterT:{hs}, drops:{dr}, noms:{nv}, desc:{dv}";
         }
 
         /// <summary>Back-compat: save only the param file (stats/attack).</summary>
@@ -602,6 +698,59 @@ namespace Lycoris.Yokai
                 string text = e.FirstText();
                 if (key.HasValue && text != null && !map.ContainsKey(key.Value)) map[key.Value] = text;
             }
+            return map;
+        }
+
+        /// <summary>key (value[0]) -&gt; entry, for a specific record type.</summary>
+        private Dictionary<int, T2bEntry> BuildKeyMap(T2bFile file, string record)
+        {
+            var map = new Dictionary<int, T2bEntry>();
+            if (file == null) return map;
+            foreach (var e in file.Records(record))
+            {
+                int? k = e.GetInt(0);
+                if (k.HasValue && !map.ContainsKey(k.Value)) map[k.Value] = e;
+            }
+            return map;
+        }
+
+        /// <summary>
+        /// Config[0]=key -&gt; NameHash (auto-detected field) -&gt; name text. record==null scans every
+        /// non-marker record (used for item_config, which has many record types). Also yields a
+        /// (key,name) option list for dropdowns.
+        /// </summary>
+        private Dictionary<int, string> BuildConfigMap(T2bFile config, string record,
+            Dictionary<int, string> textMap, out List<EnumEntry> options)
+        {
+            options = new List<EnumEntry>();
+            var map = new Dictionary<int, string>();
+            if (config == null || textMap.Count == 0) return map;
+            var records = (record != null
+                ? config.Records(record)
+                : config.Entries.Where(e => !T2bTree.IsGroupOpen(e.Name) && !T2bTree.IsGroupClose(e.Name))).ToList();
+            if (records.Count == 0) return map;
+
+            int width = records.Max(e => e.Values.Count);
+            int best = -1, bestHits = 0;
+            for (int i = 1; i < width; i++)
+            {
+                int h = records.Count(e => e.GetInt(i) is int v && textMap.ContainsKey(v));
+                if (h > bestHits) { bestHits = h; best = i; }
+            }
+            if (best < 0) return map;
+
+            var seen = new HashSet<int>();
+            foreach (var e in records)
+            {
+                int? k = e.GetInt(0);
+                int? n = e.GetInt(best);
+                if (k.HasValue && n.HasValue && textMap.TryGetValue(n.Value, out string s))
+                {
+                    if (!map.ContainsKey(k.Value)) map[k.Value] = s;
+                    if (seen.Add(k.Value)) options.Add(new EnumEntry(k.Value, s));
+                }
+            }
+            options = options.OrderBy(o => o.Name, StringComparer.OrdinalIgnoreCase).ToList();
             return map;
         }
 

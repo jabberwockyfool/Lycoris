@@ -78,6 +78,13 @@ namespace Lycoris
                 SoulCombo.ItemsSource = _db.MoveOptions;
                 AbilityCombo.ItemsSource = _db.AbilityOptions;
                 EvolveCombo.ItemsSource = _db.YokaiOptions;
+                BtAtkACombo.ItemsSource = _db.TechnicOptions;
+                BtAtkYCombo.ItemsSource = _db.TechnicOptions;
+                BtAtkXCombo.ItemsSource = _db.TechnicOptions;
+                BtSoulCombo.ItemsSource = _db.TechnicOptions;
+                BtAbilityCombo.ItemsSource = _db.BtAbilityOptions;
+                Drop1Combo.ItemsSource = _db.ItemOptions;
+                Drop2Combo.ItemsSource = _db.ItemOptions;
 
                 RebuildView();
                 if (_view.CurrentItem == null) _view.MoveCurrentToFirst();
