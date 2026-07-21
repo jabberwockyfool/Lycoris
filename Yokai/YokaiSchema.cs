@@ -102,6 +102,8 @@ namespace Lycoris.Yokai
         public int EvolveOffsetIndex = 38;     // -1 = no evolution, else index into CHARA_EVOLVE_INFO
         // CHARA_EVOLVE_INFO record (in chara_param): [0]=target ParamHash, [1]=level.
         public string EvolveRecord = "CHARA_EVOLVE_INFO";
+        public string EvolveGroupBegin = "CHARA_EVOLVE_INFO_LIST_BEG";
+        public string EvolveGroupEnd = "CHARA_EVOLVE_INFO_LIST_END";
         public int Evolve_TargetIndex = 0;
         public int Evolve_LevelIndex = 1;
 

@@ -118,7 +118,14 @@ namespace Lycoris.Yokai
         public string AbilityHex { get => Hex(_abilityHash); set => AbilityHash = ParseHex(value, _abilityHash); }
 
         // --- Evolution (CHARA_EVOLVE_INFO in chara_param, indexed by EvolveOffset) ---
-        public int? EvolveOffset { get; set; }         // -1 / null = none
+        private int? _evolveOffset;                    // -1 / null = none
+        public int? EvolveOffset
+        {
+            get => _evolveOffset;
+            set { _evolveOffset = value; OnPropertyChanged(nameof(EvolveOffset)); OnPropertyChanged(nameof(CanEvolve)); }
+        }
+        internal int? OriginalEvolveOffset { get; set; }
+        public bool EvolveOffsetChanged => EvolveOffset != OriginalEvolveOffset;
         private int? _evolveTarget, _evolveLevel;
         public int? EvolveTargetHash { get => _evolveTarget; set => SetField(ref _evolveTarget, value); }
         public int? EvolveLevel { get => _evolveLevel; set => SetField(ref _evolveLevel, value); }

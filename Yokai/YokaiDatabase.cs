@@ -325,6 +325,7 @@ namespace Lycoris.Yokai
                 y.OriginalDescription = y.Description;
                 y.OriginalRank = y.Rank;
                 y.OriginalTribe = y.Tribe;
+                y.OriginalEvolveOffset = y.EvolveOffset;
                 y.IsDirty = false; // setters above flipped it; a freshly loaded row is clean
                 Yokai.Add(y);
             }
@@ -380,6 +381,7 @@ namespace Lycoris.Yokai
                 pv += SetInt(y.SourceEntry, Schema.GuardPctIndex, y.GuardPct);
                 pv += SetInt(y.SourceEntry, Schema.SoultimateHashIndex, y.SoultimateHash);
                 pv += SetInt(y.SourceEntry, Schema.AbilityHashIndex, y.AbilityHash);
+                pv += SetInt(y.SourceEntry, Schema.EvolveOffsetIndex, y.EvolveOffset);
             }
 
             // Base fields (rank/tribe) — base records can be shared, so only write rows that
@@ -460,6 +462,7 @@ namespace Lycoris.Yokai
                 y.OriginalTribe = y.Tribe;
                 y.OriginalEvolveTarget = y.EvolveTargetHash;
                 y.OriginalEvolveLevel = y.EvolveLevel;
+                y.OriginalEvolveOffset = y.EvolveOffset;
                 y.SnapshotScale();
             }
             return $"param:{pv}, base:{bv}, scale:{sv}, evo:{ev}, blasterT:{hs}, drops:{dr}, noms:{nv}, desc:{dv}";
@@ -569,6 +572,37 @@ namespace Lycoris.Yokai
             };
             Yokai.Add(y);
             return y;
+        }
+
+        /// <summary>
+        /// Toggle whether a yo-kai can evolve. Turning it ON creates a fresh CHARA_EVOLVE_INFO record
+        /// (appended to the group so existing EvolveOffsets stay valid) and points the yo-kai at it;
+        /// turning it OFF just sets EvolveOffset to -1 (the record is left orphaned to avoid reindexing).
+        /// </summary>
+        public void SetEvolvable(YokaiInfo y, bool on)
+        {
+            if (on)
+            {
+                if (y.CanEvolve) return;
+                var list = ParamData.Records(Schema.EvolveRecord).ToList();
+                if (list.Count == 0) return; // need a template record (always present in YW3)
+                var entry = list[0].Clone();
+                SetIntForce(entry, Schema.Evolve_TargetIndex, y.ParamHash); // default: evolves into itself
+                SetIntForce(entry, Schema.Evolve_LevelIndex, 30);
+                InsertIntoGroup(ParamData, Schema.EvolveGroupBegin, Schema.EvolveGroupEnd, entry);
+
+                y.EvolveEntry = entry;
+                y.EvolveOffset = list.Count;          // index of the newly appended record
+                y.EvolveTargetHash = y.ParamHash;
+                y.EvolveLevel = 30;
+                y.OriginalEvolveTarget = null;        // force the target/level to be written on save
+                y.OriginalEvolveLevel = null;
+            }
+            else
+            {
+                if (!y.CanEvolve) return;
+                y.EvolveOffset = -1;                  // orphan the record; SaveAll writes EvolveOffset back
+            }
         }
 
         // ============================ Helpers ============================
