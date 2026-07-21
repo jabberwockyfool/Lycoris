@@ -19,14 +19,16 @@ namespace Lycoris
         private readonly TextBlock _status = new TextBlock { TextWrapping = TextWrapping.Wrap, Foreground = Brushes.DimGray, Margin = new Thickness(0, 12, 0, 0) };
         private readonly Button _yokaiBtn;
         private readonly Button _itemBtn;
+        private readonly Button _skillBtn;
 
         private MainWindow _yokaiWindow;
         private ItemEditorWindow _itemWindow;
+        private SkillEditorWindow _skillWindow;
 
         public HomeWindow()
         {
             Title = "Lycoris — Éditeur Yo-kai Watch 3";
-            Width = 460; Height = 380;
+            Width = 460; Height = 470;
             WindowStartupLocation = WindowStartupLocation.CenterScreen;
             Background = Brushes.White;
 
@@ -49,10 +51,13 @@ namespace Lycoris
 
             _yokaiBtn = BigButton("👹  Éditeur Yo-kai", "Stats, moves, évolutions, Blaster T, drops, charabase, portraits…", OpenYokaiEditor);
             _itemBtn = BigButton("🎁  Éditeur d'items", "Nom, description, prix, ordre d'inventaire, icône de l'atlas…", OpenItemEditor);
+            _skillBtn = BigButton("⚔  Éditeur de skills", "Type, élément, puissance, coups, portée Soultimate… (ajout/suppression)", OpenSkillEditor);
             _yokaiBtn.IsEnabled = false;
             _itemBtn.IsEnabled = false;
+            _skillBtn.IsEnabled = false;
             root.Children.Add(_yokaiBtn);
             root.Children.Add(_itemBtn);
+            root.Children.Add(_skillBtn);
 
             root.Children.Add(_status);
             _status.Text = _referenceFolder != null
@@ -93,12 +98,14 @@ namespace Lycoris
                     // A freshly loaded db invalidates any editor windows still bound to the previous state.
                     _yokaiWindow?.Close(); _yokaiWindow = null;
                     _itemWindow?.Close(); _itemWindow = null;
+                    _skillWindow?.Close(); _skillWindow = null;
 
                     _yokaiBtn.IsEnabled = _db.ParamFile != null;
                     _itemBtn.IsEnabled = _db.Items.Count > 0;
+                    _skillBtn.IsEnabled = _db.Skills.Count > 0;
 
                     string moves = _db.MoveOptions.Count > 0 ? $"moves nommés {_db.MoveNameCount}" : "moves non nommés";
-                    _status.Text = $"Chargé — {_db.Yokai.Count} yo-kai, {_db.Items.Count} items  ({moves}).\n" +
+                    _status.Text = $"Chargé — {_db.Yokai.Count} yo-kai, {_db.Items.Count} items, {_db.Skills.Count} skills  ({moves}).\n" +
                                    "Choisis un éditeur ci-dessus.";
                 }
                 catch (Exception ex)
@@ -125,6 +132,15 @@ namespace Lycoris
             _itemWindow = new ItemEditorWindow(this, _db) { Owner = this };
             _itemWindow.Closed += (s, e) => _itemWindow = null;
             _itemWindow.Show();
+        }
+
+        private void OpenSkillEditor()
+        {
+            if (_db.Skills.Count == 0) return;
+            if (_skillWindow != null && _skillWindow.IsLoaded) { _skillWindow.Activate(); return; }
+            _skillWindow = new SkillEditorWindow(this, _db) { Owner = this };
+            _skillWindow.Closed += (s, e) => _skillWindow = null;
+            _skillWindow.Show();
         }
     }
 }

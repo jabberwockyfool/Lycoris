@@ -77,6 +77,12 @@ namespace Lycoris.Yokai
         /// <summary>Set when an item is added or removed, so SaveItems writes even with no field edits.</summary>
         private bool _itemStructureDirty;
 
+        /// <summary>All editable skills (for the standalone skill editor).</summary>
+        public List<SkillInfo> Skills { get; } = new List<SkillInfo>();
+
+        /// <summary>Set when a skill is added or removed, so SaveSkills writes even with no field edits.</summary>
+        private bool _skillStructureDirty;
+
         public YokaiDatabase(YokaiSchema schema = null)
         {
             Schema = schema ?? YokaiSchema.Yw3;
@@ -428,11 +434,179 @@ namespace Lycoris.Yokai
                                 .OrderBy(o => o.Name, StringComparer.OrdinalIgnoreCase).ToList();
 
             LoadItems();
+            LoadSkills();
+        }
+
+        private void LoadSkills()
+        {
+            Skills.Clear();
+            _skillStructureDirty = false;
+            if (SkillConfigData == null) return;
+
+            var nounByKey = new Dictionary<int, T2bEntry>();
+            var textByKey = new Dictionary<int, T2bEntry>();
+            if (SkillTextData != null)
+            {
+                foreach (var e in SkillTextData.Records(Schema.NounRecord))
+                { int? k = e.FirstIntKey(); if (k.HasValue && !nounByKey.ContainsKey(k.Value)) nounByKey[k.Value] = e; }
+                foreach (var e in SkillTextData.Records(Schema.DescRecord))
+                { int? k = e.FirstIntKey(); if (k.HasValue && !textByKey.ContainsKey(k.Value)) textByKey[k.Value] = e; }
+            }
+
+            foreach (var e in SkillConfigData.Records(Schema.SkillConfigRecord))
+            {
+                if (e.Values.Count <= Schema.Skill_AbilityIndex) continue;
+                var s = new SkillInfo
+                {
+                    Entry = e,
+                    SkillConfigID = e.GetInt(Schema.Skill_IdIndex) ?? 0,
+                    SkillType = e.GetInt(Schema.Skill_TypeIndex),
+                    EffectID = e.GetInt(Schema.Skill_EffectIdIndex),
+                    NameID = e.GetInt(Schema.Skill_NameHashIndex) ?? 0,
+                    DescID = e.GetInt(Schema.Skill_DescIdIndex) ?? 0,
+                    SkillGrowth = e.GetInt(Schema.Skill_GrowthIndex),
+                    Power = e.GetInt(Schema.Skill_PowerIndex),
+                    Hits = e.GetInt(Schema.Skill_HitsIndex),
+                    Element = e.GetInt(Schema.Skill_ElementIndex),
+                    SoultChargeSpeed = e.GetInt(Schema.Skill_SoulChargeIndex),
+                    BattleAnimation = e.GetInt(Schema.Skill_BattleAnimIndex),
+                    SoultimateRange = e.GetInt(Schema.Skill_SoulRangeIndex),
+                    SkillAbility = e.GetInt(Schema.Skill_AbilityIndex),
+                };
+                if (nounByKey.TryGetValue(s.NameID, out T2bEntry ne)) { s.NameEntry = ne; s.Name = ne.FirstText(); }
+                if (textByKey.TryGetValue(s.DescID, out T2bEntry de)) { s.DescEntry = de; s.Description = de.FirstText(); }
+                s.OriginalName = s.Name;
+                s.OriginalDescription = s.Description;
+                s.IsDirty = false;
+                Skills.Add(s);
+            }
+        }
+
+        /// <summary>Apply skill edits and write skill_config (+ skill_text names) into the mod (only if changed).</summary>
+        public int SaveSkills()
+        {
+            if (SkillConfigData == null ||
+                (!_skillStructureDirty && !Skills.Any(s => s.IsDirty || s.NameChanged || s.DescriptionChanged)))
+                return 0;
+            int n = 0;
+            foreach (var s in Skills.Where(x => x.Entry != null))
+            {
+                n += SetInt(s.Entry, Schema.Skill_TypeIndex, s.SkillType);
+                n += SetInt(s.Entry, Schema.Skill_EffectIdIndex, s.EffectID);
+                n += SetInt(s.Entry, Schema.Skill_DescIdIndex, s.DescID);
+                n += SetInt(s.Entry, Schema.Skill_GrowthIndex, s.SkillGrowth);
+                n += SetInt(s.Entry, Schema.Skill_PowerIndex, s.Power);
+                n += SetInt(s.Entry, Schema.Skill_HitsIndex, s.Hits);
+                n += SetInt(s.Entry, Schema.Skill_ElementIndex, s.Element);
+                n += SetInt(s.Entry, Schema.Skill_SoulChargeIndex, s.SoultChargeSpeed);
+                n += SetInt(s.Entry, Schema.Skill_BattleAnimIndex, s.BattleAnimation);
+                n += SetInt(s.Entry, Schema.Skill_SoulRangeIndex, s.SoultimateRange);
+                n += SetInt(s.Entry, Schema.Skill_AbilityIndex, s.SkillAbility);
+            }
+            bool textDirty = _skillStructureDirty;
+            foreach (var s in Skills.Where(x => x.NameEntry != null && x.NameChanged))
+            { n += SetText(s.NameEntry, Schema.NounTextIndex, s.Name); textDirty = true; }
+            foreach (var s in Skills.Where(x => x.DescEntry != null && x.DescriptionChanged))
+            { n += SetText(s.DescEntry, Schema.DescTextIndex, s.Description); textDirty = true; }
+
+            if (!IsUnderMod(SkillConfigFile)) SkillConfigFile = MirrorToMod(SkillConfigFile);
+            T2bWriter.WriteFile(SkillConfigData, SkillConfigFile);
+            if (SkillTextData != null && textDirty)
+            {
+                if (!IsUnderMod(SkillTextFile)) SkillTextFile = MirrorToMod(SkillTextFile);
+                T2bWriter.WriteFile(SkillTextData, SkillTextFile);
+            }
+            foreach (var s in Skills) { s.IsDirty = false; s.OriginalName = s.Name; s.OriginalDescription = s.Description; }
+            if (_skillStructureDirty && n == 0) n = 1;
+            _skillStructureDirty = false;
+            return n;
+        }
+
+        /// <summary>
+        /// Create a new skill in skill_config (plus its name in skill_text NOUN). Clones a real
+        /// SKILL_CONFIG_INFO record as a valid template and generates collision-free IDs. Persisted on the
+        /// next <see cref="SaveSkills"/>. Returns the created <see cref="SkillInfo"/>.
+        /// </summary>
+        public SkillInfo AddSkill(string name, int skillType)
+        {
+            if (SkillConfigData == null)
+                throw new InvalidOperationException("skill_config non chargé.");
+            var tpl = SkillConfigData.Records(Schema.SkillConfigRecord).FirstOrDefault();
+            if (tpl == null) throw new InvalidOperationException("Aucun skill modèle dans skill_config.");
+
+            string code = "lycoris_skill_" + Sanitize(name);
+            int id = UniqueHash(code, ExistingKeys(SkillConfigData.Records(Schema.SkillConfigRecord), Schema.Skill_IdIndex));
+            int nameHash = UniqueHash(code + "_name",
+                SkillTextData != null ? ExistingFirstKeys(SkillTextData.Records(Schema.NounRecord)) : new HashSet<int>());
+
+            var rec = tpl.Clone();
+            SetIntForce(rec, Schema.Skill_IdIndex, id);
+            SetIntForce(rec, Schema.Skill_TypeIndex, skillType);
+            SetIntForce(rec, Schema.Skill_NameHashIndex, nameHash);
+            SetIntForce(rec, Schema.Skill_DescIdIndex, 0);
+            SetIntForce(rec, Schema.Skill_PowerIndex, 30);
+            SetIntForce(rec, Schema.Skill_HitsIndex, 1);
+            InsertIntoGroup(SkillConfigData, Schema.SkillConfigGroupBegin, Schema.SkillConfigGroupEnd, rec);
+
+            T2bEntry nounEntry = null;
+            if (SkillTextData != null)
+            {
+                var nounTpl = SkillTextData.Records(Schema.NounRecord).FirstOrDefault();
+                if (nounTpl != null)
+                {
+                    nounEntry = nounTpl.Clone();
+                    SetIntForce(nounEntry, Schema.NounKeyIndex, nameHash);
+                    SetText(nounEntry, Schema.NounTextIndex, name ?? "");
+                    InsertIntoGroup(SkillTextData, Schema.NounGroupBegin, Schema.NounGroupEnd, nounEntry);
+                }
+            }
+
+            var s = new SkillInfo
+            {
+                Entry = rec,
+                SkillConfigID = id,
+                SkillType = skillType,
+                EffectID = rec.GetInt(Schema.Skill_EffectIdIndex),
+                NameID = nameHash,
+                DescID = 0,
+                SkillGrowth = rec.GetInt(Schema.Skill_GrowthIndex),
+                Power = rec.GetInt(Schema.Skill_PowerIndex),
+                Hits = rec.GetInt(Schema.Skill_HitsIndex),
+                Element = rec.GetInt(Schema.Skill_ElementIndex),
+                SoultChargeSpeed = rec.GetInt(Schema.Skill_SoulChargeIndex),
+                BattleAnimation = rec.GetInt(Schema.Skill_BattleAnimIndex),
+                SoultimateRange = rec.GetInt(Schema.Skill_SoulRangeIndex),
+                SkillAbility = rec.GetInt(Schema.Skill_AbilityIndex),
+                NameEntry = nounEntry,
+                Name = name,
+                OriginalName = null,   // force the name to be written on save
+                IsDirty = true,
+            };
+            Skills.Add(s);
+            _skillStructureDirty = true;
+            return s;
+        }
+
+        /// <summary>
+        /// Delete a skill: removes its skill_config record, and its skill_text name entry only when no
+        /// remaining skill still references it. Persisted on the next SaveSkills.
+        /// </summary>
+        public void RemoveSkill(SkillInfo s)
+        {
+            if (s?.Entry == null || SkillConfigData == null) return;
+
+            RemoveEntry(SkillConfigData, s.Entry, Schema.SkillConfigGroupBegin);
+            Skills.Remove(s);
+
+            if (SkillTextData != null && s.NameEntry != null && Skills.All(o => o.NameID != s.NameID))
+                RemoveEntry(SkillTextData, s.NameEntry, Schema.NounGroupBegin);
+            _skillStructureDirty = true;
         }
 
         private void LoadItems()
         {
             Items.Clear();
+            _itemStructureDirty = false;
             if (_itemConfigData == null) return;
 
             var nounByKey = new Dictionary<int, T2bEntry>();

@@ -27,9 +27,24 @@ namespace Lycoris.Yokai
         // Config records: key at [0], a NameHash field elsewhere (auto-detected against the text table).
         public string AbilityConfigRecord = "CHARA_ABILITY_CONFIG_INFO"; // key[0], name[1]
         public string SkillConfigRecord = "SKILL_CONFIG_INFO";           // key[0], name[3]
-        public int Skill_NameHashIndex = 3;
+
+        // Full SKILL_CONFIG_INFO field layout (13 fields; validated against real data + CfgBinEditor tags).
+        public int Skill_IdIndex = 0;         // SkillConfigID (the record key)
+        public int Skill_TypeIndex = 1;       // SkillType: 1=Attack, 3=Technique, 5=Inspirit, 4=Soultimate
+        public int Skill_EffectIdIndex = 2;   // EffectID (hash)
+        public int Skill_NameHashIndex = 3;   // NameID -> skill_text NOUN
+        public int Skill_DescIdIndex = 4;     // DescID -> skill_text TEXT
+        public int Skill_GrowthIndex = 5;
         public int Skill_PowerIndex = 6;      // move power (0-1000)
+        public int Skill_HitsIndex = 7;       // n° hits
         public int Skill_ElementIndex = 8;    // element = Attributes enum (0-9): 8=Strong Attack (physical), 9=Restoration
+        public int Skill_SoulChargeIndex = 9; // SoultChargeSpeed
+        public int Skill_BattleAnimIndex = 10;// BattleAnimation (hash)
+        public int Skill_SoulRangeIndex = 11; // SoultimateRange
+        public int Skill_AbilityIndex = 12;   // SkillAbility
+
+        public string SkillConfigGroupBegin = "SKILL_CONFIG_INFO_LIST_BEG";
+        public string SkillConfigGroupEnd = "SKILL_CONFIG_INFO_LIST_END";
 
         // --- Blaster T (Hackslash) — editable, keyed by ParamHash ---
         public string HackslashParamFilePrefix = "hackslash_chara_param";

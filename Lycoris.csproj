@@ -75,8 +75,10 @@
     <Compile Include="Yokai\AttackProfile.cs" />
     <Compile Include="Yokai\YokaiModels.cs" />
     <Compile Include="Yokai\ItemInfo.cs" />
+    <Compile Include="Yokai\SkillInfo.cs" />
     <Compile Include="Yokai\YokaiDatabase.cs" />
     <Compile Include="ItemEditorWindow.cs" />
+    <Compile Include="SkillEditorWindow.cs" />
     <Compile Include="HomeWindow.cs" />
     <Compile Include="AddYokaiDialog.cs" />
     <Compile Include="AtlasPickerWindow.cs" />

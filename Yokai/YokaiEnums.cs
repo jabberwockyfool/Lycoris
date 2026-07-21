@@ -36,6 +36,12 @@ namespace Lycoris.Yokai
             {5, "Ice"}, {6, "Wind"}, {7, "Drain"}, {8, "Strong Attack"}, {9, "Restoration"},
         });
 
+        // SKILL_CONFIG_INFO SkillType tags (from CfgBinEditor). Others are left editable as raw ints.
+        public static readonly List<EnumEntry> SkillTypes = Build(new Dictionary<int, string>
+        {
+            {1, "Attaque normale"}, {3, "Technique (élémentaire)"}, {4, "Soultimate"}, {5, "Inspiration"},
+        });
+
         public static readonly List<EnumEntry> Speeds = Build(new Dictionary<int, string>
         {
             {0, "Normal"}, {1, "Fast"}, {2, "Slow"},
@@ -60,10 +66,12 @@ namespace Lycoris.Yokai
         private static readonly Dictionary<int, string> TribeName = ToMap(Tribes);
         private static readonly Dictionary<int, string> RankName = ToMap(Ranks);
         private static readonly Dictionary<int, string> AttributeName = ToMap(Attributes);
+        private static readonly Dictionary<int, string> SkillTypeName = ToMap(SkillTypes);
 
         public static string Tribe(int? k) => Lookup(TribeName, k);
         public static string Rank(int? k) => Lookup(RankName, k);
         public static string Attribute(int? k) => Lookup(AttributeName, k);
+        public static string SkillType(int? k) => k.HasValue && SkillTypeName.TryGetValue(k.Value, out var n) ? n : (k?.ToString() ?? "");
 
         private static List<EnumEntry> Build(Dictionary<int, string> map)
         {
