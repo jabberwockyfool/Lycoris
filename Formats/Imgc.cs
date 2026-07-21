@@ -195,7 +195,6 @@ namespace Lycoris.Formats
         {
             public string Name;
             public int Size;
-            public Action<byte[], int, byte[]> _; // unused
 
             public static ColorFormat Get(byte id)
             {
