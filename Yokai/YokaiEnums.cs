@@ -41,6 +41,22 @@ namespace Lycoris.Yokai
             {0, "Normal"}, {1, "Fast"}, {2, "Slow"},
         });
 
+        public static readonly List<EnumEntry> Roles = Build(new Dictionary<int, string>
+        {
+            {0, "Unrole"}, {1, "Fighter"}, {2, "Tank"}, {3, "Healer"}, {4, "Ranger"},
+        });
+
+        // FoodsType.YW3 — sparse (0x0A and 0x1B skipped); the stored value is the KEY.
+        public static readonly List<EnumEntry> Foods = Build(new Dictionary<int, string>
+        {
+            {0x00, "(aucun)"}, {0x01, "Rice Balls"}, {0x02, "Bread"}, {0x03, "Candy"}, {0x04, "Milk"},
+            {0x05, "Juice"}, {0x06, "Hamburgers"}, {0x07, "Ramen"}, {0x08, "Sushi"}, {0x09, "Chinese Food"},
+            {0x0B, "Vegetables"}, {0x0C, "Meat"}, {0x0D, "Seafood"}, {0x0E, "Curry"}, {0x0F, "Sweets"},
+            {0x10, "Oden Stew"}, {0x11, "Soba"}, {0x12, "Snacks"}, {0x13, "Chocobars"}, {0x14, "Ice Cream"},
+            {0x15, "Donut"}, {0x16, "Pizza"}, {0x17, "Hot Dog"}, {0x18, "Pasta"}, {0x19, "Tempura"},
+            {0x1A, "Mega Tasty Bar"}, {0x1C, "Sukiyaki"},
+        });
+
         private static readonly Dictionary<int, string> TribeName = ToMap(Tribes);
         private static readonly Dictionary<int, string> RankName = ToMap(Ranks);
         private static readonly Dictionary<int, string> AttributeName = ToMap(Attributes);
