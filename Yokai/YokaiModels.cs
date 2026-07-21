@@ -24,7 +24,43 @@ namespace Lycoris.Yokai
         public int? FileNameNumber { get; set; }
         public int? FileNameVariant { get; set; }
         public string IconBaseName { get; set; }   // e.g. "y105010"
-        public string IconFile { get; set; }        // full path to the .xi, or null
+        public string IconFile { get; set; }        // face_icon .xi path, or null
+        public string MedalIconFile { get; set; }   // medal_icon .xi path, or null
+
+        /// <summary>Model/icon name, e.g. "y152900" — editable, parsed back to prefix/number/variant.</summary>
+        public string ModelName
+        {
+            get => IconNaming.GetFileModelText(FileNamePrefix ?? -1, FileNameNumber ?? 0, FileNameVariant ?? 0);
+            set
+            {
+                if (IconNaming.TryParse(value, out int p, out int n, out int v))
+                {
+                    FileNamePrefix = p; FileNameNumber = n; FileNameVariant = v;
+                    IsDirty = true; OnPropertyChanged(nameof(ModelName));
+                }
+            }
+        }
+
+        // --- Charabase editable fields (chara_base CHARA_BASE_YOKAI_INFO) ---
+        private int? _medalX, _medalY, _favFood, _hatedFood, _role;
+        private bool _isRare, _isLegend, _isPionner, _isCommandant, _isClassic, _isMerican, _isDeva, _isMystery, _isTreasure;
+        public int? MedalPosX { get => _medalX; set => SetField(ref _medalX, value); }
+        public int? MedalPosY { get => _medalY; set => SetField(ref _medalY, value); }
+        public int? FavoriteFood { get => _favFood; set => SetField(ref _favFood, value); }
+        public int? HatedFood { get => _hatedFood; set => SetField(ref _hatedFood, value); }
+        public int? Role { get => _role; set => SetField(ref _role, value); }
+        public bool IsRare { get => _isRare; set => SetField(ref _isRare, value); }
+        public bool IsLegend { get => _isLegend; set => SetField(ref _isLegend, value); }
+        public bool IsPionner { get => _isPionner; set => SetField(ref _isPionner, value); }
+        public bool IsCommandant { get => _isCommandant; set => SetField(ref _isCommandant, value); }
+        public bool IsClassic { get => _isClassic; set => SetField(ref _isClassic, value); }
+        public bool IsMerican { get => _isMerican; set => SetField(ref _isMerican, value); }
+        public bool IsDeva { get => _isDeva; set => SetField(ref _isDeva, value); }
+        public bool IsMystery { get => _isMystery; set => SetField(ref _isMystery, value); }
+        public bool IsTreasure { get => _isTreasure; set => SetField(ref _isTreasure, value); }
+
+        /// <summary>Original chara_base field values (index -&gt; value) for clobber-safe saving (base records are shared).</summary>
+        internal System.Collections.Generic.Dictionary<int, int?> BaseOriginal = new System.Collections.Generic.Dictionary<int, int?>();
 
         // --- chara_scale: Scale1..Scale7 (may be shared by BaseHash) ---
         private readonly double?[] _scale = new double?[8];      // indices 1..7 used

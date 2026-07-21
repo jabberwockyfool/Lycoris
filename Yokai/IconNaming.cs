@@ -24,6 +24,25 @@ namespace Lycoris.Yokai
             return letter + number.ToString("D3") + v;
         }
 
+        private static readonly System.Collections.Generic.Dictionary<char, int> LetterPrefix =
+            new System.Collections.Generic.Dictionary<char, int> { { 'c', 0 }, { 'x', 5 }, { 'y', 6 }, { 'z', 7 } };
+
+        /// <summary>Parse a model name like "y152900" back to prefix/number/variant. Inverse of GetFileModelText.</summary>
+        public static bool TryParse(string name, out int prefix, out int number, out int variant)
+        {
+            prefix = number = variant = 0;
+            if (string.IsNullOrEmpty(name) || name.Length != 7) return false;
+            if (!LetterPrefix.TryGetValue(char.ToLowerInvariant(name[0]), out prefix)) return false;
+            if (!int.TryParse(name.Substring(1, 3), out number)) return false;
+            string v = name.Substring(4, 3);
+            if (v.Length != 3 || !v.All(char.IsDigit)) return false;
+            if (v[2] == '0')
+                variant = v[0] == '0' ? (v[1] - '0') : (v[0] - '0') * 10 + (v[1] - '0');
+            else
+                variant = int.Parse(new string(v.Reverse().ToArray()));
+            return true;
+        }
+
         private static string FormatVariant(int x)
         {
             if (x >= 0 && x < 10) return "0" + x + "0";
