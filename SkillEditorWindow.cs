@@ -53,6 +53,7 @@ namespace Lycoris
             DockPanel.SetDock(_search, Dock.Top);
             _list.DisplayMemberPath = "DisplayName";
             _list.SelectionChanged += (s, e) => { _fields.DataContext = _list.SelectedItem; _fields.IsEnabled = _list.SelectedItem != null; };
+            _list.GroupStyle.Add(new GroupStyle { HeaderTemplate = BuildGroupHeader() });
             left.Children.Add(_search);
             left.Children.Add(_list);
             DockPanel.SetDock(left, Dock.Left);
@@ -73,8 +74,39 @@ namespace Lycoris
 
             _view = CollectionViewSource.GetDefaultView(_db.Skills);
             _view.Filter = Filter;
+            _view.SortDescriptions.Add(new SortDescription("CategorySort", ListSortDirection.Ascending));
+            _view.SortDescriptions.Add(new SortDescription("DisplayName", ListSortDirection.Ascending));
+            _view.GroupDescriptions.Add(new PropertyGroupDescription("CategoryName"));
+            // Live shaping: editing a skill's Type/Name moves it to the right group immediately.
+            if (_view is ICollectionViewLiveShaping live)
+            {
+                live.IsLiveGrouping = true; live.LiveGroupingProperties.Add("CategoryName");
+                live.IsLiveSorting = true; live.LiveSortingProperties.Add("CategorySort");
+                live.LiveSortingProperties.Add("DisplayName");
+            }
             _list.ItemsSource = _view;
-            if (_db.Skills.Count > 0) _list.SelectedIndex = 0;
+            if (!_view.IsEmpty) _list.SelectedIndex = 0;
+        }
+
+        /// <summary>Group header: category name in bold + item count.</summary>
+        private static DataTemplate BuildGroupHeader()
+        {
+            var sp = new FrameworkElementFactory(typeof(StackPanel));
+            sp.SetValue(StackPanel.OrientationProperty, Orientation.Horizontal);
+            sp.SetValue(FrameworkElement.MarginProperty, new Thickness(0, 8, 0, 2));
+
+            var name = new FrameworkElementFactory(typeof(TextBlock));
+            name.SetBinding(TextBlock.TextProperty, new Binding("Name"));
+            name.SetValue(TextBlock.FontWeightProperty, FontWeights.Bold);
+            name.SetValue(TextBlock.ForegroundProperty, Brushes.SteelBlue);
+
+            var count = new FrameworkElementFactory(typeof(TextBlock));
+            count.SetBinding(TextBlock.TextProperty, new Binding("ItemCount") { StringFormat = "  ({0})" });
+            count.SetValue(TextBlock.ForegroundProperty, Brushes.Gray);
+
+            sp.AppendChild(name);
+            sp.AppendChild(count);
+            return new DataTemplate { VisualTree = sp };
         }
 
         private bool Filter(object o)

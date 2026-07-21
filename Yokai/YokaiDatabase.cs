@@ -435,6 +435,29 @@ namespace Lycoris.Yokai
 
             LoadItems();
             LoadSkills();
+            BuildSkillSlotOptions();
+        }
+
+        /// <summary>Named skill options bucketed by SkillType, for the per-slot move dropdowns in the yo-kai editor.</summary>
+        public List<EnumEntry> AttackOptions { get; private set; } = new List<EnumEntry>();
+        public List<EnumEntry> TechniqueOptions { get; private set; } = new List<EnumEntry>();
+        public List<EnumEntry> InspiritOptions { get; private set; } = new List<EnumEntry>();
+        public List<EnumEntry> GuardOptions { get; private set; } = new List<EnumEntry>();
+        public List<EnumEntry> SoultimateSkillOptions { get; private set; } = new List<EnumEntry>();
+
+        /// <summary>Bucket the named skills by type (1=Attack, 3=Technique, 5=Inspirit, 4=Soultimate, 0=Guard).</summary>
+        private void BuildSkillSlotOptions()
+        {
+            List<EnumEntry> ForType(int t) => Skills
+                .Where(s => s.SkillType == t && !string.IsNullOrWhiteSpace(s.Name))
+                .GroupBy(s => s.SkillConfigID).Select(g => g.First())
+                .Select(s => new EnumEntry(s.SkillConfigID, s.Name))
+                .OrderBy(o => o.Name, StringComparer.OrdinalIgnoreCase).ToList();
+            AttackOptions = ForType(1);
+            TechniqueOptions = ForType(3);
+            InspiritOptions = ForType(5);
+            SoultimateSkillOptions = ForType(4);
+            GuardOptions = ForType(0);
         }
 
         private void LoadSkills()

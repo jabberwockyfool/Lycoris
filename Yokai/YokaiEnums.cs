@@ -73,6 +73,23 @@ namespace Lycoris.Yokai
         public static string Attribute(int? k) => Lookup(AttributeName, k);
         public static string SkillType(int? k) => k.HasValue && SkillTypeName.TryGetValue(k.Value, out var n) ? n : (k?.ToString() ?? "");
 
+        /// <summary>
+        /// Category (display order + label) a skill falls into for the skill editor's grouping. Empty-named
+        /// skills — and any type outside the known tags (incl. type 0 Guard/misc) — go to "Non identifié".
+        /// </summary>
+        public static (int sort, string name) SkillCategoryInfo(int? type, string name)
+        {
+            if (string.IsNullOrWhiteSpace(name)) return (99, "Non identifié");
+            switch (type)
+            {
+                case 1: return (0, "Attaque normale");
+                case 3: return (1, "Technique (élémentaire)");
+                case 5: return (2, "Inspiration");
+                case 4: return (3, "Soultimate");
+                default: return (99, "Non identifié");
+            }
+        }
+
         private static List<EnumEntry> Build(Dictionary<int, string> map)
         {
             var list = new List<EnumEntry>();

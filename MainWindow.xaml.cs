@@ -133,20 +133,22 @@ namespace Lycoris
 
         private void WireMoveCombos()
         {
+            // Each move slot lists ONLY the skills of its category (SkillType): Attack=1, Technique=3,
+            // Inspirit=5, Guard=0, Soultimate=4. Ability is a separate table (chara_ability).
             if (_scAttack == null)
             {
-                _scAttack = new SearchableCombo(AttackCombo, _db.MoveOptions, y => y.AttackHash, (y, v) => y.AttackHash = v);
-                _scTech = new SearchableCombo(TechCombo, _db.MoveOptions, y => y.TechniqueHash, (y, v) => y.TechniqueHash = v);
-                _scInsp = new SearchableCombo(InspiritCombo, _db.MoveOptions, y => y.InspiritHash, (y, v) => y.InspiritHash = v);
-                _scGuard = new SearchableCombo(GuardCombo, _db.MoveOptions, y => y.GuardHash, (y, v) => y.GuardHash = v);
-                _scSoul = new SearchableCombo(SoulCombo, _db.MoveOptions, y => y.SoultimateHash, (y, v) => y.SoultimateHash = v);
+                _scAttack = new SearchableCombo(AttackCombo, _db.AttackOptions, y => y.AttackHash, (y, v) => y.AttackHash = v);
+                _scTech = new SearchableCombo(TechCombo, _db.TechniqueOptions, y => y.TechniqueHash, (y, v) => y.TechniqueHash = v);
+                _scInsp = new SearchableCombo(InspiritCombo, _db.InspiritOptions, y => y.InspiritHash, (y, v) => y.InspiritHash = v);
+                _scGuard = new SearchableCombo(GuardCombo, _db.GuardOptions, y => y.GuardHash, (y, v) => y.GuardHash = v);
+                _scSoul = new SearchableCombo(SoulCombo, _db.SoultimateSkillOptions, y => y.SoultimateHash, (y, v) => y.SoultimateHash = v);
                 _scAbility = new SearchableCombo(AbilityCombo, _db.AbilityOptions, y => y.AbilityHash, (y, v) => y.AbilityHash = v);
             }
             else
             {
-                _scAttack.SetSource(_db.MoveOptions); _scTech.SetSource(_db.MoveOptions);
-                _scInsp.SetSource(_db.MoveOptions); _scGuard.SetSource(_db.MoveOptions);
-                _scSoul.SetSource(_db.MoveOptions); _scAbility.SetSource(_db.AbilityOptions);
+                _scAttack.SetSource(_db.AttackOptions); _scTech.SetSource(_db.TechniqueOptions);
+                _scInsp.SetSource(_db.InspiritOptions); _scGuard.SetSource(_db.GuardOptions);
+                _scSoul.SetSource(_db.SoultimateSkillOptions); _scAbility.SetSource(_db.AbilityOptions);
             }
         }
 

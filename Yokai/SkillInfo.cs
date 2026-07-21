@@ -16,11 +16,19 @@ namespace Lycoris.Yokai
         public int DescID { get; set; }           // -> skill_text TEXT
 
         private string _name, _description;
-        public string Name { get => _name; set => Set(ref _name, value); }
+        public string Name
+        {
+            get => _name;
+            set { if (Set(ref _name, value)) NotifyCategory(nameof(DisplayName)); }
+        }
         public string Description { get => _description; set => Set(ref _description, value); }
 
         private int? _type, _effect, _growth, _power, _hits, _element, _soulCharge, _battleAnim, _soulRange, _ability;
-        public int? SkillType { get => _type; set { Set(ref _type, value); OnPropertyChanged(nameof(SkillTypeName)); } }
+        public int? SkillType
+        {
+            get => _type;
+            set { if (Set(ref _type, value)) { OnPropertyChanged(nameof(SkillTypeName)); NotifyCategory(null); } }
+        }
         public int? EffectID { get => _effect; set { Set(ref _effect, value); OnPropertyChanged(nameof(EffectIDHex)); } }
         public int? SkillGrowth { get => _growth; set => Set(ref _growth, value); }
         public int? Power { get => _power; set => Set(ref _power, value); }
@@ -46,6 +54,17 @@ namespace Lycoris.Yokai
         public string DisplayName => string.IsNullOrEmpty(Name) ? SkillIdHex : Name;
         public string SkillTypeName => YokaiEnums.SkillType(SkillType);
 
+        // Grouping for the skill editor: category label + display order (empty/unknown -> "Non identifié").
+        public string CategoryName => YokaiEnums.SkillCategoryInfo(SkillType, Name).name;
+        public int CategorySort => YokaiEnums.SkillCategoryInfo(SkillType, Name).sort;
+
+        private void NotifyCategory(string extra)
+        {
+            OnPropertyChanged(nameof(CategoryName));
+            OnPropertyChanged(nameof(CategorySort));
+            if (extra != null) OnPropertyChanged(extra);
+        }
+
         // Hash-like fields are edited as hex; the string wrappers parse "0x...."/decimal, blank -> null.
         public string EffectIDHex { get => Hex(EffectID); set => EffectID = ParseHex(value); }
         public string BattleAnimationHex { get => Hex(BattleAnimation); set => BattleAnimation = ParseHex(value); }
@@ -62,12 +81,13 @@ namespace Lycoris.Yokai
             return null;
         }
 
-        private void Set<T>(ref T field, T value, [CallerMemberName] string prop = null)
+        private bool Set<T>(ref T field, T value, [CallerMemberName] string prop = null)
         {
-            if (System.Collections.Generic.EqualityComparer<T>.Default.Equals(field, value)) return;
+            if (System.Collections.Generic.EqualityComparer<T>.Default.Equals(field, value)) return false;
             field = value;
             IsDirty = true;
             OnPropertyChanged(prop);
+            return true;
         }
 
         public event PropertyChangedEventHandler PropertyChanged;
