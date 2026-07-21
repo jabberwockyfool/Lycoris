@@ -166,43 +166,31 @@
                                         </Grid.RowDefinitions>
 
                                         <TextBlock Grid.Row="0" Grid.Column="0" Text="Attack"/>
-                                        <ComboBox x:Name="AttackCombo" Grid.Row="0" Grid.Column="1" IsTextSearchEnabled="True"
-                                                  SelectedValuePath="Key" DisplayMemberPath="Name" TextSearch.TextPath="Name"
-                                                  SelectedValue="{Binding AttackHash}" Margin="0,1"/>
+                                        <ComboBox x:Name="AttackCombo" Grid.Row="0" Grid.Column="1" Margin="0,1"/>
                                         <TextBox Grid.Row="0" Grid.Column="2" Text="{Binding AttackHex, Mode=OneWay}" IsReadOnly="True" FontFamily="Consolas" FontSize="10"/>
                                         <TextBox Grid.Row="0" Grid.Column="3" Text="{Binding AttackPct}" Margin="4,1,0,1"/>
 
                                         <TextBlock Grid.Row="1" Grid.Column="0" Text="Technique"/>
-                                        <ComboBox x:Name="TechCombo" Grid.Row="1" Grid.Column="1" IsTextSearchEnabled="True"
-                                                  SelectedValuePath="Key" DisplayMemberPath="Name" TextSearch.TextPath="Name"
-                                                  SelectedValue="{Binding TechniqueHash}" Margin="0,1"/>
+                                        <ComboBox x:Name="TechCombo" Grid.Row="1" Grid.Column="1" Margin="0,1"/>
                                         <TextBox Grid.Row="1" Grid.Column="2" Text="{Binding TechniqueHex, Mode=OneWay}" IsReadOnly="True" FontFamily="Consolas" FontSize="10"/>
                                         <TextBox Grid.Row="1" Grid.Column="3" Text="{Binding TechniquePct}" Margin="4,1,0,1"/>
 
                                         <TextBlock Grid.Row="2" Grid.Column="0" Text="Inspirit"/>
-                                        <ComboBox x:Name="InspiritCombo" Grid.Row="2" Grid.Column="1" IsTextSearchEnabled="True"
-                                                  SelectedValuePath="Key" DisplayMemberPath="Name" TextSearch.TextPath="Name"
-                                                  SelectedValue="{Binding InspiritHash}" Margin="0,1"/>
+                                        <ComboBox x:Name="InspiritCombo" Grid.Row="2" Grid.Column="1" Margin="0,1"/>
                                         <TextBox Grid.Row="2" Grid.Column="2" Text="{Binding InspiritHex, Mode=OneWay}" IsReadOnly="True" FontFamily="Consolas" FontSize="10"/>
                                         <TextBox Grid.Row="2" Grid.Column="3" Text="{Binding InspiritPct}" Margin="4,1,0,1"/>
 
                                         <TextBlock Grid.Row="3" Grid.Column="0" Text="Guard"/>
-                                        <ComboBox x:Name="GuardCombo" Grid.Row="3" Grid.Column="1" IsTextSearchEnabled="True"
-                                                  SelectedValuePath="Key" DisplayMemberPath="Name" TextSearch.TextPath="Name"
-                                                  SelectedValue="{Binding GuardHash}" Margin="0,1"/>
+                                        <ComboBox x:Name="GuardCombo" Grid.Row="3" Grid.Column="1" Margin="0,1"/>
                                         <TextBox Grid.Row="3" Grid.Column="2" Text="{Binding GuardHex, Mode=OneWay}" IsReadOnly="True" FontFamily="Consolas" FontSize="10"/>
                                         <TextBox Grid.Row="3" Grid.Column="3" Text="{Binding GuardPct}" Margin="4,1,0,1"/>
 
                                         <TextBlock Grid.Row="4" Grid.Column="0" Text="Soultimate"/>
-                                        <ComboBox x:Name="SoulCombo" Grid.Row="4" Grid.Column="1" IsTextSearchEnabled="True"
-                                                  SelectedValuePath="Key" DisplayMemberPath="Name" TextSearch.TextPath="Name"
-                                                  SelectedValue="{Binding SoultimateHash}" Margin="0,1"/>
+                                        <ComboBox x:Name="SoulCombo" Grid.Row="4" Grid.Column="1" Margin="0,1"/>
                                         <TextBox Grid.Row="4" Grid.Column="2" Text="{Binding SoultimateHex, Mode=OneWay}" IsReadOnly="True" FontFamily="Consolas" FontSize="10"/>
 
                                         <TextBlock Grid.Row="5" Grid.Column="0" Text="Ability"/>
-                                        <ComboBox x:Name="AbilityCombo" Grid.Row="5" Grid.Column="1" IsTextSearchEnabled="True"
-                                                  SelectedValuePath="Key" DisplayMemberPath="Name" TextSearch.TextPath="Name"
-                                                  SelectedValue="{Binding AbilityHash}" Margin="0,1"/>
+                                        <ComboBox x:Name="AbilityCombo" Grid.Row="5" Grid.Column="1" Margin="0,1"/>
                                         <TextBox Grid.Row="5" Grid.Column="2" Text="{Binding AbilityHex, Mode=OneWay}" IsReadOnly="True" FontFamily="Consolas" FontSize="10"/>
                                     </Grid>
                                 </GroupBox>

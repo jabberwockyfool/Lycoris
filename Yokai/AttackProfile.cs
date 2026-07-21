@@ -18,11 +18,19 @@ namespace Lycoris.Yokai
     {
         private const int Physical = 8; // Attributes: Strong Attack
 
+        // Generic basic-attack name markers, so the Attack slot gets a Punch/Kick-style move
+        // (the escalating basic line) rather than a strong named special at high power.
+        private static readonly string[] BasicKeywords =
+        {
+            "Punch", "Kick", "Bite", "Claw", "Paw", "Slash", "Scratch", "Peck", "Slap",
+            "Tackle", "Headbutt", "Fist", "Chomp", "Fang", "Chop", "Stab", "Strike", "Jab"
+        };
+
         public static string Apply(YokaiDatabase db, YokaiInfo y, int element, int power, bool blasterT)
         {
             var parts = new List<string>();
 
-            var attack = Pick(db, Physical, power);
+            var attack = PickBasic(db, power) ?? Pick(db, Physical, power);
             var technique = Pick(db, element, power) ?? Pick(db, Physical, power);
             var soul = Strongest(db, element) ?? Strongest(db, Physical);
 
@@ -44,9 +52,23 @@ namespace Lycoris.Yokai
         private static YokaiDatabase.SkillMove? Pick(YokaiDatabase db, int element, int power)
         {
             if (!db.SkillsByElement.TryGetValue(element, out var list) || list.Count == 0) return null;
+            return AtTier(list, power);
+        }
+
+        /// <summary>Physical pool filtered to generic basic attacks (Punch/Kick/…), picked at the power tier.</summary>
+        private static YokaiDatabase.SkillMove? PickBasic(YokaiDatabase db, int power)
+        {
+            if (!db.SkillsByElement.TryGetValue(Physical, out var all) || all.Count == 0) return null;
+            var basics = all.Where(m => m.Power > 0 &&
+                BasicKeywords.Any(k => m.Name.IndexOf(k, StringComparison.OrdinalIgnoreCase) >= 0)).ToList();
+            return AtTier(basics.Count > 0 ? basics : all, power);
+        }
+
+        private static YokaiDatabase.SkillMove AtTier(List<YokaiDatabase.SkillMove> sorted, int power)
+        {
             int p = Math.Max(1, Math.Min(10, power));
-            int idx = (int)Math.Round((list.Count - 1) * (p - 1) / 9.0);
-            return list[idx];
+            int idx = (int)Math.Round((sorted.Count - 1) * (p - 1) / 9.0);
+            return sorted[idx];
         }
 
         private static YokaiDatabase.SkillMove? Strongest(YokaiDatabase db, int element)

@@ -73,13 +73,8 @@ namespace Lycoris
                 // the working atlas so its medals are shown and edited — not the reference's clean copy.
                 _moddedAtlasPath = _db.ModFaceAtlasFile;
 
-                // Feed the move dropdowns.
-                AttackCombo.ItemsSource = _db.MoveOptions;
-                TechCombo.ItemsSource = _db.MoveOptions;
-                InspiritCombo.ItemsSource = _db.MoveOptions;
-                GuardCombo.ItemsSource = _db.MoveOptions;
-                SoulCombo.ItemsSource = _db.MoveOptions;
-                AbilityCombo.ItemsSource = _db.AbilityOptions;
+                // Searchable move dropdowns (type to filter among ~2500 skills).
+                WireMoveCombos();
                 EvolveCombo.ItemsSource = _db.YokaiOptions;
                 BtAtkACombo.ItemsSource = _db.TechnicOptions;
                 BtAtkYCombo.ItemsSource = _db.TechnicOptions;
@@ -114,12 +109,39 @@ namespace Lycoris
         // ----------------------- Selection -----------------------
 
         private bool _suppressEvolvable;
+        private SearchableCombo _scAttack, _scTech, _scInsp, _scGuard, _scSoul, _scAbility;
+
+        private void WireMoveCombos()
+        {
+            if (_scAttack == null)
+            {
+                _scAttack = new SearchableCombo(AttackCombo, _db.MoveOptions, y => y.AttackHash, (y, v) => y.AttackHash = v);
+                _scTech = new SearchableCombo(TechCombo, _db.MoveOptions, y => y.TechniqueHash, (y, v) => y.TechniqueHash = v);
+                _scInsp = new SearchableCombo(InspiritCombo, _db.MoveOptions, y => y.InspiritHash, (y, v) => y.InspiritHash = v);
+                _scGuard = new SearchableCombo(GuardCombo, _db.MoveOptions, y => y.GuardHash, (y, v) => y.GuardHash = v);
+                _scSoul = new SearchableCombo(SoulCombo, _db.MoveOptions, y => y.SoultimateHash, (y, v) => y.SoultimateHash = v);
+                _scAbility = new SearchableCombo(AbilityCombo, _db.AbilityOptions, y => y.AbilityHash, (y, v) => y.AbilityHash = v);
+            }
+            else
+            {
+                _scAttack.SetSource(_db.MoveOptions); _scTech.SetSource(_db.MoveOptions);
+                _scInsp.SetSource(_db.MoveOptions); _scGuard.SetSource(_db.MoveOptions);
+                _scSoul.SetSource(_db.MoveOptions); _scAbility.SetSource(_db.AbilityOptions);
+            }
+        }
+
+        private void BindMoveCombos(YokaiInfo y)
+        {
+            _scAttack?.Bind(y); _scTech?.Bind(y); _scInsp?.Bind(y);
+            _scGuard?.Bind(y); _scSoul?.Bind(y); _scAbility?.Bind(y);
+        }
 
         private void Selector_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
             var y = Selector.SelectedItem as YokaiInfo;
             Panel.DataContext = y;
             Panel.IsEnabled = y != null;
+            BindMoveCombos(y);
             PortraitImage.Source = LoadIcon(y);
             RefreshCharabaseImages(y);
             if (y != null) ProfileElementCombo.SelectedValue = y.Resistance ?? 0; // default profile element = its resistance
@@ -156,6 +178,7 @@ namespace Lycoris
             int element = ProfileElementCombo.SelectedValue is int el ? el : (y.Resistance ?? 0);
             int power = (int)Math.Round(PowerSlider.Value);
             string summary = AttackProfile.Apply(_db, y, element, power, ProfileBtCheck.IsChecked == true);
+            BindMoveCombos(y); // refresh the (non-two-way) move dropdowns to show the new moves
             StatusText.Text = $"Profil {YokaiEnums.Attribute(element)} / puissance {power} → {summary}";
         }
 
