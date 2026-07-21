@@ -68,6 +68,7 @@ namespace Lycoris
         {
             try
             {
+                _moddedAtlasPath = null;
                 string status = load();
 
                 // Feed the move dropdowns.
@@ -118,6 +119,7 @@ namespace Lycoris
             Panel.DataContext = y;
             Panel.IsEnabled = y != null;
             PortraitImage.Source = LoadIcon(y);
+            RefreshCharabaseImages(y);
 
             _suppressEvolvable = true;
             EvolvableCheck.IsChecked = y != null && y.CanEvolve;
@@ -144,18 +146,140 @@ namespace Lycoris
             StatusText.Text = $"Stats de {y.DisplayName} réglées sur puissance {power}/10.";
         }
 
-        private static BitmapSource LoadIcon(YokaiInfo y)
+        private static BitmapSource LoadIcon(YokaiInfo y) => LoadIconFile(y?.IconFile);
+
+        private static BitmapSource LoadIconFile(string path)
         {
-            if (y?.IconFile == null || !System.IO.File.Exists(y.IconFile)) return null;
+            if (path == null || !System.IO.File.Exists(path)) return null;
             try
             {
-                var img = Imgc.Decode(System.IO.File.ReadAllBytes(y.IconFile));
-                var bmp = new WriteableBitmap(img.Width, img.Height, 96, 96, PixelFormats.Bgra32, null);
-                bmp.WritePixels(new System.Windows.Int32Rect(0, 0, img.Width, img.Height), img.Bgra, img.Width * 4, 0);
-                bmp.Freeze();
-                return bmp;
+                var img = Imgc.Decode(System.IO.File.ReadAllBytes(path));
+                return ToBitmap(img.Bgra, img.Width, img.Height);
             }
             catch { return null; }
+        }
+
+        private static BitmapSource ToBitmap(byte[] bgra, int w, int h)
+        {
+            var bmp = new WriteableBitmap(w, h, 96, 96, PixelFormats.Bgra32, null);
+            bmp.WritePixels(new System.Windows.Int32Rect(0, 0, w, h), bgra, w * 4, 0);
+            bmp.Freeze();
+            return bmp;
+        }
+
+        /// <summary>Load a PNG and return it as a w×h BGRA32 buffer (scaled if needed).</summary>
+        private static byte[] PngToBgra(string pngPath, int w, int h)
+        {
+            var png = new BitmapImage();
+            png.BeginInit(); png.CacheOption = BitmapCacheOption.OnLoad;
+            png.UriSource = new Uri(pngPath); png.EndInit();
+            var conv = new FormatConvertedBitmap(png, PixelFormats.Bgra32, null, 0);
+            BitmapSource src = conv.PixelWidth == w && conv.PixelHeight == h
+                ? (BitmapSource)conv
+                : new TransformedBitmap(conv, new ScaleTransform((double)w / conv.PixelWidth, (double)h / conv.PixelHeight));
+            var bgra = new byte[w * h * 4];
+            src.CopyPixels(bgra, w * 4, 0);
+            return bgra;
+        }
+
+        // ----------------------- Charabase / medal icons -----------------------
+
+        /// <summary>Flush the focused editor so its two-way binding writes back before we read the model.</summary>
+        private void CommitEdits()
+        {
+            var f = System.Windows.Input.Keyboard.FocusedElement as System.Windows.UIElement;
+            f?.RaiseEvent(new RoutedEventArgs(LostFocusEvent));
+        }
+
+        private const int MedalCell = 32; // YW3 atlas cell size
+        private string _moddedAtlasPath;  // the mod's edited atlas once one medal is replaced (cumulative)
+
+        /// <summary>The atlas to read from: the mod's edited copy if we've written one, else the resolved one.</summary>
+        private string CurrentAtlasPath()
+        {
+            if (_moddedAtlasPath != null && System.IO.File.Exists(_moddedAtlasPath)) return _moddedAtlasPath;
+            return _db.FaceAtlasFile;
+        }
+
+        private void RefreshCharabaseImages(YokaiInfo y)
+        {
+            MedalIconImage.Source = LoadIconFile(y?.MedalIconFile);
+            MedalAtlasImage.Source = CropAtlasMedal(y);
+        }
+
+        private BitmapSource CropAtlasMedal(YokaiInfo y)
+        {
+            string atlasPath = CurrentAtlasPath();
+            if (y == null || !y.MedalPosX.HasValue || !y.MedalPosY.HasValue || atlasPath == null) return null;
+            try
+            {
+                var atlas = Imgc.Decode(System.IO.File.ReadAllBytes(atlasPath));
+                int x = y.MedalPosX.Value * MedalCell, y0 = y.MedalPosY.Value * MedalCell;
+                if (x + MedalCell > atlas.Width || y0 + MedalCell > atlas.Height) return null;
+                var cell = new byte[MedalCell * MedalCell * 4];
+                for (int ry = 0; ry < MedalCell; ry++)
+                    Array.Copy(atlas.Bgra, ((y0 + ry) * atlas.Width + x) * 4, cell, ry * MedalCell * 4, MedalCell * 4);
+                return ToBitmap(cell, MedalCell, MedalCell);
+            }
+            catch { return null; }
+        }
+
+        private void RefreshMedalPreview_Click(object sender, RoutedEventArgs e)
+        {
+            var y = Selector.SelectedItem as YokaiInfo;
+            CommitEdits(); // flush X/Y textboxes
+            MedalAtlasImage.Source = CropAtlasMedal(y);
+        }
+
+        private void ReplaceMedalIcon_Click(object sender, RoutedEventArgs e)
+        {
+            var y = Selector.SelectedItem as YokaiInfo;
+            if (y == null) return;
+            string baseName = y.IconBaseName ?? (y.FileNamePrefix.HasValue
+                ? IconNaming.GetFileModelText(y.FileNamePrefix.Value, y.FileNameNumber ?? 0, y.FileNameVariant ?? 0) : null);
+            string src = y.MedalIconFile ?? (_db.ModMedalIconDir != null && baseName != null
+                ? System.IO.Path.Combine(_db.ModMedalIconDir, baseName + ".xi") : null);
+            if (src == null) { MessageBox.Show("Pas de dossier medal_icon disponible.", "medal_icon"); return; }
+
+            var dlg = new Microsoft.Win32.OpenFileDialog { Filter = "Images PNG|*.png", Title = "medal_icon — PNG (64×64 idéalement)" };
+            if (dlg.ShowDialog() != true) return;
+            try
+            {
+                string target = _db.MirrorToMod(src);
+                System.IO.File.WriteAllBytes(target, Imgc.EncodeXi(PngToBgra(dlg.FileName, 64, 64), 64, 64));
+                y.MedalIconFile = target;
+                MedalIconImage.Source = LoadIconFile(target);
+                StatusText.Text = $"medal_icon remplacé: {System.IO.Path.GetFileName(target)}";
+            }
+            catch (Exception ex) { MessageBox.Show(ex.Message, "Erreur medal_icon", MessageBoxButton.OK, MessageBoxImage.Error); }
+        }
+
+        private void ReplaceMedalAtlas_Click(object sender, RoutedEventArgs e)
+        {
+            var y = Selector.SelectedItem as YokaiInfo;
+            CommitEdits();
+            if (y == null || !y.MedalPosX.HasValue || !y.MedalPosY.HasValue) return;
+            if (CurrentAtlasPath() == null) { MessageBox.Show("Atlas face_icon.xi introuvable.", "Medal"); return; }
+
+            var dlg = new Microsoft.Win32.OpenFileDialog { Filter = "Images PNG|*.png", Title = "Mini-médaille — PNG (32×32)" };
+            if (dlg.ShowDialog() != true) return;
+            try
+            {
+                var atlas = Imgc.Decode(System.IO.File.ReadAllBytes(CurrentAtlasPath()));
+                byte[] cell = PngToBgra(dlg.FileName, MedalCell, MedalCell);
+                int x = y.MedalPosX.Value * MedalCell, y0 = y.MedalPosY.Value * MedalCell;
+                if (x + MedalCell > atlas.Width || y0 + MedalCell > atlas.Height)
+                { MessageBox.Show("Position medal hors de l'atlas.", "Medal"); return; }
+                for (int ry = 0; ry < MedalCell; ry++)
+                    Array.Copy(cell, ry * MedalCell * 4, atlas.Bgra, ((y0 + ry) * atlas.Width + x) * 4, MedalCell * 4);
+
+                string target = _db.MirrorToMod(_db.FaceAtlasFile);
+                System.IO.File.WriteAllBytes(target, Imgc.EncodeXi(atlas.Bgra, atlas.Width, atlas.Height));
+                _moddedAtlasPath = target;
+                MedalAtlasImage.Source = CropAtlasMedal(y);
+                StatusText.Text = $"Médaille insérée dans l'atlas à ({y.MedalPosX},{y.MedalPosY}) → {System.IO.Path.GetFileName(target)}";
+            }
+            catch (Exception ex) { MessageBox.Show(ex.Message, "Erreur atlas medal", MessageBoxButton.OK, MessageBoxImage.Error); }
         }
 
         private void ReplaceIconButton_Click(object sender, RoutedEventArgs e)
@@ -183,31 +307,14 @@ namespace Lycoris
 
         private void ReplaceIcon(YokaiInfo y, string pngPath)
         {
-            // Determine the target .xi path: existing icon, else compute name into the mod's face_icon.
-            string target = y.IconFile;
-            if (target == null)
-            {
-                string name = y.IconBaseName
-                    ?? (y.FileNamePrefix.HasValue && y.FileNameNumber.HasValue && y.FileNameVariant.HasValue
-                        ? IconNaming.GetFileModelText(y.FileNamePrefix.Value, y.FileNameNumber.Value, y.FileNameVariant.Value)
-                        : null);
-                if (name == null) throw new InvalidOperationException("Impossible de déterminer le nom d'icône de ce yo-kai.");
-                target = System.IO.Path.Combine(_db.ModFaceIconDir, name + ".xi");
-            }
+            string name = y.IconBaseName ?? (y.FileNamePrefix.HasValue
+                ? IconNaming.GetFileModelText(y.FileNamePrefix.Value, y.FileNameNumber ?? 0, y.FileNameVariant ?? 0) : null);
+            string src = y.IconFile ?? (_db.ModFaceIconDir != null && name != null
+                ? System.IO.Path.Combine(_db.ModFaceIconDir, name + ".xi") : null);
+            if (src == null) throw new InvalidOperationException("Impossible de déterminer le fichier d'icône de ce yo-kai.");
 
-            // Decode PNG to BGRA 64x64.
-            var png = new BitmapImage();
-            png.BeginInit(); png.CacheOption = BitmapCacheOption.OnLoad;
-            png.UriSource = new Uri(pngPath); png.EndInit();
-            var conv = new FormatConvertedBitmap(png, PixelFormats.Bgra32, null, 0);
-            var scaled = conv.PixelWidth == 64 && conv.PixelHeight == 64
-                ? (BitmapSource)conv
-                : new TransformedBitmap(conv, new ScaleTransform(64.0 / conv.PixelWidth, 64.0 / conv.PixelHeight));
-            var bgra = new byte[64 * 64 * 4];
-            scaled.CopyPixels(bgra, 64 * 4, 0);
-
-            byte[] xi = Imgc.EncodeXi(bgra, 64, 64);
-            System.IO.File.WriteAllBytes(target, xi);
+            string target = _db.MirrorToMod(src);
+            System.IO.File.WriteAllBytes(target, Imgc.EncodeXi(PngToBgra(pngPath, 64, 64), 64, 64));
             y.IconFile = target;
         }
 

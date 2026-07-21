@@ -33,7 +33,7 @@ namespace Lycoris.Yokai
         public string HackslashFile { get; private set; }
         public string BattleFile { get; private set; }
         private string _hsTechnicFile, _hsTechnicTextFile, _hsAbilityFile, _hsAbilityTextFile, _itemConfigFile, _itemTextFile;
-        private string _modFolder;
+        private string _modFolder, _referenceFolder;
 
         public List<EnumEntry> TechnicOptions { get; private set; } = new List<EnumEntry>();
         public List<EnumEntry> BtAbilityOptions { get; private set; } = new List<EnumEntry>();
@@ -82,6 +82,7 @@ namespace Lycoris.Yokai
                 throw new DirectoryNotFoundException(folder);
             ResolverFromReference.Clear();
             _modFolder = folder;
+            _referenceFolder = referenceFolder;
 
             // Editable files: mod folder only (SaveAll writes these back).
             ParamFile = FindNewest(folder, Schema.ParamFilePrefix);
@@ -163,9 +164,26 @@ namespace Lycoris.Yokai
         public string FaceAtlasFile =>
             _faceIconDirs.Select(d => Path.Combine(d, "face_icon.xi")).FirstOrDefault(File.Exists);
 
-        /// <summary>Where a modified atlas is written (mod's face_icon folder), or null.</summary>
-        public string ModFaceAtlasTarget =>
-            ModFaceIconDir != null ? Path.Combine(ModFaceIconDir, "face_icon.xi") : null;
+        /// <summary>
+        /// Where a modified copy of <paramref name="resolvedPath"/> should be written inside the mod.
+        /// If the file already lives in the mod, it is overwritten; if it was resolved from the reference
+        /// game folder, its relative path is mirrored under the mod (creating folders as needed) — the
+        /// correct YWML behaviour, and reference files are never touched.
+        /// </summary>
+        public string MirrorToMod(string resolvedPath)
+        {
+            if (resolvedPath == null || _modFolder == null) return null;
+            string target;
+            if (IsUnderMod(resolvedPath))
+                target = resolvedPath;
+            else if (_referenceFolder != null &&
+                     resolvedPath.StartsWith(_referenceFolder, StringComparison.OrdinalIgnoreCase))
+                target = Path.Combine(_modFolder, resolvedPath.Substring(_referenceFolder.Length).TrimStart('\\', '/'));
+            else
+                target = Path.Combine(_modFolder, Path.GetFileName(resolvedPath));
+            Directory.CreateDirectory(Path.GetDirectoryName(target));
+            return target;
+        }
 
         /// <summary>The first face_icon folder inside the mod (write target for replaced icons), or null.</summary>
         public string ModFaceIconDir => _faceIconDirs.Count > 0 ? _faceIconDirs[0] : null;

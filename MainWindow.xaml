@@ -310,6 +310,65 @@
                             </StackPanel>
                         </TabItem>
 
+                        <!-- ================= Charabase ================= -->
+                        <TabItem Header="Charabase">
+                            <StackPanel Margin="8">
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                    <TextBlock Text="Modèle"/>
+                                    <TextBox Text="{Binding ModelName, UpdateSourceTrigger=LostFocus}" Width="90" FontFamily="Consolas"/>
+                                    <Border Width="48" Height="48" BorderBrush="#999" BorderThickness="1" Background="#F0F0F0" Margin="16,0,0,0">
+                                        <Image x:Name="MedalIconImage" RenderOptions.BitmapScalingMode="NearestNeighbor"/>
+                                    </Border>
+                                    <StackPanel VerticalAlignment="Center" Margin="4,0,0,0">
+                                        <TextBlock Text="medal_icon" Foreground="#888" FontSize="10"/>
+                                        <Button Content="Remplacer (PNG)" FontSize="10" Padding="4,1" Click="ReplaceMedalIcon_Click"/>
+                                    </StackPanel>
+                                </StackPanel>
+
+                                <GroupBox Header="Status">
+                                    <WrapPanel Margin="4">
+                                        <CheckBox Content="Rare" IsChecked="{Binding IsRare}" Width="95" Margin="0,2"/>
+                                        <CheckBox Content="Deva" IsChecked="{Binding IsDeva}" Width="95" Margin="0,2"/>
+                                        <CheckBox Content="Legend" IsChecked="{Binding IsLegend}" Width="95" Margin="0,2"/>
+                                        <CheckBox Content="Classic" IsChecked="{Binding IsClassic}" Width="95" Margin="0,2"/>
+                                        <CheckBox Content="Mystery" IsChecked="{Binding IsMystery}" Width="95" Margin="0,2"/>
+                                        <CheckBox Content="Pionner" IsChecked="{Binding IsPionner}" Width="95" Margin="0,2"/>
+                                        <CheckBox Content="Merican" IsChecked="{Binding IsMerican}" Width="95" Margin="0,2"/>
+                                        <CheckBox Content="Treasure" IsChecked="{Binding IsTreasure}" Width="95" Margin="0,2"/>
+                                        <CheckBox Content="Commandant" IsChecked="{Binding IsCommandant}" Width="95" Margin="0,2"/>
+                                    </WrapPanel>
+                                </GroupBox>
+
+                                <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                    <TextBlock Text="Role" Width="60"/>
+                                    <ComboBox Width="130" ItemsSource="{x:Static yk:YokaiEnums.Roles}"
+                                              SelectedValuePath="Key" DisplayMemberPath="Name" SelectedValue="{Binding Role}"/>
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                                    <TextBlock Text="Favori" Width="60"/>
+                                    <ComboBox Width="150" ItemsSource="{x:Static yk:YokaiEnums.Foods}"
+                                              SelectedValuePath="Key" DisplayMemberPath="Name" SelectedValue="{Binding FavoriteFood}"/>
+                                    <TextBlock Text="Détesté" Width="60" Margin="16,0,0,0"/>
+                                    <ComboBox Width="150" ItemsSource="{x:Static yk:YokaiEnums.Foods}"
+                                              SelectedValuePath="Key" DisplayMemberPath="Name" SelectedValue="{Binding HatedFood}"/>
+                                </StackPanel>
+
+                                <GroupBox Header="Medal (mini-icône dans l'atlas face_icon.xi)" Margin="0,8,0,0">
+                                    <StackPanel Orientation="Horizontal" Margin="4">
+                                        <TextBlock Text="X"/>
+                                        <TextBox Text="{Binding MedalPosX, UpdateSourceTrigger=LostFocus}" Width="45" Margin="4,0"/>
+                                        <TextBlock Text="Y" Margin="8,0,0,0"/>
+                                        <TextBox Text="{Binding MedalPosY, UpdateSourceTrigger=LostFocus}" Width="45" Margin="4,0"/>
+                                        <Border Width="48" Height="48" BorderBrush="#999" BorderThickness="1" Background="#F0F0F0" Margin="12,0,0,0">
+                                            <Image x:Name="MedalAtlasImage" RenderOptions.BitmapScalingMode="NearestNeighbor"/>
+                                        </Border>
+                                        <Button Content="Aperçu" Padding="6,2" Margin="6,0,0,0" VerticalAlignment="Center" Click="RefreshMedalPreview_Click"/>
+                                        <Button Content="Remplacer par PNG" Padding="6,2" Margin="6,0,0,0" VerticalAlignment="Center" Click="ReplaceMedalAtlas_Click"/>
+                                    </StackPanel>
+                                </GroupBox>
+                            </StackPanel>
+                        </TabItem>
+
                         <!-- ================= Quotes ================= -->
                         <TabItem Header="Quotes">
                             <TextBlock Margin="12" Foreground="#888"
