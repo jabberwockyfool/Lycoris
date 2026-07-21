@@ -55,9 +55,31 @@ namespace Lycoris.Yokai
         public int B_Drop2Index = 7;
         public int B_Drop2RateIndex = 8;
 
-        // --- Items (drop names) ---
+        // --- Items (drop names + the standalone item editor) ---
         public string ItemConfigFilePrefix = "item_config";
         public string ItemTextFilePrefix = "item_text";
+        public string ItemIconFilePrefix = "item_icon"; // folder containing item_icon.xi atlas
+
+        // item_config record types that share the common item layout (all editable).
+        public string[] ItemRecords =
+        {
+            "ITEM_CONSUME", "ITEM_CREATURE", "ITEM_IMPORTANT", "ITEM_EQUIPMENT",
+            "ITEM_HACKSLASH_BATTLE", "ITEM_HACKSLASH_EQUIPMENT", "ITEM_SOUL",
+        };
+        // Common field indices (identical across the record types above; validated against real data).
+        public int Item_IdIndex = 0;
+        public int Item_NameHashIndex = 1;       // NounTextID -> item_text NOUN
+        public int Item_InventorySortIndex = 2;
+        public int Item_TypeIndex = 3;
+        public int Item_CarryCapIndex = 6;
+        public int Item_SellPriceIndex = 10;
+        public int Item_ShopPriceIndex = 11;
+        public int Item_IconPosXIndex = 12;
+        public int Item_IconPosYIndex = 13;
+        public int Item_DescHashIndex = 14;      // DescTextID -> item_text TEXT_INFO
+        // item_text: names are NOUN_INFO (text at 5), descriptions are TEXT_INFO (text at 2).
+        public int ItemNoun_TextIndex = 5;
+        public int ItemText_TextIndex = 2;
 
         // chara_scale: CHARA_SCALE_INFO keyed by BaseHash at [0].
         public string ScaleRecord = "CHARA_SCALE_INFO";

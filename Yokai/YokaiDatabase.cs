@@ -65,10 +65,14 @@ namespace Lycoris.Yokai
         /// <summary>skill_text key -&gt; name, for the move-name resolver.</summary>
         public Dictionary<int, string> SkillNames { get; private set; } = new Dictionary<int, string>();
 
-        /// <summary>face_icon / medal_icon folders searched for .xi icons (mod first, then reference).</summary>
+        /// <summary>face_icon / medal_icon / item_icon folders searched for .xi icons (mod first, then reference).</summary>
         private readonly List<string> _faceIconDirs = new List<string>();
         private readonly List<string> _medalIconDirs = new List<string>();
+        private readonly List<string> _itemIconDirs = new List<string>();
         public int IconCount { get; private set; }
+
+        /// <summary>All editable items (for the standalone item editor).</summary>
+        public List<ItemInfo> Items { get; } = new List<ItemInfo>();
 
         public YokaiDatabase(YokaiSchema schema = null)
         {
@@ -119,6 +123,7 @@ namespace Lycoris.Yokai
 
             _faceIconDirs.Clear();
             _medalIconDirs.Clear();
+            _itemIconDirs.Clear();
             AddIconDirs(folder);
             if (referenceFolder != null) AddIconDirs(referenceFolder);
 
@@ -137,6 +142,8 @@ namespace Lycoris.Yokai
                     if (!_faceIconDirs.Contains(d)) _faceIconDirs.Add(d);
                 foreach (var d in Directory.EnumerateDirectories(root, "medal_icon", SearchOption.AllDirectories))
                     if (!_medalIconDirs.Contains(d)) _medalIconDirs.Add(d);
+                foreach (var d in Directory.EnumerateDirectories(root, "item_icon", SearchOption.AllDirectories))
+                    if (!_itemIconDirs.Contains(d)) _itemIconDirs.Add(d);
             }
             catch { /* ignore */ }
         }
@@ -178,6 +185,12 @@ namespace Lycoris.Yokai
         /// medals). Preferred as the working atlas so the mod's medals are shown/edited, not the reference.</summary>
         public string ModFaceAtlasFile =>
             _faceIconDirs.Where(IsUnderMod).Select(d => Path.Combine(d, "face_icon.xi")).FirstOrDefault(File.Exists);
+
+        /// <summary>The item icon atlas (item_icon/item_icon.xi) — mod preferred, else reference — or null.</summary>
+        public string ItemAtlasFile =>
+            _itemIconDirs.Select(d => Path.Combine(d, "item_icon.xi")).FirstOrDefault(File.Exists);
+        public string ModItemAtlasFile =>
+            _itemIconDirs.Where(IsUnderMod).Select(d => Path.Combine(d, "item_icon.xi")).FirstOrDefault(File.Exists);
 
         /// <summary>
         /// Where a modified copy of <paramref name="resolvedPath"/> should be written inside the mod.
@@ -410,6 +423,85 @@ namespace Lycoris.Yokai
                     y.EvolvesToName = tn;
             YokaiOptions = Yokai.Select(y => new EnumEntry(y.ParamHash, y.DisplayName))
                                 .OrderBy(o => o.Name, StringComparer.OrdinalIgnoreCase).ToList();
+
+            LoadItems();
+        }
+
+        private void LoadItems()
+        {
+            Items.Clear();
+            if (_itemConfigData == null) return;
+
+            var nounByKey = new Dictionary<int, T2bEntry>();
+            var textByKey = new Dictionary<int, T2bEntry>();
+            if (_itemTextData != null)
+            {
+                foreach (var e in _itemTextData.Records(Schema.NounRecord))
+                { int? k = e.FirstIntKey(); if (k.HasValue && !nounByKey.ContainsKey(k.Value)) nounByKey[k.Value] = e; }
+                foreach (var e in _itemTextData.Records(Schema.DescRecord))
+                { int? k = e.FirstIntKey(); if (k.HasValue && !textByKey.ContainsKey(k.Value)) textByKey[k.Value] = e; }
+            }
+
+            foreach (var recName in Schema.ItemRecords)
+                foreach (var e in _itemConfigData.Records(recName))
+                {
+                    if (e.Values.Count <= Schema.Item_DescHashIndex) continue;
+                    var it = new ItemInfo
+                    {
+                        Entry = e,
+                        RecordType = recName,
+                        ItemId = e.GetInt(Schema.Item_IdIndex) ?? 0,
+                        NounTextID = e.GetInt(Schema.Item_NameHashIndex) ?? 0,
+                        DescTextID = e.GetInt(Schema.Item_DescHashIndex) ?? 0,
+                        InventorySort = e.GetInt(Schema.Item_InventorySortIndex),
+                        ItemType = e.GetInt(Schema.Item_TypeIndex),
+                        CarryCap = e.GetInt(Schema.Item_CarryCapIndex),
+                        SellPrice = e.GetInt(Schema.Item_SellPriceIndex),
+                        ShopPrice = e.GetInt(Schema.Item_ShopPriceIndex),
+                        IconPosX = e.GetInt(Schema.Item_IconPosXIndex),
+                        IconPosY = e.GetInt(Schema.Item_IconPosYIndex),
+                    };
+                    if (nounByKey.TryGetValue(it.NounTextID, out T2bEntry ne)) { it.NameEntry = ne; it.Name = ne.FirstText(); }
+                    if (textByKey.TryGetValue(it.DescTextID, out T2bEntry de)) { it.DescEntry = de; it.Description = de.FirstText(); }
+                    it.OriginalName = it.Name;
+                    it.OriginalDescription = it.Description;
+                    it.IsDirty = false;
+                    Items.Add(it);
+                }
+
+            Items.Sort((a, b) => (a.InventorySort ?? 0).CompareTo(b.InventorySort ?? 0));
+        }
+
+        /// <summary>Apply item edits and write item_config + item_text into the mod (only if any changed).</summary>
+        public int SaveItems()
+        {
+            if (_itemConfigData == null || !Items.Any(i => i.IsDirty || i.NameChanged || i.DescriptionChanged))
+                return 0;
+            int n = 0;
+            foreach (var it in Items.Where(i => i.Entry != null))
+            {
+                n += SetInt(it.Entry, Schema.Item_InventorySortIndex, it.InventorySort);
+                n += SetInt(it.Entry, Schema.Item_TypeIndex, it.ItemType);
+                n += SetInt(it.Entry, Schema.Item_CarryCapIndex, it.CarryCap);
+                n += SetInt(it.Entry, Schema.Item_SellPriceIndex, it.SellPrice);
+                n += SetInt(it.Entry, Schema.Item_ShopPriceIndex, it.ShopPrice);
+                n += SetInt(it.Entry, Schema.Item_IconPosXIndex, it.IconPosX);
+                n += SetInt(it.Entry, Schema.Item_IconPosYIndex, it.IconPosY);
+            }
+            foreach (var it in Items.Where(i => i.NameEntry != null && i.NameChanged))
+                n += SetText(it.NameEntry, Schema.ItemNoun_TextIndex, it.Name);
+            foreach (var it in Items.Where(i => i.DescEntry != null && i.DescriptionChanged))
+                n += SetText(it.DescEntry, Schema.ItemText_TextIndex, it.Description);
+
+            if (!IsUnderMod(_itemConfigFile)) _itemConfigFile = MirrorToMod(_itemConfigFile);
+            T2bWriter.WriteFile(_itemConfigData, _itemConfigFile);
+            if (_itemTextData != null)
+            {
+                if (!IsUnderMod(_itemTextFile)) _itemTextFile = MirrorToMod(_itemTextFile);
+                T2bWriter.WriteFile(_itemTextData, _itemTextFile);
+            }
+            foreach (var it in Items) { it.IsDirty = false; it.OriginalName = it.Name; it.OriginalDescription = it.Description; }
+            return n;
         }
 
         /// <summary>All yo-kai as (ParamHash, name) — for the evolution-target dropdown.</summary>
