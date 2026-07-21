@@ -148,6 +148,20 @@ namespace Lycoris
             StatusText.Text = $"Stats de {y.DisplayName} réglées sur puissance {power}/10.";
         }
 
+        private void MorphoSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            if (MorphoLabel != null) MorphoLabel.Text = ScaleCurve.Morphology((int)Math.Round(MorphoSlider.Value));
+        }
+
+        private void ApplyMorpho_Click(object sender, RoutedEventArgs e)
+        {
+            var y = Selector.SelectedItem as YokaiInfo;
+            if (y == null) return;
+            int level = (int)Math.Round(MorphoSlider.Value);
+            ScaleCurve.Apply(y, level);
+            StatusText.Text = $"Scale de {y.DisplayName} → {ScaleCurve.Morphology(level)}.";
+        }
+
         private static BitmapSource LoadIcon(YokaiInfo y) => LoadIconFile(y?.IconFile);
 
         private static BitmapSource LoadIconFile(string path)

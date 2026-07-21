@@ -895,26 +895,28 @@ namespace Lycoris.Yokai
             return 1;
         }
 
-        /// <summary>Write a scale value, preserving the slot's original int/float type.</summary>
+        /// <summary>
+        /// Write a scale value. A whole number on an Integer slot stays an int (preserving the
+        /// original layout); a fractional value forces the slot to Float (e.g. applying a 0.85
+        /// humanoid scale onto a slot that shipped as int 1).
+        /// </summary>
         private static int SetScaleValue(T2bEntry e, int index, double? value)
         {
             if (!value.HasValue || index < 0 || index >= e.Values.Count) return 0;
             var slot = e.Values[index];
-            if (slot.Type == Formats.ValueType.FloatingPoint)
+            bool whole = value.Value == System.Math.Floor(value.Value);
+            if (slot.Type == Formats.ValueType.Integer && whole)
             {
-                float f = (float)value.Value;
-                if (slot.Value is float cf && cf == f) return 0;
-                slot.Value = f;
-                return 1;
-            }
-            if (slot.Type == Formats.ValueType.Integer)
-            {
-                int iv = (int)System.Math.Round(value.Value);
+                int iv = (int)value.Value;
                 if (slot.Value is int ci && ci == iv) return 0;
                 slot.Value = iv;
                 return 1;
             }
-            return 0;
+            float f = (float)value.Value;
+            if (slot.Type == Formats.ValueType.FloatingPoint && slot.Value is float cf && cf == f) return 0;
+            slot.Type = Formats.ValueType.FloatingPoint;
+            slot.Value = f;
+            return 1;
         }
 
         /// <summary>Force-set an Integer slot (used when building a fresh record from a template).</summary>

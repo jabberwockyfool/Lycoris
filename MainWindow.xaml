@@ -297,7 +297,20 @@
                                 <TextBox Text="{Binding Description, UpdateSourceTrigger=LostFocus}" AcceptsReturn="True"
                                          TextWrapping="Wrap" Height="90" VerticalScrollBarVisibility="Auto"/>
                                 <GroupBox Header="Scale (chara_scale)" Margin="0,10,0,0">
-                                    <WrapPanel Margin="4">
+                                  <StackPanel Margin="4">
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                        <TextBlock Text="Morphologie" VerticalAlignment="Center"/>
+                                        <Slider x:Name="MorphoSlider" Minimum="1" Maximum="10" Width="200" Value="1"
+                                                TickFrequency="1" IsSnapToTickEnabled="True" TickPlacement="BottomRight"
+                                                VerticalAlignment="Center" Margin="6,0,0,0"
+                                                ValueChanged="MorphoSlider_ValueChanged"/>
+                                        <TextBlock x:Name="MorphoLabel" VerticalAlignment="Center" Margin="8,0,0,0"
+                                                   FontWeight="Bold" MinWidth="140"/>
+                                        <Button Content="Appliquer" Padding="8,2" Margin="8,0,0,0" Click="ApplyMorpho_Click"/>
+                                    </StackPanel>
+                                    <TextBlock Text="Jibanyan (Nyan) → Usapyon (mascotte) → Mark Evans (humain) → Enma (humanoïde)"
+                                               Foreground="#888" FontSize="10" Margin="0,0,0,4"/>
+                                    <WrapPanel>
                                         <StackPanel Orientation="Horizontal" Margin="0,0,10,4"><TextBlock Text="1"/><TextBox Text="{Binding Scale1}" Width="70"/></StackPanel>
                                         <StackPanel Orientation="Horizontal" Margin="0,0,10,4"><TextBlock Text="2"/><TextBox Text="{Binding Scale2}" Width="70"/></StackPanel>
                                         <StackPanel Orientation="Horizontal" Margin="0,0,10,4"><TextBlock Text="3"/><TextBox Text="{Binding Scale3}" Width="70"/></StackPanel>
@@ -306,6 +319,7 @@
                                         <StackPanel Orientation="Horizontal" Margin="0,0,10,4"><TextBlock Text="6"/><TextBox Text="{Binding Scale6}" Width="70"/></StackPanel>
                                         <StackPanel Orientation="Horizontal" Margin="0,0,10,4"><TextBlock Text="7"/><TextBox Text="{Binding Scale7}" Width="70"/></StackPanel>
                                     </WrapPanel>
+                                  </StackPanel>
                                 </GroupBox>
                             </StackPanel>
                         </TabItem>
