@@ -164,6 +164,11 @@ namespace Lycoris.Yokai
         public string FaceAtlasFile =>
             _faceIconDirs.Select(d => Path.Combine(d, "face_icon.xi")).FirstOrDefault(File.Exists);
 
+        /// <summary>The mod's own face_icon.xi atlas, if it ships one (it already contains the vanilla
+        /// medals). Preferred as the working atlas so the mod's medals are shown/edited, not the reference.</summary>
+        public string ModFaceAtlasFile =>
+            _faceIconDirs.Where(IsUnderMod).Select(d => Path.Combine(d, "face_icon.xi")).FirstOrDefault(File.Exists);
+
         /// <summary>
         /// Where a modified copy of <paramref name="resolvedPath"/> should be written inside the mod.
         /// If the file already lives in the mod, it is overwritten; if it was resolved from the reference

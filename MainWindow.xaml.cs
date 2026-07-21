@@ -68,8 +68,10 @@ namespace Lycoris
         {
             try
             {
-                _moddedAtlasPath = null;
                 string status = load();
+                // If the mod ships its own face_icon.xi (which contains the vanilla medals), use it as
+                // the working atlas so its medals are shown and edited — not the reference's clean copy.
+                _moddedAtlasPath = _db.ModFaceAtlasFile;
 
                 // Feed the move dropdowns.
                 AttackCombo.ItemsSource = _db.MoveOptions;
@@ -273,7 +275,7 @@ namespace Lycoris
                 for (int ry = 0; ry < MedalCell; ry++)
                     Array.Copy(cell, ry * MedalCell * 4, atlas.Bgra, ((y0 + ry) * atlas.Width + x) * 4, MedalCell * 4);
 
-                string target = _db.MirrorToMod(_db.FaceAtlasFile);
+                string target = _db.MirrorToMod(CurrentAtlasPath());
                 System.IO.File.WriteAllBytes(target, Imgc.EncodeXi(atlas.Bgra, atlas.Width, atlas.Height));
                 _moddedAtlasPath = target;
                 MedalAtlasImage.Source = CropAtlasMedal(y);
