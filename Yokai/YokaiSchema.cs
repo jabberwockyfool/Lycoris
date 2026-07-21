@@ -28,6 +28,34 @@ namespace Lycoris.Yokai
         public string AbilityConfigRecord = "CHARA_ABILITY_CONFIG_INFO"; // key[0], name[1]
         public string SkillConfigRecord = "SKILL_CONFIG_INFO";           // key[0], name[3]
 
+        // --- Blaster T (Hackslash) — editable, keyed by ParamHash ---
+        public string HackslashParamFilePrefix = "hackslash_chara_param";
+        public string HackslashRecord = "HACKSLASH_CHARA_PARAM_INFO";
+        public int Hs_AbilityIndex = 3;      // Blaster-T ability -> hackslash_chara_ability config
+        public int Hs_SoultimateIndex = 4;   // -> hackslash_technic
+        public int Hs_AttackAIndex = 5;
+        public int Hs_AttackYIndex = 6;
+        public int Hs_AttackXIndex = 7;
+        public string HackslashTechnicFilePrefix = "hackslash_technic";       // config (exclude *_text)
+        public string HackslashTechnicRecord = "HACKSLASH_TECHNIC_INFO";
+        public string HackslashTechnicTextFilePrefix = "hackslash_technic_text";
+        public string HackslashAbilityFilePrefix = "hackslash_chara_ability";  // config (exclude *_text)
+        public string HackslashAbilityTextFilePrefix = "hackslash_chara_ability_text";
+
+        // --- Drops / rewards (battle_chara_param) — editable, keyed by ParamHash ---
+        public string BattleParamFilePrefix = "battle_chara_param";
+        public string BattleRecord = "BATTLE_CHARA_PARAM_INFO";
+        public int B_MoneyIndex = 3;
+        public int B_ExpIndex = 4;
+        public int B_Drop1Index = 5;
+        public int B_Drop1RateIndex = 6;
+        public int B_Drop2Index = 7;
+        public int B_Drop2RateIndex = 8;
+
+        // --- Items (drop names) ---
+        public string ItemConfigFilePrefix = "item_config";
+        public string ItemTextFilePrefix = "item_text";
+
         // chara_scale: CHARA_SCALE_INFO keyed by BaseHash at [0].
         public string ScaleRecord = "CHARA_SCALE_INFO";
         public int Scale_BaseHashIndex = 0;

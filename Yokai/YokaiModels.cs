@@ -129,6 +129,27 @@ namespace Lycoris.Yokai
         public bool EvolveChanged => EvolveTargetHash != OriginalEvolveTarget || EvolveLevel != OriginalEvolveLevel;
         internal Formats.T2bEntry EvolveEntry { get; set; }
 
+        // --- Blaster T (hackslash_chara_param, keyed by ParamHash) ---
+        private int? _btAbility, _btSoul, _btAtkA, _btAtkY, _btAtkX;
+        public int? BtAbilityHash { get => _btAbility; set => SetField(ref _btAbility, value); }
+        public int? BtSoultimateHash { get => _btSoul; set => SetField(ref _btSoul, value); }
+        public int? BtAttackAHash { get => _btAtkA; set => SetField(ref _btAtkA, value); }
+        public int? BtAttackYHash { get => _btAtkY; set => SetField(ref _btAtkY, value); }
+        public int? BtAttackXHash { get => _btAtkX; set => SetField(ref _btAtkX, value); }
+        public bool HasBlasterT => HackslashEntry != null;
+        internal Formats.T2bEntry HackslashEntry { get; set; }
+
+        // --- Drops / rewards (battle_chara_param, keyed by ParamHash) ---
+        private int? _money, _exp, _drop1, _drop1Rate, _drop2, _drop2Rate;
+        public int? Money { get => _money; set => SetField(ref _money, value); }
+        public int? Experience { get => _exp; set => SetField(ref _exp, value); }
+        public int? Drop1Hash { get => _drop1; set => SetField(ref _drop1, value); }
+        public int? Drop1Rate { get => _drop1Rate; set => SetField(ref _drop1Rate, value); }
+        public int? Drop2Hash { get => _drop2; set => SetField(ref _drop2, value); }
+        public int? Drop2Rate { get => _drop2Rate; set => SetField(ref _drop2Rate, value); }
+        public bool HasDrops => BattleEntry != null;
+        internal Formats.T2bEntry BattleEntry { get; set; }
+
         public bool IsDirty { get; set; }
         public bool IsNew { get; set; }
 
