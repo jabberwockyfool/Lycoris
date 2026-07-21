@@ -122,6 +122,7 @@ namespace Lycoris
             Panel.IsEnabled = y != null;
             PortraitImage.Source = LoadIcon(y);
             RefreshCharabaseImages(y);
+            if (y != null) ProfileElementCombo.SelectedValue = y.Resistance ?? 0; // default profile element = its resistance
 
             _suppressEvolvable = true;
             EvolvableCheck.IsChecked = y != null && y.CanEvolve;
@@ -146,6 +147,16 @@ namespace Lycoris
             int power = (int)Math.Round(PowerSlider.Value);
             StatCurve.Apply(y, power);
             StatusText.Text = $"Stats de {y.DisplayName} réglées sur puissance {power}/10.";
+        }
+
+        private void ApplyProfile_Click(object sender, RoutedEventArgs e)
+        {
+            var y = Selector.SelectedItem as YokaiInfo;
+            if (y == null) return;
+            int element = ProfileElementCombo.SelectedValue is int el ? el : (y.Resistance ?? 0);
+            int power = (int)Math.Round(PowerSlider.Value);
+            string summary = AttackProfile.Apply(_db, y, element, power, ProfileBtCheck.IsChecked == true);
+            StatusText.Text = $"Profil {YokaiEnums.Attribute(element)} / puissance {power} → {summary}";
         }
 
         private void MorphoSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
