@@ -27,6 +27,9 @@ namespace Lycoris.Yokai
         // Config records: key at [0], a NameHash field elsewhere (auto-detected against the text table).
         public string AbilityConfigRecord = "CHARA_ABILITY_CONFIG_INFO"; // key[0], name[1]
         public string SkillConfigRecord = "SKILL_CONFIG_INFO";           // key[0], name[3]
+        public int Skill_NameHashIndex = 3;
+        public int Skill_PowerIndex = 6;      // move power (0-1000)
+        public int Skill_ElementIndex = 8;    // element = Attributes enum (0-9): 8=Strong Attack (physical), 9=Restoration
 
         // --- Blaster T (Hackslash) — editable, keyed by ParamHash ---
         public string HackslashParamFilePrefix = "hackslash_chara_param";
