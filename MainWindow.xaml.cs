@@ -13,19 +13,31 @@ namespace Lycoris
 {
     public partial class MainWindow : Window
     {
-        private readonly YokaiDatabase _db = new YokaiDatabase(YokaiSchema.Yw3);
+        private YokaiDatabase _db = new YokaiDatabase(YokaiSchema.Yw3);
         private ICollectionView _view;
 
         /// <summary>Reference game extract used to resolve move names absent from a mod. Defaults to the "cfg" folder.</summary>
-        private readonly string _referenceFolder = FindDefaultReference();
+        private string _referenceFolder = FindDefaultReference();
 
         public MainWindow()
         {
             InitializeComponent();
         }
 
+        /// <summary>
+        /// Open the yo-kai editor bound to an already-loaded database (used by the home launcher so the
+        /// yo-kai and item editors share one in-memory mod). The UI is wired straight from the given db.
+        /// </summary>
+        public MainWindow(YokaiDatabase db, string referenceFolder) : this()
+        {
+            _db = db;
+            _referenceFolder = referenceFolder;
+            ApplyLoadedDb();
+            StatusText.Text = $"{_db.Yokai.Count} yo-kai chargés  |  noms {_db.NameTableCount}, desc {_db.DescTableCount}";
+        }
+
         /// <summary>Walk up from the exe location to find a "cfg" folder (the bundled game extract).</summary>
-        private static string FindDefaultReference()
+        internal static string FindDefaultReference()
         {
             try
             {
@@ -69,29 +81,7 @@ namespace Lycoris
             try
             {
                 string status = load();
-                // If the mod ships its own face_icon.xi (which contains the vanilla medals), use it as
-                // the working atlas so its medals are shown and edited — not the reference's clean copy.
-                _moddedAtlasPath = _db.ModFaceAtlasFile;
-
-                // Searchable move dropdowns (type to filter among ~2500 skills).
-                WireMoveCombos();
-                EvolveCombo.ItemsSource = _db.YokaiOptions;
-                BtAtkACombo.ItemsSource = _db.TechnicOptions;
-                BtAtkYCombo.ItemsSource = _db.TechnicOptions;
-                BtAtkXCombo.ItemsSource = _db.TechnicOptions;
-                BtSoulCombo.ItemsSource = _db.TechnicOptions;
-                BtAbilityCombo.ItemsSource = _db.BtAbilityOptions;
-                Drop1Combo.ItemsSource = _db.ItemOptions;
-                Drop2Combo.ItemsSource = _db.ItemOptions;
-
-                RebuildView();
-                if (_view.CurrentItem == null) _view.MoveCurrentToFirst();
-                Selector.SelectedItem = _view.CurrentItem;
-
-                SaveButton.IsEnabled = _db.ParamFile != null;
-                AddButton.IsEnabled = _db.BaseData != null && _db.TextData != null && _db.DescData != null;
-                DeleteButton.IsEnabled = _db.ParamFile != null;
-                ItemsButton.IsEnabled = _db.Items.Count > 0;
+                ApplyLoadedDb();
                 StatusText.Text = status;
             }
             catch (Exception ex)
@@ -99,6 +89,34 @@ namespace Lycoris
                 MessageBox.Show(ex.Message, "Erreur", MessageBoxButton.OK, MessageBoxImage.Error);
                 StatusText.Text = "Erreur: " + ex.Message;
             }
+        }
+
+        /// <summary>Wire the UI (dropdowns, selector, toolbar enablement) from the current <see cref="_db"/>.</summary>
+        private void ApplyLoadedDb()
+        {
+            // If the mod ships its own face_icon.xi (which contains the vanilla medals), use it as
+            // the working atlas so its medals are shown and edited — not the reference's clean copy.
+            _moddedAtlasPath = _db.ModFaceAtlasFile;
+
+            // Searchable move dropdowns (type to filter among ~2500 skills).
+            WireMoveCombos();
+            EvolveCombo.ItemsSource = _db.YokaiOptions;
+            BtAtkACombo.ItemsSource = _db.TechnicOptions;
+            BtAtkYCombo.ItemsSource = _db.TechnicOptions;
+            BtAtkXCombo.ItemsSource = _db.TechnicOptions;
+            BtSoulCombo.ItemsSource = _db.TechnicOptions;
+            BtAbilityCombo.ItemsSource = _db.BtAbilityOptions;
+            Drop1Combo.ItemsSource = _db.ItemOptions;
+            Drop2Combo.ItemsSource = _db.ItemOptions;
+
+            RebuildView();
+            if (_view.CurrentItem == null) _view.MoveCurrentToFirst();
+            Selector.SelectedItem = _view.CurrentItem;
+
+            SaveButton.IsEnabled = _db.ParamFile != null;
+            AddButton.IsEnabled = _db.BaseData != null && _db.TextData != null && _db.DescData != null;
+            DeleteButton.IsEnabled = _db.ParamFile != null;
+            ItemsButton.IsEnabled = _db.Items.Count > 0;
         }
 
         private void RebuildView()

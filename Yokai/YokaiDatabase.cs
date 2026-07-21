@@ -74,6 +74,9 @@ namespace Lycoris.Yokai
         /// <summary>All editable items (for the standalone item editor).</summary>
         public List<ItemInfo> Items { get; } = new List<ItemInfo>();
 
+        /// <summary>Set when an item is added or removed, so SaveItems writes even with no field edits.</summary>
+        private bool _itemStructureDirty;
+
         public YokaiDatabase(YokaiSchema schema = null)
         {
             Schema = schema ?? YokaiSchema.Yw3;
@@ -475,7 +478,8 @@ namespace Lycoris.Yokai
         /// <summary>Apply item edits and write item_config + item_text into the mod (only if any changed).</summary>
         public int SaveItems()
         {
-            if (_itemConfigData == null || !Items.Any(i => i.IsDirty || i.NameChanged || i.DescriptionChanged))
+            if (_itemConfigData == null ||
+                (!_itemStructureDirty && !Items.Any(i => i.IsDirty || i.NameChanged || i.DescriptionChanged)))
                 return 0;
             int n = 0;
             foreach (var it in Items.Where(i => i.Entry != null))
@@ -501,7 +505,122 @@ namespace Lycoris.Yokai
                 T2bWriter.WriteFile(_itemTextData, _itemTextFile);
             }
             foreach (var it in Items) { it.IsDirty = false; it.OriginalName = it.Name; it.OriginalDescription = it.Description; }
+            if (_itemStructureDirty && n == 0) n = 1; // report the add/remove even when no field changed
+            _itemStructureDirty = false;
             return n;
+        }
+
+        /// <summary>
+        /// Create a new item in item_config (plus its name/description in item_text) under the given
+        /// record type. Clones a real record of that type as a valid template and generates collision-free
+        /// IDs derived from <paramref name="name"/>. Persisted on the next <see cref="SaveItems"/>.
+        /// Returns the created <see cref="ItemInfo"/> (already added to <see cref="Items"/>).
+        /// </summary>
+        public ItemInfo AddItem(string name, string recordType)
+        {
+            if (_itemConfigData == null)
+                throw new InvalidOperationException("item_config non chargé.");
+            if (string.IsNullOrEmpty(recordType) || !Schema.ItemRecords.Contains(recordType))
+                recordType = Schema.ItemRecords[0];
+
+            // Template: a real record of the requested type, else any item record.
+            string useType = recordType;
+            var tpl = _itemConfigData.Records(recordType).FirstOrDefault();
+            if (tpl == null)
+                foreach (var rt in Schema.ItemRecords)
+                {
+                    tpl = _itemConfigData.Records(rt).FirstOrDefault();
+                    if (tpl != null) { useType = rt; break; }
+                }
+            if (tpl == null) throw new InvalidOperationException("Aucun item modèle dans item_config.");
+
+            // Collision-free IDs, checked against every item id / text key already present.
+            string code = "lycoris_item_" + Sanitize(name);
+            var allIds = new HashSet<int>();
+            foreach (var rt in Schema.ItemRecords)
+                foreach (var e in _itemConfigData.Records(rt))
+                { int? id = e.GetInt(Schema.Item_IdIndex); if (id.HasValue) allIds.Add(id.Value); }
+            int itemId = UniqueHash(code, allIds);
+            int nounHash = UniqueHash(code + "_noun",
+                _itemTextData != null ? ExistingFirstKeys(_itemTextData.Records(Schema.NounRecord)) : new HashSet<int>());
+            int descHash = UniqueHash(code + "_desc",
+                _itemTextData != null ? ExistingFirstKeys(_itemTextData.Records(Schema.DescRecord)) : new HashSet<int>());
+            int nextSort = Items.Count > 0 ? Items.Max(i => i.InventorySort ?? 0) + 1 : 0;
+
+            var rec = tpl.Clone();
+            SetIntForce(rec, Schema.Item_IdIndex, itemId);
+            SetIntForce(rec, Schema.Item_NameHashIndex, nounHash);
+            SetIntForce(rec, Schema.Item_DescHashIndex, descHash);
+            SetIntForce(rec, Schema.Item_InventorySortIndex, nextSort);
+            InsertIntoGroup(_itemConfigData, useType + "_LIST_BEG", useType + "_LIST_END", rec);
+
+            T2bEntry nounEntry = null, descEntry = null;
+            if (_itemTextData != null)
+            {
+                var nounTpl = _itemTextData.Records(Schema.NounRecord).FirstOrDefault();
+                if (nounTpl != null)
+                {
+                    nounEntry = nounTpl.Clone();
+                    SetIntForce(nounEntry, 0, nounHash);
+                    SetText(nounEntry, Schema.ItemNoun_TextIndex, name ?? "");
+                    InsertIntoGroup(_itemTextData, Schema.NounGroupBegin, Schema.NounGroupEnd, nounEntry);
+                }
+                var textTpl = _itemTextData.Records(Schema.DescRecord).FirstOrDefault();
+                if (textTpl != null)
+                {
+                    descEntry = textTpl.Clone();
+                    SetIntForce(descEntry, 0, descHash);
+                    SetText(descEntry, Schema.ItemText_TextIndex, "");
+                    InsertIntoGroup(_itemTextData, Schema.DescGroupBegin, Schema.DescGroupEnd, descEntry);
+                }
+            }
+
+            var it = new ItemInfo
+            {
+                Entry = rec,
+                RecordType = useType,
+                ItemId = itemId,
+                NounTextID = nounHash,
+                DescTextID = descHash,
+                Name = name,
+                Description = "",
+                InventorySort = nextSort,
+                ItemType = rec.GetInt(Schema.Item_TypeIndex),
+                CarryCap = rec.GetInt(Schema.Item_CarryCapIndex),
+                SellPrice = rec.GetInt(Schema.Item_SellPriceIndex),
+                ShopPrice = rec.GetInt(Schema.Item_ShopPriceIndex),
+                IconPosX = rec.GetInt(Schema.Item_IconPosXIndex),
+                IconPosY = rec.GetInt(Schema.Item_IconPosYIndex),
+                NameEntry = nounEntry,
+                DescEntry = descEntry,
+                OriginalName = null,        // force the name/desc to be written on save
+                OriginalDescription = null,
+                IsDirty = true,
+            };
+            Items.Add(it);
+            _itemStructureDirty = true;
+            return it;
+        }
+
+        /// <summary>
+        /// Delete an item: removes its item_config record, and its item_text name/description entries only
+        /// when no remaining item still references them (they can be shared). Persisted on the next SaveItems.
+        /// </summary>
+        public void RemoveItem(ItemInfo it)
+        {
+            if (it?.Entry == null || _itemConfigData == null) return;
+
+            RemoveEntry(_itemConfigData, it.Entry, it.RecordType + "_LIST_BEG");
+            Items.Remove(it);
+
+            if (_itemTextData != null)
+            {
+                if (it.NameEntry != null && Items.All(o => o.NounTextID != it.NounTextID))
+                    RemoveEntry(_itemTextData, it.NameEntry, Schema.NounGroupBegin);
+                if (it.DescEntry != null && Items.All(o => o.DescTextID != it.DescTextID))
+                    RemoveEntry(_itemTextData, it.DescEntry, Schema.DescGroupBegin);
+            }
+            _itemStructureDirty = true;
         }
 
         /// <summary>All yo-kai as (ParamHash, name) — for the evolution-target dropdown.</summary>

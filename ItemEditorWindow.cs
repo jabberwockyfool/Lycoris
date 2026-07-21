@@ -28,6 +28,7 @@ namespace Lycoris
         private readonly TextBlock _status = new TextBlock { Foreground = Brushes.Gray, Margin = new Thickness(4) };
         private ICollectionView _view;
         private string _moddedAtlas;
+        private readonly TextBlock _countText = new TextBlock { VerticalAlignment = VerticalAlignment.Center, Foreground = Brushes.Gray };
 
         public ItemEditorWindow(Window owner, YokaiDatabase db)
         {
@@ -40,16 +41,19 @@ namespace Lycoris
             _moddedAtlas = _db.ModItemAtlasFile;
 
             // Toolbar
-            var save = new Button { Content = "Sauver le mod", Padding = new Thickness(10, 4, 10, 4) };
+            var add = new Button { Content = "+ Ajouter", Padding = new Thickness(10, 4, 10, 4) };
+            add.Click += (s, e) => AddItem();
+            var del = new Button { Content = "Supprimer", Padding = new Thickness(10, 4, 10, 4), Margin = new Thickness(6, 0, 0, 0) };
+            del.Click += (s, e) => DeleteItem();
+            var save = new Button { Content = "Sauver le mod", Padding = new Thickness(10, 4, 10, 4), Margin = new Thickness(6, 0, 0, 0) };
             save.Click += (s, e) => Save();
             var toolbar = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(6) };
+            toolbar.Children.Add(add);
+            toolbar.Children.Add(del);
             toolbar.Children.Add(save);
-            toolbar.Children.Add(new TextBlock
-            {
-                Text = $"  {_db.Items.Count} items",
-                VerticalAlignment = VerticalAlignment.Center,
-                Foreground = Brushes.Gray
-            });
+            _countText.Margin = new Thickness(10, 0, 0, 0);
+            UpdateCount();
+            toolbar.Children.Add(_countText);
             DockPanel.SetDock(toolbar, Dock.Top);
 
             // Left: search + list
@@ -244,6 +248,44 @@ namespace Lycoris
             catch (Exception ex) { MessageBox.Show(ex.Message, "Erreur icône item", MessageBoxButton.OK, MessageBoxImage.Error); }
         }
 
+        private void UpdateCount() => _countText.Text = $"{_db.Items.Count} items";
+
+        private void AddItem()
+        {
+            var dlg = new AddItemDialog(this, _db.Schema.ItemRecords) { Owner = this };
+            if (dlg.ShowDialog() != true) return;
+            if (string.IsNullOrWhiteSpace(dlg.ItemName)) return;
+            try
+            {
+                var it = _db.AddItem(dlg.ItemName, dlg.RecordType);
+                _view.Refresh();
+                UpdateCount();
+                _list.SelectedItem = it;
+                _list.ScrollIntoView(it);
+                _status.Text = $"Item ajouté: {it.DisplayName} ({it.ItemIdHex}). Édite puis « Sauver le mod ».";
+            }
+            catch (Exception ex) { MessageBox.Show(ex.Message, "Ajout d'item", MessageBoxButton.OK, MessageBoxImage.Warning); }
+        }
+
+        private void DeleteItem()
+        {
+            var it = _list.SelectedItem as ItemInfo;
+            if (it == null) return;
+            var confirm = MessageBox.Show(
+                $"Supprimer l'item « {it.DisplayName} » ({it.ItemIdHex}) ?\n\n" +
+                "Son nom/description ne sont retirés que si aucun autre item ne les partage. " +
+                "À confirmer avec « Sauver le mod ».",
+                "Supprimer un item", MessageBoxButton.OKCancel, MessageBoxImage.Warning);
+            if (confirm != MessageBoxResult.OK) return;
+
+            int idx = _list.SelectedIndex;
+            _db.RemoveItem(it);
+            _view.Refresh();
+            UpdateCount();
+            if (_list.Items.Count > 0) _list.SelectedIndex = Math.Min(idx, _list.Items.Count - 1);
+            _status.Text = $"Item supprimé — {_db.Items.Count} restants. Sauver pour appliquer.";
+        }
+
         private void Save()
         {
             var f = System.Windows.Input.Keyboard.FocusedElement as UIElement;
@@ -277,6 +319,62 @@ namespace Lycoris
             var bgra = new byte[w * h * 4];
             src.CopyPixels(bgra, w * 4, 0);
             return bgra;
+        }
+    }
+
+    /// <summary>Small modal asking for a new item's name and record type (category).</summary>
+    internal sealed class AddItemDialog : Window
+    {
+        private readonly TextBox _name = new TextBox();
+        private readonly ComboBox _type = new ComboBox { DisplayMemberPath = "Label", SelectedValuePath = "Value" };
+
+        public string ItemName => _name.Text?.Trim();
+        public string RecordType => _type.SelectedValue as string ?? "ITEM_CONSUME";
+
+        // Friendly labels for the item_config record types.
+        private static string Friendly(string rec)
+        {
+            switch (rec)
+            {
+                case "ITEM_CONSUME": return "Consommable";
+                case "ITEM_CREATURE": return "Créature / appât";
+                case "ITEM_IMPORTANT": return "Objet important";
+                case "ITEM_EQUIPMENT": return "Équipement";
+                case "ITEM_HACKSLASH_BATTLE": return "Blaster T — combat";
+                case "ITEM_HACKSLASH_EQUIPMENT": return "Blaster T — équipement";
+                case "ITEM_SOUL": return "Âme (soul)";
+                default: return rec;
+            }
+        }
+
+        public AddItemDialog(Window owner, string[] recordTypes)
+        {
+            Owner = owner;
+            Title = "Ajouter un item";
+            Width = 380; Height = 190;
+            WindowStartupLocation = WindowStartupLocation.CenterOwner;
+            ResizeMode = ResizeMode.NoResize;
+
+            foreach (var rt in recordTypes)
+                _type.Items.Add(new { Label = Friendly(rt), Value = rt });
+            _type.SelectedIndex = 0;
+
+            var grid = new StackPanel { Margin = new Thickness(12) };
+            grid.Children.Add(new TextBlock { Text = "Nom de l'item", Foreground = Brushes.DimGray });
+            grid.Children.Add(_name);
+            grid.Children.Add(new TextBlock { Text = "Catégorie", Foreground = Brushes.DimGray, Margin = new Thickness(0, 8, 0, 0) });
+            grid.Children.Add(_type);
+
+            var ok = new Button { Content = "Ajouter", IsDefault = true, Width = 90, Margin = new Thickness(0, 12, 6, 0) };
+            ok.Click += (s, e) => { DialogResult = !string.IsNullOrWhiteSpace(ItemName); };
+            var cancel = new Button { Content = "Annuler", IsCancel = true, Width = 90, Margin = new Thickness(0, 12, 0, 0) };
+            var btns = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+            btns.Children.Add(ok);
+            btns.Children.Add(cancel);
+            grid.Children.Add(btns);
+
+            Content = grid;
+            Loaded += (s, e) => _name.Focus();
         }
     }
 }
