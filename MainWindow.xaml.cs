@@ -90,6 +90,7 @@ namespace Lycoris
 
                 SaveButton.IsEnabled = _db.ParamFile != null;
                 AddButton.IsEnabled = _db.BaseData != null && _db.TextData != null && _db.DescData != null;
+                DeleteButton.IsEnabled = _db.ParamFile != null;
                 StatusText.Text = status;
             }
             catch (Exception ex)
@@ -430,6 +431,26 @@ namespace Lycoris
             {
                 MessageBox.Show(ex.Message, "Ajout impossible", MessageBoxButton.OK, MessageBoxImage.Warning);
             }
+        }
+
+        private void DeleteButton_Click(object sender, RoutedEventArgs e)
+        {
+            var y = Selector.SelectedItem as YokaiInfo;
+            if (y == null) return;
+            var confirm = MessageBox.Show(
+                $"Supprimer {y.DisplayName} ({y.ParamIdHex}) du registre ?\n\n" +
+                "Son entrée param (et hackslash/battle) est retirée ; les données partagées " +
+                "(base, nom, description…) ne le sont que si aucun autre yo-kai ne les utilise. " +
+                "À confirmer avec « Sauver le mod ».",
+                "Supprimer un yo-kai", MessageBoxButton.OKCancel, MessageBoxImage.Warning);
+            if (confirm != MessageBoxResult.OK) return;
+
+            int idx = Selector.SelectedIndex;
+            _db.RemoveYokai(y);
+            RebuildView();
+            if (Selector.Items.Count > 0)
+                Selector.SelectedIndex = Math.Min(idx, Selector.Items.Count - 1);
+            StatusText.Text = $"{y.DisplayName} supprimé — {_db.Yokai.Count} yo-kai restants. Sauver pour appliquer.";
         }
 
         private void SaveButton_Click(object sender, RoutedEventArgs e)

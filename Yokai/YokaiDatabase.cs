@@ -677,6 +677,45 @@ namespace Lycoris.Yokai
             }
         }
 
+        /// <summary>
+        /// Delete a yo-kai from the registry. Removes its param record (the core registry entry) and its
+        /// per-ParamHash records (hackslash, battle); removes SHARED records (base, scale, name, description)
+        /// only when no remaining yo-kai still references them. Evolution records are left untouched (removing
+        /// them would reindex every other yo-kai's EvolveOffset). Persisted on the next SaveAll.
+        /// </summary>
+        public void RemoveYokai(YokaiInfo y)
+        {
+            if (y?.SourceEntry == null) return;
+
+            RemoveEntry(ParamData, y.SourceEntry, Schema.ParamGroupBegin);
+            if (HackslashData != null && y.HackslashEntry != null)
+                RemoveEntry(HackslashData, y.HackslashEntry, Schema.HackslashGroupBegin);
+            if (BattleData != null && y.BattleEntry != null)
+                RemoveEntry(BattleData, y.BattleEntry, Schema.BattleGroupBegin);
+
+            Yokai.Remove(y);
+
+            // Shared records — remove only if orphaned (no other yo-kai points at them anymore).
+            if (BaseData != null && y.BaseEntry != null && Yokai.All(o => o.BaseHash != y.BaseHash))
+                RemoveEntry(BaseData, y.BaseEntry, Schema.BaseGroupBegin);
+            if (ScaleData != null && y.ScaleEntry != null && Yokai.All(o => o.BaseHash != y.BaseHash))
+                RemoveEntry(ScaleData, y.ScaleEntry, Schema.ScaleGroupBegin);
+            if (TextData != null && y.NameEntry != null && Yokai.All(o => o.NameHash != y.NameHash))
+                RemoveEntry(TextData, y.NameEntry, Schema.NounGroupBegin);
+            if (DescData != null && y.DescEntry != null && y.DescriptionHash.HasValue
+                && Yokai.All(o => o.DescriptionHash != y.DescriptionHash))
+                RemoveEntry(DescData, y.DescEntry, Schema.DescGroupBegin);
+        }
+
+        /// <summary>Remove an entry from a file and decrement its group's _BEG child count.</summary>
+        private static void RemoveEntry(T2bFile file, T2bEntry entry, string beginName)
+        {
+            if (file == null || !file.Entries.Remove(entry)) return;
+            var begin = file.Entries.FirstOrDefault(e => e.Name == beginName);
+            if (begin != null && begin.Values.Count > 0 && begin.Values[0].Value is int c)
+                begin.Values[0].Value = c - 1;
+        }
+
         // ============================ Helpers ============================
 
         /// <summary>Resolve each move hash to a display name via the move-name map (set in LoadAll).</summary>

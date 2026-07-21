@@ -24,6 +24,7 @@
         <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,8">
             <Button x:Name="OpenFolderButton" Content="Ouvrir un dossier…" Padding="10,4" Click="OpenFolderButton_Click"/>
             <Button x:Name="AddButton" Content="+ Ajouter" Padding="10,4" Margin="6,0,0,0" Click="AddButton_Click" IsEnabled="False"/>
+            <Button x:Name="DeleteButton" Content="Supprimer" Padding="10,4" Margin="6,0,0,0" Click="DeleteButton_Click" IsEnabled="False"/>
             <Button x:Name="SaveButton" Content="Sauver le mod" Padding="10,4" Margin="6,0,0,0" Click="SaveButton_Click" IsEnabled="False"/>
         </StackPanel>
 
