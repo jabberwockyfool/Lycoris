@@ -70,6 +70,7 @@
     <Compile Include="Yokai\IconNaming.cs" />
     <Compile Include="Yokai\YokaiSchema.cs" />
     <Compile Include="Yokai\YokaiEnums.cs" />
+    <Compile Include="Yokai\StatCurve.cs" />
     <Compile Include="Yokai\YokaiModels.cs" />
     <Compile Include="Yokai\YokaiDatabase.cs" />
     <Compile Include="AddYokaiDialog.cs" />

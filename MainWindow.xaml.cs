@@ -110,12 +110,38 @@ namespace Lycoris
 
         // ----------------------- Selection -----------------------
 
+        private bool _suppressEvolvable;
+
         private void Selector_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
             var y = Selector.SelectedItem as YokaiInfo;
             Panel.DataContext = y;
             Panel.IsEnabled = y != null;
             PortraitImage.Source = LoadIcon(y);
+
+            _suppressEvolvable = true;
+            EvolvableCheck.IsChecked = y != null && y.CanEvolve;
+            _suppressEvolvable = false;
+        }
+
+        private void EvolvableCheck_Changed(object sender, RoutedEventArgs e)
+        {
+            if (_suppressEvolvable) return;
+            var y = Selector.SelectedItem as YokaiInfo;
+            if (y == null) return;
+            _db.SetEvolvable(y, EvolvableCheck.IsChecked == true);
+            StatusText.Text = y.CanEvolve
+                ? $"{y.DisplayName} peut maintenant évoluer — choisis la cible et le niveau, puis Sauver."
+                : $"{y.DisplayName} n'évolue plus.";
+        }
+
+        private void ApplyPower_Click(object sender, RoutedEventArgs e)
+        {
+            var y = Selector.SelectedItem as YokaiInfo;
+            if (y == null) return;
+            int power = (int)Math.Round(PowerSlider.Value);
+            StatCurve.Apply(y, power);
+            StatusText.Text = $"Stats de {y.DisplayName} réglées sur puissance {power}/10.";
         }
 
         private static BitmapSource LoadIcon(YokaiInfo y)

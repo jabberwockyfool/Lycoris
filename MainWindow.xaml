@@ -125,6 +125,18 @@
                                     <TextBox Grid.Row="2" Grid.Column="5" Text="{Binding MaxSpeed}" Margin="2"/>
                                 </Grid>
 
+                                <!-- Power scale -->
+                                <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                                    <TextBlock Text="Puissance" VerticalAlignment="Center"/>
+                                    <Slider x:Name="PowerSlider" Minimum="1" Maximum="10" Width="220" Value="5"
+                                            TickFrequency="1" IsSnapToTickEnabled="True" TickPlacement="BottomRight"
+                                            VerticalAlignment="Center" Margin="6,0,0,0"/>
+                                    <TextBlock Text="{Binding Value, ElementName=PowerSlider, StringFormat=N0}" Width="24"
+                                               VerticalAlignment="Center" Margin="6,0,0,0" FontWeight="Bold"/>
+                                    <Button Content="Appliquer stats cohérentes" Padding="8,2" Margin="10,0,0,0"
+                                            Click="ApplyPower_Click"/>
+                                </StackPanel>
+
                                 <!-- Attributes -->
                                 <GroupBox Header="Attribute Damage Multiplicator" Margin="0,10,0,0">
                                     <StackPanel Orientation="Horizontal" Margin="4">
@@ -267,7 +279,10 @@
                                               SelectedValuePath="Key" DisplayMemberPath="Name" SelectedValue="{Binding Rank}"/>
                                 </StackPanel>
                                 <GroupBox Header="Évolution" Margin="0,0,0,6">
-                                    <StackPanel Orientation="Horizontal" Margin="4">
+                                  <StackPanel Margin="4">
+                                    <CheckBox x:Name="EvolvableCheck" Content="Évoluable" Margin="0,0,0,6"
+                                              Checked="EvolvableCheck_Changed" Unchecked="EvolvableCheck_Changed"/>
+                                    <StackPanel Orientation="Horizontal">
                                         <TextBlock Text="Évolue en"/>
                                         <ComboBox x:Name="EvolveCombo" Width="180" IsTextSearchEnabled="True"
                                                   SelectedValuePath="Key" DisplayMemberPath="Name" TextSearch.TextPath="Name"
@@ -276,6 +291,7 @@
                                         <TextBox Text="{Binding EvolveLevel}" Width="45" IsEnabled="{Binding CanEvolve}"/>
                                         <TextBlock Text="{Binding EvolvesToName}" Margin="12,0,0,0" Foreground="#888"/>
                                     </StackPanel>
+                                  </StackPanel>
                                 </GroupBox>
                                 <TextBlock Text="Description" Margin="0,4,0,2"/>
                                 <TextBox Text="{Binding Description, UpdateSourceTrigger=LostFocus}" AcceptsReturn="True"
