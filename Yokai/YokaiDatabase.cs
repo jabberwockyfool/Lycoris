@@ -39,6 +39,16 @@ namespace Lycoris.Yokai
         public List<EnumEntry> BtAbilityOptions { get; private set; } = new List<EnumEntry>();
         public List<EnumEntry> ItemOptions { get; private set; } = new List<EnumEntry>();
 
+        public struct SkillMove
+        {
+            public int Hash; public string Name; public int Power;
+            public SkillMove(int h, string n, int p) { Hash = h; Name = n; Power = p; }
+        }
+        /// <summary>skill_config moves grouped by element (Attributes 0-9), sorted by power. For attack profiles.</summary>
+        public Dictionary<int, List<SkillMove>> SkillsByElement { get; private set; } = new Dictionary<int, List<SkillMove>>();
+        /// <summary>Blaster-T technic name -&gt; hash, for name-matched Blaster-T profile assignment.</summary>
+        public Dictionary<string, int> TechnicByName { get; private set; } = new Dictionary<string, int>();
+
         public string ParamFile { get; private set; }
         public string BaseFile { get; private set; }
         public string TextFile { get; private set; }
@@ -260,6 +270,9 @@ namespace Lycoris.Yokai
             var scaleByBase = BuildScaleMap(ScaleData);
             SkillNames = BuildTextValueMap(SkillTextData);
             _moveNames = BuildMoveNames();
+            SkillsByElement = BuildSkillPools();
+            TechnicByName = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            foreach (var o in TechnicOptions) if (!TechnicByName.ContainsKey(o.Name)) TechnicByName[o.Name] = o.Key;
             NameTableCount = nounByKey.Count;
             DescTableCount = textByKey.Count;
             SkillTableCount = SkillNames.Count;
@@ -686,6 +699,27 @@ namespace Lycoris.Yokai
 
         /// <summary>Move hash -&gt; name, assembled from ability config + skill/ability text tables.</summary>
         private Dictionary<int, string> _moveNames = new Dictionary<int, string>();
+
+        private Dictionary<int, List<SkillMove>> BuildSkillPools()
+        {
+            var pools = new Dictionary<int, List<SkillMove>>();
+            if (SkillConfigData == null) return pools;
+            var seen = new HashSet<int>();
+            foreach (var e in SkillConfigData.Records(Schema.SkillConfigRecord))
+            {
+                int? hash = e.GetInt(0);
+                int? elem = e.GetInt(Schema.Skill_ElementIndex);
+                int? power = e.GetInt(Schema.Skill_PowerIndex);
+                int? nameHash = e.GetInt(Schema.Skill_NameHashIndex);
+                if (!hash.HasValue || !elem.HasValue || !nameHash.HasValue) continue;
+                if (!SkillNames.TryGetValue(nameHash.Value, out string name) || string.IsNullOrEmpty(name)) continue;
+                if (!seen.Add(hash.Value)) continue;
+                if (!pools.TryGetValue(elem.Value, out var list)) pools[elem.Value] = list = new List<SkillMove>();
+                list.Add(new SkillMove(hash.Value, name, power ?? 0));
+            }
+            foreach (var list in pools.Values) list.Sort((a, b) => a.Power.CompareTo(b.Power));
+            return pools;
+        }
 
         /// <summary>How many yo-kai got a resolved ability name (diagnostic for the UI).</summary>
         public int AbilityTableCount { get; private set; }
