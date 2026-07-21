@@ -96,8 +96,22 @@ namespace Lycoris.Yokai
         public int Base_FileNameVariantIndex = 3;
         public int Base_NameHashIndex = 4;
         public int Base_DescriptionHashIndex = 10;
+        public int Base_MedalPosXIndex = 11;
+        public int Base_MedalPosYIndex = 12;
         public int Base_RankIndex = 14;
+        public int Base_IsRareIndex = 15;
+        public int Base_IsLegendIndex = 16;
+        public int Base_IsPionnerIndex = 17;
+        public int Base_IsCommandantIndex = 18;
+        public int Base_FavoriteFoodIndex = 19;
+        public int Base_HatedFoodIndex = 20;
         public int Base_TribeIndex = 23;
+        public int Base_IsClassicIndex = 24;
+        public int Base_IsMericanIndex = 25;
+        public int Base_RoleIndex = 26;
+        public int Base_IsDevaIndex = 28;
+        public int Base_IsMysteryIndex = 29;
+        public int Base_IsTreasureIndex = 30;
 
         public int EvolveOffsetIndex = 38;     // -1 = no evolution, else index into CHARA_EVOLVE_INFO
         // CHARA_EVOLVE_INFO record (in chara_param): [0]=target ParamHash, [1]=level.
