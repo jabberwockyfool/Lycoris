@@ -802,7 +802,21 @@ namespace Lycoris.Yokai
                     if (tpl != null) { useType = rt; break; }
                 }
             if (tpl == null) throw new InvalidOperationException("Aucun item modèle dans item_config.");
+            return CreateItem(tpl, useType, name, "");
+        }
 
+        /// <summary>Duplicate an existing item: same fields (incl. description + icon position), a new ID/name.</summary>
+        public ItemInfo DuplicateItem(ItemInfo src)
+        {
+            if (src?.Entry == null || _itemConfigData == null)
+                throw new InvalidOperationException("Aucun item à dupliquer.");
+            string name = (string.IsNullOrEmpty(src.Name) ? src.ItemIdHex : src.Name) + " (copie)";
+            return CreateItem(src.Entry, src.RecordType, name, src.Description);
+        }
+
+        /// <summary>Shared record-builder for AddItem/DuplicateItem. Clones <paramref name="template"/>.</summary>
+        private ItemInfo CreateItem(T2bEntry template, string useType, string name, string description)
+        {
             // Collision-free IDs, checked against every item id / text key already present.
             string code = "lycoris_item_" + Sanitize(name);
             var allIds = new HashSet<int>();
@@ -816,7 +830,7 @@ namespace Lycoris.Yokai
                 _itemTextData != null ? ExistingFirstKeys(_itemTextData.Records(Schema.DescRecord)) : new HashSet<int>());
             int nextSort = Items.Count > 0 ? Items.Max(i => i.InventorySort ?? 0) + 1 : 0;
 
-            var rec = tpl.Clone();
+            var rec = template.Clone();
             SetIntForce(rec, Schema.Item_IdIndex, itemId);
             SetIntForce(rec, Schema.Item_NameHashIndex, nounHash);
             SetIntForce(rec, Schema.Item_DescHashIndex, descHash);
@@ -839,7 +853,7 @@ namespace Lycoris.Yokai
                 {
                     descEntry = textTpl.Clone();
                     SetIntForce(descEntry, 0, descHash);
-                    SetText(descEntry, Schema.ItemText_TextIndex, "");
+                    SetText(descEntry, Schema.ItemText_TextIndex, description ?? "");
                     InsertIntoGroup(_itemTextData, Schema.DescGroupBegin, Schema.DescGroupEnd, descEntry);
                 }
             }
@@ -852,7 +866,7 @@ namespace Lycoris.Yokai
                 NounTextID = nounHash,
                 DescTextID = descHash,
                 Name = name,
-                Description = "",
+                Description = description ?? "",
                 InventorySort = nextSort,
                 ItemType = rec.GetInt(Schema.Item_TypeIndex),
                 CarryCap = rec.GetInt(Schema.Item_CarryCapIndex),
@@ -1125,6 +1139,126 @@ namespace Lycoris.Yokai
             Yokai.Add(y);
             EnableBlasterT(y);   // new yo-kai get an editable Blaster-T + Drops entry
             EnableDrops(y);
+            return y;
+        }
+
+        /// <summary>
+        /// Duplicate a yo-kai: clones its param / base / name / description / scale records (and Blaster-T /
+        /// drops if it has them) with fresh collision-free hashes, so the copy is fully independent. All stats,
+        /// moves, tribe/rank, model, charabase flags, scale and evolution target are copied. Persisted on the
+        /// next <see cref="SaveAll"/>. Returns the created <see cref="YokaiInfo"/>.
+        /// </summary>
+        public YokaiInfo DuplicateYokai(YokaiInfo src)
+        {
+            if (src?.SourceEntry == null) throw new InvalidOperationException("Aucun yo-kai à dupliquer.");
+            if (BaseData == null || TextData == null || DescData == null)
+                throw new InvalidOperationException(
+                    "Dupliquer nécessite chara_base + chara_text + chara_desc_text chargés (mod complet).");
+
+            string name = (string.IsNullOrEmpty(src.Name) ? src.ParamIdHex : src.Name) + " (copie)";
+            string code = "lycoris_" + Sanitize(name);
+            int baseHash = UniqueHash(code + "_base", ExistingKeys(BaseData.Records(Schema.BaseYokaiRecord), Schema.Base_BaseHashIndex));
+            int paramHash = UniqueHash(code + "_param", ExistingKeys(ParamData.Records(Schema.ParamRecord), Schema.ParamHashIndex));
+            int nameHash = UniqueHash(code + "_name", ExistingFirstKeys(TextData.Records(Schema.NounRecord)));
+            int descHash = UniqueHash(code + "_desc", ExistingFirstKeys(DescData.Records(Schema.DescRecord)));
+
+            // --- param (clone the source, re-key to the new param/base hashes) ---
+            var paramTpl = src.SourceEntry.Clone();
+            SetIntForce(paramTpl, Schema.ParamHashIndex, paramHash);
+            SetIntForce(paramTpl, Schema.Param_BaseHashIndex, baseHash);
+            InsertIntoGroup(ParamData, Schema.ParamGroupBegin, Schema.ParamGroupEnd, paramTpl);
+
+            // --- base (clone the source's base so rank/tribe/model/charabase all carry over) ---
+            var baseTpl = (src.BaseEntry ?? BaseData.Records(Schema.BaseYokaiRecord).First()).Clone();
+            SetIntForce(baseTpl, Schema.Base_BaseHashIndex, baseHash);
+            SetIntForce(baseTpl, Schema.Base_NameHashIndex, nameHash);
+            SetIntForce(baseTpl, Schema.Base_DescriptionHashIndex, descHash);
+            InsertIntoGroup(BaseData, Schema.BaseGroupBegin, Schema.BaseGroupEnd, baseTpl);
+
+            // --- name + description (new independent entries) ---
+            var nounTpl = (src.NameEntry ?? TextData.Records(Schema.NounRecord).First()).Clone();
+            SetIntForce(nounTpl, Schema.NounKeyIndex, nameHash);
+            SetText(nounTpl, Schema.NounTextIndex, name);
+            InsertIntoGroup(TextData, Schema.NounGroupBegin, Schema.NounGroupEnd, nounTpl);
+
+            var descTpl = (src.DescEntry ?? DescData.Records(Schema.DescRecord).First()).Clone();
+            SetIntForce(descTpl, Schema.DescKeyIndex, descHash);
+            SetText(descTpl, Schema.DescTextIndex, src.Description ?? "");
+            InsertIntoGroup(DescData, Schema.DescGroupBegin, Schema.DescGroupEnd, descTpl);
+
+            // --- scale (keyed by BaseHash → clone with the new base hash) ---
+            T2bEntry scaleTpl = null;
+            if (ScaleData != null && src.ScaleEntry != null)
+            {
+                scaleTpl = src.ScaleEntry.Clone();
+                SetIntForce(scaleTpl, Schema.Scale_BaseHashIndex, baseHash);
+                InsertIntoGroup(ScaleData, Schema.ScaleGroupBegin, Schema.ScaleGroupEnd, scaleTpl);
+            }
+
+            // --- Blaster-T / drops (keyed by ParamHash → clone with the new param hash) ---
+            T2bEntry hsTpl = null;
+            if (HackslashData != null && src.HackslashEntry != null)
+            {
+                hsTpl = src.HackslashEntry.Clone();
+                SetIntForce(hsTpl, 0, paramHash);
+                InsertIntoGroup(HackslashData, Schema.HackslashGroupBegin, Schema.HackslashGroupEnd, hsTpl);
+                if (!IsUnderMod(HackslashFile)) HackslashFile = MirrorToMod(HackslashFile);
+            }
+            T2bEntry btTpl = null;
+            if (BattleData != null && src.BattleEntry != null)
+            {
+                btTpl = src.BattleEntry.Clone();
+                SetIntForce(btTpl, 0, paramHash);
+                InsertIntoGroup(BattleData, Schema.BattleGroupBegin, Schema.BattleGroupEnd, btTpl);
+                if (!IsUnderMod(BattleFile)) BattleFile = MirrorToMod(BattleFile);
+            }
+
+            // Build the model by copying every editable/display field from the source.
+            var y = new YokaiInfo
+            {
+                IsNew = true,
+                SourceEntry = paramTpl, BaseEntry = baseTpl, NameEntry = nounTpl, DescEntry = descTpl,
+                ScaleEntry = scaleTpl, HackslashEntry = hsTpl, BattleEntry = btTpl,
+                ParamHash = paramHash, BaseHash = baseHash, NameHash = nameHash, DescriptionHash = descHash,
+                Name = name, Description = src.Description,
+                // model / icons
+                FileNamePrefix = src.FileNamePrefix, FileNameNumber = src.FileNameNumber, FileNameVariant = src.FileNameVariant,
+                IconBaseName = src.IconBaseName, IconFile = src.IconFile, MedalIconFile = src.MedalIconFile,
+                // param stats
+                Show = src.Show, Medal = src.Medal, Resistance = src.Resistance, Weakness = src.Weakness,
+                MinHp = src.MinHp, MaxHp = src.MaxHp, MinStrength = src.MinStrength, MaxStrength = src.MaxStrength,
+                MinSpirit = src.MinSpirit, MaxSpirit = src.MaxSpirit, MinDefense = src.MinDefense, MaxDefense = src.MaxDefense,
+                MinSpeed = src.MinSpeed, MaxSpeed = src.MaxSpeed,
+                // moves
+                AttackHash = src.AttackHash, AttackPct = src.AttackPct, TechniqueHash = src.TechniqueHash, TechniquePct = src.TechniquePct,
+                InspiritHash = src.InspiritHash, InspiritPct = src.InspiritPct, GuardHash = src.GuardHash, GuardPct = src.GuardPct,
+                SoultimateHash = src.SoultimateHash, AbilityHash = src.AbilityHash,
+                AttackName = src.AttackName, TechniqueName = src.TechniqueName, InspiritName = src.InspiritName,
+                GuardName = src.GuardName, SoultimateName = src.SoultimateName, AbilityName = src.AbilityName,
+                // base / charabase
+                Rank = src.Rank, Tribe = src.Tribe,
+                MedalPosX = src.MedalPosX, MedalPosY = src.MedalPosY, FavoriteFood = src.FavoriteFood, HatedFood = src.HatedFood,
+                Role = src.Role, IsRare = src.IsRare, IsLegend = src.IsLegend, IsPionner = src.IsPionner,
+                IsCommandant = src.IsCommandant, IsClassic = src.IsClassic, IsMerican = src.IsMerican,
+                IsDeva = src.IsDeva, IsMystery = src.IsMystery, IsTreasure = src.IsTreasure,
+                // evolution: copy the offset (shared record referenced by index; not re-written)
+                EvolveOffset = src.EvolveOffset, EvolveTargetHash = src.EvolveTargetHash, EvolveLevel = src.EvolveLevel,
+                EvolvesToName = src.EvolvesToName,
+                // Blaster-T / drops
+                BtAbilityHash = src.BtAbilityHash, BtSoultimateHash = src.BtSoultimateHash,
+                BtAttackAHash = src.BtAttackAHash, BtAttackYHash = src.BtAttackYHash, BtAttackXHash = src.BtAttackXHash,
+                Money = src.Money, Experience = src.Experience,
+                Drop1Hash = src.Drop1Hash, Drop1Rate = src.Drop1Rate, Drop2Hash = src.Drop2Hash, Drop2Rate = src.Drop2Rate,
+            };
+            for (int i = 1; i <= 7; i++) y.InitScale(i, src.GetScale(i));
+
+            // Snapshots so SaveAll doesn't treat the (already-correct) shared records as edited.
+            y.OriginalRank = y.Rank; y.OriginalTribe = y.Tribe;
+            y.OriginalEvolveOffset = y.EvolveOffset;
+            y.OriginalEvolveTarget = y.EvolveTargetHash; y.OriginalEvolveLevel = y.EvolveLevel;
+            foreach (var kv in y.BaseFieldValues(Schema)) y.BaseOriginal[kv.Key] = kv.Value;
+
+            Yokai.Add(y);
             return y;
         }
 

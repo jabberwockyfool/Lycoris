@@ -115,6 +115,7 @@ namespace Lycoris
 
             SaveButton.IsEnabled = _db.ParamFile != null;
             AddButton.IsEnabled = _db.BaseData != null && _db.TextData != null && _db.DescData != null;
+            DuplicateButton.IsEnabled = _db.BaseData != null && _db.TextData != null && _db.DescData != null;
             DeleteButton.IsEnabled = _db.ParamFile != null;
             ItemsButton.IsEnabled = _db.Items.Count > 0;
         }
@@ -480,6 +481,24 @@ namespace Lycoris
             catch (Exception ex)
             {
                 MessageBox.Show(ex.Message, "Ajout impossible", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+        }
+
+        private void DuplicateButton_Click(object sender, RoutedEventArgs e)
+        {
+            var src = Selector.SelectedItem as YokaiInfo;
+            if (src == null) return;
+            CommitEdits(); // flush pending edits on the source before cloning it
+            try
+            {
+                var y = _db.DuplicateYokai(src);
+                RebuildView();
+                Selector.SelectedItem = y;
+                StatusText.Text = $"Dupliqué: {y.Name} ({y.ParamIdHex}). Édite ses champs puis Sauver le mod.";
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(ex.Message, "Duplication impossible", MessageBoxButton.OK, MessageBoxImage.Warning);
             }
         }
 

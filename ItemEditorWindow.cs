@@ -43,12 +43,15 @@ namespace Lycoris
             // Toolbar
             var add = new Button { Content = "+ Ajouter", Padding = new Thickness(10, 4, 10, 4) };
             add.Click += (s, e) => AddItem();
+            var dup = new Button { Content = "Dupliquer", Padding = new Thickness(10, 4, 10, 4), Margin = new Thickness(6, 0, 0, 0) };
+            dup.Click += (s, e) => DuplicateItem();
             var del = new Button { Content = "Supprimer", Padding = new Thickness(10, 4, 10, 4), Margin = new Thickness(6, 0, 0, 0) };
             del.Click += (s, e) => DeleteItem();
             var save = new Button { Content = "Sauver le mod", Padding = new Thickness(10, 4, 10, 4), Margin = new Thickness(6, 0, 0, 0) };
             save.Click += (s, e) => Save();
             var toolbar = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(6) };
             toolbar.Children.Add(add);
+            toolbar.Children.Add(dup);
             toolbar.Children.Add(del);
             toolbar.Children.Add(save);
             _countText.Margin = new Thickness(10, 0, 0, 0);
@@ -265,6 +268,24 @@ namespace Lycoris
                 _status.Text = $"Item ajouté: {it.DisplayName} ({it.ItemIdHex}). Édite puis « Sauver le mod ».";
             }
             catch (Exception ex) { MessageBox.Show(ex.Message, "Ajout d'item", MessageBoxButton.OK, MessageBoxImage.Warning); }
+        }
+
+        private void DuplicateItem()
+        {
+            var src = _list.SelectedItem as ItemInfo;
+            if (src == null) return;
+            var f = System.Windows.Input.Keyboard.FocusedElement as UIElement;
+            f?.RaiseEvent(new RoutedEventArgs(LostFocusEvent));
+            try
+            {
+                var it = _db.DuplicateItem(src);
+                _view.Refresh();
+                UpdateCount();
+                _list.SelectedItem = it;
+                _list.ScrollIntoView(it);
+                _status.Text = $"Dupliqué: {it.DisplayName} ({it.ItemIdHex}). Édite puis « Sauver le mod ».";
+            }
+            catch (Exception ex) { MessageBox.Show(ex.Message, "Duplication d'item", MessageBoxButton.OK, MessageBoxImage.Warning); }
         }
 
         private void DeleteItem()

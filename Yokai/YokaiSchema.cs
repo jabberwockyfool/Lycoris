@@ -100,6 +100,7 @@ namespace Lycoris.Yokai
         // chara_scale: CHARA_SCALE_INFO keyed by BaseHash at [0].
         public string ScaleRecord = "CHARA_SCALE_INFO";
         public string ScaleGroupBegin = "CHARA_SCALE_INFO_LIST_BEG";
+        public string ScaleGroupEnd = "CHARA_SCALE_INFO_LIST_END";
         public int Scale_BaseHashIndex = 0;
 
         // Group markers (value[0] = child count) for delete + enable-BT/drops paths.
