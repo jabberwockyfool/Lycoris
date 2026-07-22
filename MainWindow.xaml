@@ -5,16 +5,16 @@
         x:Name="Root"
         Title="Lycoris — YKW3 Editor" Height="720" Width="900">
     <Window.Resources>
-        <Style TargetType="TextBlock">
+        <Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
             <Setter Property="VerticalAlignment" Value="Center"/>
             <Setter Property="Margin" Value="0,0,6,0"/>
         </Style>
-        <Style TargetType="TextBox">
+        <Style TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}">
             <Setter Property="VerticalContentAlignment" Value="Center"/>
             <Setter Property="Margin" Value="0,2,0,2"/>
         </Style>
         <Style x:Key="Lbl" TargetType="TextBlock">
-            <Setter Property="Foreground" Value="#666"/>
+            <Setter Property="Foreground" Value="{StaticResource FgMutedBrush}"/>
             <Setter Property="HorizontalAlignment" Value="Center"/>
         </Style>
     </Window.Resources>
@@ -42,7 +42,7 @@
             <TextBox x:Name="FilterBox" Width="180" TextChanged="FilterBox_TextChanged"/>
         </StackPanel>
 
-        <TextBlock x:Name="StatusText" DockPanel.Dock="Bottom" Margin="0,6,0,0" Foreground="#555"
+        <TextBlock x:Name="StatusText" DockPanel.Dock="Bottom" Margin="0,6,0,0" Foreground="{StaticResource FgMutedBrush}"
                    TextWrapping="Wrap" Text="Ouvre un dossier extrait / mod YWML."/>
 
         <!-- Character panel -->
@@ -56,8 +56,8 @@
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
-                        <Border Grid.Column="0" Width="72" Height="72" BorderBrush="#999" BorderThickness="1"
-                                Background="#F0F0F0" Margin="0,0,12,0">
+                        <Border Grid.Column="0" Width="72" Height="72" BorderBrush="{StaticResource BorderBrushC}" BorderThickness="1"
+                                Background="{StaticResource FieldBgBrush}" Margin="0,0,12,0">
                             <Grid>
                                 <TextBlock Text="{Binding ParamIdHex}" TextWrapping="Wrap" FontSize="9"
                                            HorizontalAlignment="Center" VerticalAlignment="Center" TextAlignment="Center"/>
@@ -301,7 +301,7 @@
                                                   SelectedValue="{Binding EvolveTargetHash}" IsEnabled="{Binding CanEvolve}"/>
                                         <TextBlock Text="au niveau" Margin="12,0,4,0"/>
                                         <TextBox Text="{Binding EvolveLevel}" Width="45" IsEnabled="{Binding CanEvolve}"/>
-                                        <TextBlock Text="{Binding EvolvesToName}" Margin="12,0,0,0" Foreground="#888"/>
+                                        <TextBlock Text="{Binding EvolvesToName}" Margin="12,0,0,0" Foreground="{StaticResource FgMutedBrush}"/>
                                     </StackPanel>
                                   </StackPanel>
                                 </GroupBox>
@@ -321,7 +321,7 @@
                                         <Button Content="Appliquer" Padding="8,2" Margin="8,0,0,0" Click="ApplyMorpho_Click"/>
                                     </StackPanel>
                                     <TextBlock Text="Jibanyan (Nyan) → Usapyon (mascotte) → Mark Evans (humain) → Enma (humanoïde)"
-                                               Foreground="#888" FontSize="10" Margin="0,0,0,4"/>
+                                               Foreground="{StaticResource FgMutedBrush}" FontSize="10" Margin="0,0,0,4"/>
                                     <WrapPanel>
                                         <StackPanel Orientation="Horizontal" Margin="0,0,10,4"><TextBlock Text="1"/><TextBox Text="{Binding Scale1}" Width="70"/></StackPanel>
                                         <StackPanel Orientation="Horizontal" Margin="0,0,10,4"><TextBlock Text="2"/><TextBox Text="{Binding Scale2}" Width="70"/></StackPanel>
@@ -342,11 +342,11 @@
                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
                                     <TextBlock Text="Modèle"/>
                                     <TextBox Text="{Binding ModelName, UpdateSourceTrigger=LostFocus}" Width="90" FontFamily="Consolas"/>
-                                    <Border Width="48" Height="48" BorderBrush="#999" BorderThickness="1" Background="#F0F0F0" Margin="16,0,0,0">
+                                    <Border Width="48" Height="48" BorderBrush="{StaticResource BorderBrushC}" BorderThickness="1" Background="{StaticResource FieldBgBrush}" Margin="16,0,0,0">
                                         <Image x:Name="MedalIconImage" RenderOptions.BitmapScalingMode="NearestNeighbor"/>
                                     </Border>
                                     <StackPanel VerticalAlignment="Center" Margin="4,0,0,0">
-                                        <TextBlock Text="medal_icon" Foreground="#888" FontSize="10"/>
+                                        <TextBlock Text="medal_icon" Foreground="{StaticResource FgMutedBrush}" FontSize="10"/>
                                         <Button Content="Remplacer (PNG)" FontSize="10" Padding="4,1" Click="ReplaceMedalIcon_Click"/>
                                     </StackPanel>
                                 </StackPanel>
@@ -385,7 +385,7 @@
                                         <TextBox Text="{Binding MedalPosX, UpdateSourceTrigger=LostFocus}" Width="45" Margin="4,0"/>
                                         <TextBlock Text="Y" Margin="8,0,0,0"/>
                                         <TextBox Text="{Binding MedalPosY, UpdateSourceTrigger=LostFocus}" Width="45" Margin="4,0"/>
-                                        <Border Width="48" Height="48" BorderBrush="#999" BorderThickness="1" Background="#F0F0F0" Margin="12,0,0,0">
+                                        <Border Width="48" Height="48" BorderBrush="{StaticResource BorderBrushC}" BorderThickness="1" Background="{StaticResource FieldBgBrush}" Margin="12,0,0,0">
                                             <Image x:Name="MedalAtlasImage" RenderOptions.BitmapScalingMode="NearestNeighbor"/>
                                         </Border>
                                         <Button Content="Choisir dans l'atlas…" Padding="6,2" Margin="6,0,0,0" VerticalAlignment="Center" Click="PickMedal_Click"/>
@@ -397,7 +397,7 @@
 
                         <!-- ================= Quotes ================= -->
                         <TabItem Header="Quotes">
-                            <TextBlock Margin="12" Foreground="#888"
+                            <TextBlock Margin="12" Foreground="{StaticResource FgMutedBrush}"
                                        Text="Les citations (befriend quotes) seront ajoutées ultérieurement."/>
                         </TabItem>
                     </TabControl>

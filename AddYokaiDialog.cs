@@ -56,7 +56,7 @@ namespace Lycoris
             {
                 Text = "Les stats sont copiées d'un modèle existant — édite-les ensuite dans la grille.",
                 TextWrapping = TextWrapping.Wrap,
-                Foreground = System.Windows.Media.Brushes.Gray,
+                Foreground = Theme.FgMuted,
                 Margin = new Thickness(0, 0, 0, 10)
             });
 

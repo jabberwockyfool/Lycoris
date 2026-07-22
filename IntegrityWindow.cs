@@ -46,7 +46,7 @@ namespace Lycoris
             // Colour error rows.
             var itemStyle = new Style(typeof(ListViewItem));
             var trig = new DataTrigger { Binding = new Binding("LevelText"), Value = "Erreur" };
-            trig.Setters.Add(new Setter(ForegroundProperty, new SolidColorBrush(Color.FromRgb(0xC0, 0x20, 0x20))));
+            trig.Setters.Add(new Setter(ForegroundProperty, Theme.Error));
             itemStyle.Triggers.Add(trig);
             _list.ItemContainerStyle = itemStyle;
 
@@ -103,10 +103,10 @@ namespace Lycoris
             var name = new FrameworkElementFactory(typeof(TextBlock));
             name.SetBinding(TextBlock.TextProperty, new Binding("Name"));
             name.SetValue(TextBlock.FontWeightProperty, FontWeights.Bold);
-            name.SetValue(TextBlock.ForegroundProperty, Brushes.SteelBlue);
+            name.SetValue(TextBlock.ForegroundProperty, Theme.Accent);
             var count = new FrameworkElementFactory(typeof(TextBlock));
             count.SetBinding(TextBlock.TextProperty, new Binding("ItemCount") { StringFormat = "  ({0})" });
-            count.SetValue(TextBlock.ForegroundProperty, Brushes.Gray);
+            count.SetValue(TextBlock.ForegroundProperty, Theme.FgMuted);
             sp.AppendChild(name);
             sp.AppendChild(count);
             return new DataTemplate { VisualTree = sp };

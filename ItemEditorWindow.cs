@@ -25,10 +25,10 @@ namespace Lycoris
         private readonly TextBox _search = new TextBox();
         private readonly Image _iconImg = new Image { Stretch = Stretch.Uniform };
         private readonly StackPanel _fields = new StackPanel();
-        private readonly TextBlock _status = new TextBlock { Foreground = Brushes.Gray, Margin = new Thickness(4) };
+        private readonly TextBlock _status = new TextBlock { Foreground = Theme.FgMuted, Margin = new Thickness(4) };
         private ICollectionView _view;
         private string _moddedAtlas;
-        private readonly TextBlock _countText = new TextBlock { VerticalAlignment = VerticalAlignment.Center, Foreground = Brushes.Gray };
+        private readonly TextBlock _countText = new TextBlock { VerticalAlignment = VerticalAlignment.Center, Foreground = Theme.FgMuted };
 
         public ItemEditorWindow(Window owner, YokaiDatabase db)
         {
@@ -105,8 +105,8 @@ namespace Lycoris
             var header = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 8) };
             var iconBorder = new Border
             {
-                Width = 56, Height = 56, BorderBrush = Brushes.Gray, BorderThickness = new Thickness(1),
-                Background = Brushes.WhiteSmoke, Margin = new Thickness(0, 0, 10, 0)
+                Width = 56, Height = 56, BorderBrush = Theme.Border, BorderThickness = new Thickness(1),
+                Background = Theme.FieldBg, Margin = new Thickness(0, 0, 10, 0)
             };
             RenderOptions.SetBitmapScalingMode(_iconImg, BitmapScalingMode.NearestNeighbor);
             iconBorder.Child = _iconImg;
@@ -149,12 +149,12 @@ namespace Lycoris
         // ---------- field builders ----------
 
         private static UIElement Label(string text) =>
-            new TextBlock { Text = text, Width = 130, VerticalAlignment = VerticalAlignment.Center, Foreground = Brushes.DimGray };
+            new TextBlock { Text = text, Width = 130, VerticalAlignment = VerticalAlignment.Center, Foreground = Theme.FgMuted };
 
         private FrameworkElement ReadOnlyRow(string label, string path)
         {
             var sp = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 1, 0, 1) };
-            sp.Children.Add(new TextBlock { Text = label + ": ", Foreground = Brushes.DimGray });
+            sp.Children.Add(new TextBlock { Text = label + ": ", Foreground = Theme.FgMuted });
             var tb = new TextBlock { FontFamily = new FontFamily("Consolas") };
             tb.SetBinding(TextBlock.TextProperty, new Binding(path));
             sp.Children.Add(tb);
@@ -381,9 +381,9 @@ namespace Lycoris
             _type.SelectedIndex = 0;
 
             var grid = new StackPanel { Margin = new Thickness(12) };
-            grid.Children.Add(new TextBlock { Text = "Nom de l'item", Foreground = Brushes.DimGray });
+            grid.Children.Add(new TextBlock { Text = "Nom de l'item", Foreground = Theme.FgMuted });
             grid.Children.Add(_name);
-            grid.Children.Add(new TextBlock { Text = "Catégorie", Foreground = Brushes.DimGray, Margin = new Thickness(0, 8, 0, 0) });
+            grid.Children.Add(new TextBlock { Text = "Catégorie", Foreground = Theme.FgMuted, Margin = new Thickness(0, 8, 0, 0) });
             grid.Children.Add(_type);
 
             var ok = new Button { Content = "Ajouter", IsDefault = true, Width = 90, Margin = new Thickness(0, 12, 6, 0) };

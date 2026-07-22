@@ -13,3 +13,4 @@ D:\cc\Lycoris\Lycoris\obj\Debug\Lycoris.csproj.GenerateResource.cache
 D:\cc\Lycoris\Lycoris\obj\Debug\Lycoris.csproj.CoreCompileInputs.cache
 D:\cc\Lycoris\Lycoris\obj\Debug\Lycoris.exe
 D:\cc\Lycoris\Lycoris\obj\Debug\Lycoris.pdb
+D:\cc\Lycoris\Lycoris\obj\Debug\App.baml

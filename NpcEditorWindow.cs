@@ -26,7 +26,7 @@ namespace Lycoris
         private readonly ListBox _list = new ListBox();
         private readonly TextBox _search = new TextBox();
         private readonly StackPanel _fields = new StackPanel();
-        private readonly TextBlock _status = new TextBlock { Foreground = Brushes.Gray, Margin = new Thickness(4) };
+        private readonly TextBlock _status = new TextBlock { Foreground = Theme.FgMuted, Margin = new Thickness(4) };
         private ICollectionView _view;
         private readonly System.Collections.Generic.List<MapEntry> _maps;
 
@@ -118,7 +118,7 @@ namespace Lycoris
         }
 
         private static UIElement Label(string text) =>
-            new TextBlock { Text = text, Width = 160, VerticalAlignment = VerticalAlignment.Center, Foreground = Brushes.DimGray };
+            new TextBlock { Text = text, Width = 160, VerticalAlignment = VerticalAlignment.Center, Foreground = Theme.FgMuted };
 
         private static FrameworkElement TextRow(string label, string path, double width)
         {
@@ -174,7 +174,7 @@ namespace Lycoris
                 cb.SetBinding(System.Windows.Controls.Primitives.Selector.SelectedValueProperty,
                     new Binding("MapID") { Mode = BindingMode.TwoWay });
                 sp.Children.Add(cb);
-                sp.Children.Add(new TextBlock { Text = $"  ({_maps.Count} maps)", VerticalAlignment = VerticalAlignment.Center, Foreground = Brushes.Gray });
+                sp.Children.Add(new TextBlock { Text = $"  ({_maps.Count} maps)", VerticalAlignment = VerticalAlignment.Center, Foreground = Theme.FgMuted });
             }
             else
             {

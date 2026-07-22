@@ -16,7 +16,7 @@ namespace Lycoris
         private readonly YokaiDatabase _db = new YokaiDatabase(YokaiSchema.Yw3);
         private readonly string _referenceFolder = MainWindow.FindDefaultReference();
 
-        private readonly TextBlock _status = new TextBlock { TextWrapping = TextWrapping.Wrap, Foreground = Brushes.DimGray, Margin = new Thickness(0, 12, 0, 0) };
+        private readonly TextBlock _status = new TextBlock { TextWrapping = TextWrapping.Wrap, Foreground = Theme.FgMuted, Margin = new Thickness(0, 12, 0, 0) };
         private readonly Button _yokaiBtn;
         private readonly Button _itemBtn;
         private readonly Button _skillBtn;
@@ -33,19 +33,19 @@ namespace Lycoris
             Title = "Lycoris — Éditeur Yo-kai Watch 3";
             Width = 460; Height = 650;
             WindowStartupLocation = WindowStartupLocation.CenterScreen;
-            Background = Brushes.White;
+            Background = Theme.WindowBg;
 
             var root = new StackPanel { Margin = new Thickness(24) };
 
             root.Children.Add(new TextBlock
             {
                 Text = "Lycoris",
-                FontSize = 30, FontWeight = FontWeights.Bold, Foreground = Brushes.MediumVioletRed
+                FontSize = 30, FontWeight = FontWeights.Bold, Foreground = Theme.Accent
             });
             root.Children.Add(new TextBlock
             {
                 Text = "Éditeur de mods Yo-kai Watch 3",
-                FontSize = 13, Foreground = Brushes.Gray, Margin = new Thickness(0, 0, 0, 18)
+                FontSize = 13, Foreground = Theme.FgMuted, Margin = new Thickness(0, 0, 0, 18)
             });
 
             var open = new Button { Content = "📂  Ouvrir un dossier (mod extrait)…", Padding = new Thickness(12, 8, 12, 8), FontSize = 14 };
@@ -80,7 +80,7 @@ namespace Lycoris
         {
             var sp = new StackPanel();
             sp.Children.Add(new TextBlock { Text = title, FontSize = 15, FontWeight = FontWeights.SemiBold });
-            sp.Children.Add(new TextBlock { Text = subtitle, FontSize = 11, Foreground = Brushes.Gray, TextWrapping = TextWrapping.Wrap });
+            sp.Children.Add(new TextBlock { Text = subtitle, FontSize = 11, Foreground = Theme.FgMuted, TextWrapping = TextWrapping.Wrap });
             var b = new Button
             {
                 Content = sp,
