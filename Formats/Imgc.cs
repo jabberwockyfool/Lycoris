@@ -332,6 +332,12 @@ namespace Lycoris.Formats
             return s;
         }
 
+        /// <summary>Decompress a Level-5 compression container (header = size&lt;&lt;3 | method). Public for XPCK.</summary>
+        public static byte[] DecompressLevel5(byte[] data) => Decompress(data);
+
+        /// <summary>Wrap raw bytes as a Level-5 "stored" (method 0) container. Public for XPCK writing.</summary>
+        public static byte[] StoreLevel5(byte[] data) => NoCompress(data);
+
         private static byte[] Decompress(byte[] data)
         {
             if (data.Length < 4) return data;

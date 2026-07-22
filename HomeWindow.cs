@@ -20,15 +20,18 @@ namespace Lycoris
         private readonly Button _yokaiBtn;
         private readonly Button _itemBtn;
         private readonly Button _skillBtn;
+        private readonly Button _npcBtn;
+        private readonly Button _checkBtn;
 
         private MainWindow _yokaiWindow;
         private ItemEditorWindow _itemWindow;
         private SkillEditorWindow _skillWindow;
+        private NpcEditorWindow _npcWindow;
 
         public HomeWindow()
         {
             Title = "Lycoris — Éditeur Yo-kai Watch 3";
-            Width = 460; Height = 470;
+            Width = 460; Height = 650;
             WindowStartupLocation = WindowStartupLocation.CenterScreen;
             Background = Brushes.White;
 
@@ -52,12 +55,18 @@ namespace Lycoris
             _yokaiBtn = BigButton("👹  Éditeur Yo-kai", "Stats, moves, évolutions, Blaster T, drops, charabase, portraits…", OpenYokaiEditor);
             _itemBtn = BigButton("🎁  Éditeur d'items", "Nom, description, prix, ordre d'inventaire, icône de l'atlas…", OpenItemEditor);
             _skillBtn = BigButton("⚔  Éditeur de skills", "Type, élément, puissance, coups, portée Soultimate… (ajout/suppression)", OpenSkillEditor);
+            _npcBtn = BigButton("🧍  Éditeur de NPC", "Config NPCMake (TOML) éditable dans le GUI, import/export .toml.", OpenNpcEditor);
+            _checkBtn = BigButton("🩺  Vérifier l'intégrité", "Détecte les références cassées (move/drop/évolution manquants) et les doublons.", OpenIntegrity);
             _yokaiBtn.IsEnabled = false;
             _itemBtn.IsEnabled = false;
             _skillBtn.IsEnabled = false;
+            _npcBtn.IsEnabled = false;
+            _checkBtn.IsEnabled = false;
             root.Children.Add(_yokaiBtn);
             root.Children.Add(_itemBtn);
             root.Children.Add(_skillBtn);
+            root.Children.Add(_npcBtn);
+            root.Children.Add(_checkBtn);
 
             root.Children.Add(_status);
             _status.Text = _referenceFolder != null
@@ -99,10 +108,13 @@ namespace Lycoris
                     _yokaiWindow?.Close(); _yokaiWindow = null;
                     _itemWindow?.Close(); _itemWindow = null;
                     _skillWindow?.Close(); _skillWindow = null;
+                    _npcWindow?.Close(); _npcWindow = null;
 
                     _yokaiBtn.IsEnabled = _db.ParamFile != null;
                     _itemBtn.IsEnabled = _db.Items.Count > 0;
                     _skillBtn.IsEnabled = _db.Skills.Count > 0;
+                    _npcBtn.IsEnabled = _db.ParamFile != null;
+                    _checkBtn.IsEnabled = _db.ParamFile != null;
 
                     string moves = _db.MoveOptions.Count > 0 ? $"moves nommés {_db.MoveNameCount}" : "moves non nommés";
                     _status.Text = $"Chargé — {_db.Yokai.Count} yo-kai, {_db.Items.Count} items, {_db.Skills.Count} skills  ({moves}).\n" +
@@ -141,6 +153,21 @@ namespace Lycoris
             _skillWindow = new SkillEditorWindow(this, _db) { Owner = this };
             _skillWindow.Closed += (s, e) => _skillWindow = null;
             _skillWindow.Show();
+        }
+
+        private void OpenNpcEditor()
+        {
+            if (_db.ParamFile == null) return;
+            if (_npcWindow != null && _npcWindow.IsLoaded) { _npcWindow.Activate(); return; }
+            _npcWindow = new NpcEditorWindow(this, _db) { Owner = this };
+            _npcWindow.Closed += (s, e) => _npcWindow = null;
+            _npcWindow.Show();
+        }
+
+        private void OpenIntegrity()
+        {
+            if (_db.ParamFile == null) return;
+            new IntegrityWindow(this, _db) { Owner = this }.Show();
         }
     }
 }

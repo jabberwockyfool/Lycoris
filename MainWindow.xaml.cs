@@ -118,6 +118,7 @@ namespace Lycoris
             DuplicateButton.IsEnabled = _db.BaseData != null && _db.TextData != null && _db.DescData != null;
             DeleteButton.IsEnabled = _db.ParamFile != null;
             ItemsButton.IsEnabled = _db.Items.Count > 0;
+            CheckButton.IsEnabled = _db.ParamFile != null;
         }
 
         private void RebuildView()
@@ -500,6 +501,12 @@ namespace Lycoris
             {
                 MessageBox.Show(ex.Message, "Duplication impossible", MessageBoxButton.OK, MessageBoxImage.Warning);
             }
+        }
+
+        private void CheckButton_Click(object sender, RoutedEventArgs e)
+        {
+            CommitEdits();
+            new IntegrityWindow(this, _db) { Owner = this }.Show();
         }
 
         private void ItemsButton_Click(object sender, RoutedEventArgs e)

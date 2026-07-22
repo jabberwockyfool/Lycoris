@@ -67,6 +67,7 @@
     <Compile Include="Formats\T2bTree.cs" />
     <Compile Include="Formats\T2bEntryExtensions.cs" />
     <Compile Include="Formats\Imgc.cs" />
+    <Compile Include="Formats\Xpck.cs" />
     <Compile Include="Yokai\IconNaming.cs" />
     <Compile Include="Yokai\YokaiSchema.cs" />
     <Compile Include="Yokai\YokaiEnums.cs" />
@@ -76,9 +77,17 @@
     <Compile Include="Yokai\YokaiModels.cs" />
     <Compile Include="Yokai\ItemInfo.cs" />
     <Compile Include="Yokai\SkillInfo.cs" />
+    <Compile Include="Yokai\IntegrityIssue.cs" />
+    <Compile Include="Npc\NpcModel.cs" />
+    <Compile Include="Npc\NpcToml.cs" />
+    <Compile Include="Npc\MapList.cs" />
+    <Compile Include="Npc\NpcXq.cs" />
+    <Compile Include="Npc\NpcCompiler.cs" />
     <Compile Include="Yokai\YokaiDatabase.cs" />
     <Compile Include="ItemEditorWindow.cs" />
     <Compile Include="SkillEditorWindow.cs" />
+    <Compile Include="IntegrityWindow.cs" />
+    <Compile Include="NpcEditorWindow.cs" />
     <Compile Include="HomeWindow.cs" />
     <Compile Include="AddYokaiDialog.cs" />
     <Compile Include="AtlasPickerWindow.cs" />

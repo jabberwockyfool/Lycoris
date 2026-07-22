@@ -36,6 +36,11 @@ namespace Lycoris.Yokai
         private string _hsTechnicFile, _hsTechnicTextFile, _hsAbilityFile, _hsAbilityTextFile, _itemConfigFile, _itemTextFile;
         private string _modFolder, _referenceFolder;
 
+        /// <summary>The loaded mod folder (root of the extracted mod), or null.</summary>
+        public string ModFolder => _modFolder;
+        /// <summary>The reference game extract used to resolve missing files (the "cfg" folder), or null.</summary>
+        public string ReferenceFolder => _referenceFolder;
+
         public List<EnumEntry> TechnicOptions { get; private set; } = new List<EnumEntry>();
         public List<EnumEntry> BtAbilityOptions { get; private set; } = new List<EnumEntry>();
         public List<EnumEntry> ItemOptions { get; private set; } = new List<EnumEntry>();
@@ -443,6 +448,7 @@ namespace Lycoris.Yokai
             LoadItems();
             LoadSkills();
             BuildSkillSlotOptions();
+            SnapshotIntegrityBaseline();
         }
 
         /// <summary>Named skill options bucketed by SkillType, for the per-slot move dropdowns in the yo-kai editor.</summary>
@@ -1377,6 +1383,120 @@ namespace Lycoris.Yokai
             var begin = file.Entries.FirstOrDefault(e => e.Name == beginName);
             if (begin != null && begin.Values.Count > 0 && begin.Values[0].Value is int c)
                 begin.Values[0].Value = c - 1;
+        }
+
+        // ============================ Integrity check ============================
+
+        /// <summary>
+        /// Scan the loaded mod for dangling references (a move pointing to a missing skill, a drop to a
+        /// missing item, an evolution to a missing yo-kai…) and duplicate keys. A check is only run when
+        /// the file needed to validate it is loaded, so an absent file never produces false "missing".
+        /// </summary>
+        public List<IntegrityIssue> CheckIntegrity()
+        {
+            var issues = new List<IntegrityIssue>();
+            if (ParamData == null) return issues;
+
+            // Valid-key sets, built only from files that are actually loaded.
+            HashSet<int> KeySet(T2bFile f, string rec, int idx) => f == null ? null
+                : new HashSet<int>(f.Records(rec).Select(e => e.GetInt(idx)).Where(v => v.HasValue).Select(v => v.Value));
+            HashSet<int> FirstKeys(T2bFile f, string rec) => f == null ? null
+                : new HashSet<int>(f.Records(rec).Select(e => e.FirstIntKey()).Where(v => v.HasValue).Select(v => v.Value));
+
+            var skillIds = KeySet(SkillConfigData, Schema.SkillConfigRecord, 0);
+            var abilityKeys = KeySet(AbilityData, Schema.AbilityConfigRecord, 0);
+            var hsTechKeys = KeySet(_hsTechnicData, Schema.HackslashTechnicRecord, 0);
+            var hsAbilKeys = KeySet(_hsAbilityData, Schema.AbilityConfigRecord, 0);
+            var baseHashes = KeySet(BaseData, Schema.BaseYokaiRecord, Schema.Base_BaseHashIndex);
+            var paramHashes = new HashSet<int>(Yokai.Select(y => y.ParamHash));
+            var itemIds = new HashSet<int>(Items.Select(i => i.ItemId));
+            var charaNoun = FirstKeys(TextData, Schema.NounRecord);
+            var charaText = FirstKeys(DescData, Schema.DescRecord);
+            var skillNoun = FirstKeys(SkillTextData, Schema.NounRecord);
+            var skillDesc = FirstKeys(SkillDescTextData, Schema.DescRecord);
+            var itemNoun = FirstKeys(_itemTextData, Schema.NounRecord);
+            var itemText = FirstKeys(_itemTextData, Schema.DescRecord);
+
+            void Ref(HashSet<int> set, int? hash, string cat, IssueLevel lvl, string subject, string what)
+            {
+                if (set == null || !hash.HasValue || hash.Value == 0) return;
+                if (!set.Contains(hash.Value))
+                    issues.Add(new IntegrityIssue { Category = cat, Level = lvl, Subject = subject,
+                        Detail = $"{what} → 0x{unchecked((uint)hash.Value):X8} introuvable" });
+            }
+
+            // --- Yo-kai ---
+            var seenParam = new HashSet<int>();
+            foreach (var y in Yokai)
+            {
+                string subj = y.DisplayName + " (" + y.ParamIdHex + ")";
+                if (!seenParam.Add(y.ParamHash))
+                    issues.Add(new IntegrityIssue { Category = "Doublon", Level = IssueLevel.Warning, Subject = subj, Detail = "ParamHash en double" });
+                if (baseHashes != null && !baseHashes.Contains(y.BaseHash))
+                    issues.Add(new IntegrityIssue { Category = "Charabase", Level = IssueLevel.Error, Subject = subj, Detail = $"BaseHash → {y.BaseHex} introuvable" });
+                Ref(charaNoun, y.NameHash, "Nom", IssueLevel.Error, subj, "NameHash");
+                Ref(charaText, y.DescriptionHash, "Description", IssueLevel.Warning, subj, "DescHash");
+                Ref(skillIds, y.AttackHash, "Move", IssueLevel.Error, subj, "Attaque");
+                Ref(skillIds, y.TechniqueHash, "Move", IssueLevel.Error, subj, "Technique");
+                Ref(skillIds, y.InspiritHash, "Move", IssueLevel.Error, subj, "Inspiration");
+                Ref(skillIds, y.GuardHash, "Move", IssueLevel.Error, subj, "Garde");
+                Ref(skillIds, y.SoultimateHash, "Move", IssueLevel.Error, subj, "Soultimate");
+                Ref(abilityKeys, y.AbilityHash, "Ability", IssueLevel.Error, subj, "Ability");
+                if (y.CanEvolve) Ref(paramHashes, y.EvolveTargetHash, "Évolution", IssueLevel.Error, subj, "Cible d'évolution");
+                if (y.HasDrops)
+                {
+                    Ref(itemIds, y.Drop1Hash, "Drop", IssueLevel.Error, subj, "Drop 1");
+                    Ref(itemIds, y.Drop2Hash, "Drop", IssueLevel.Error, subj, "Drop 2");
+                }
+                if (y.HasBlasterT)
+                {
+                    Ref(hsTechKeys, y.BtSoultimateHash, "Blaster T", IssueLevel.Error, subj, "BT Soultimate");
+                    Ref(hsTechKeys, y.BtAttackAHash, "Blaster T", IssueLevel.Error, subj, "BT Attaque A");
+                    Ref(hsTechKeys, y.BtAttackYHash, "Blaster T", IssueLevel.Error, subj, "BT Attaque Y");
+                    Ref(hsTechKeys, y.BtAttackXHash, "Blaster T", IssueLevel.Error, subj, "BT Attaque X");
+                    Ref(hsAbilKeys, y.BtAbilityHash, "Blaster T", IssueLevel.Error, subj, "BT Ability");
+                }
+            }
+
+            // --- Skills ---
+            var seenSkill = new HashSet<int>();
+            foreach (var s in Skills)
+            {
+                string subj = s.DisplayName + " (" + s.SkillIdHex + ")";
+                if (!seenSkill.Add(s.SkillConfigID))
+                    issues.Add(new IntegrityIssue { Category = "Doublon", Level = IssueLevel.Warning, Subject = subj, Detail = "SkillConfigID en double" });
+                Ref(skillNoun, s.NameID, "Nom skill", IssueLevel.Warning, subj, "NameID");
+                Ref(skillDesc, s.DescID, "Desc skill", IssueLevel.Warning, subj, "DescID");
+            }
+
+            // --- Items ---
+            var seenItem = new HashSet<int>();
+            foreach (var it in Items)
+            {
+                string subj = it.DisplayName + " (" + it.ItemIdHex + ")";
+                if (!seenItem.Add(it.ItemId))
+                    issues.Add(new IntegrityIssue { Category = "Doublon", Level = IssueLevel.Warning, Subject = subj, Detail = "ItemID en double" });
+                Ref(itemNoun, it.NounTextID, "Nom item", IssueLevel.Warning, subj, "NounTextID");
+                Ref(itemText, it.DescTextID, "Desc item", IssueLevel.Warning, subj, "DescTextID");
+            }
+
+            // Flag which problems already existed in the files at load, so the UI can separate the ones
+            // introduced this session (the ones that matter) from pre-existing cross-version noise.
+            if (_baselineIssues != null)
+                foreach (var i in issues) i.Preexisting = _baselineIssues.Contains(Sig(i));
+            return issues;
+        }
+
+        private static string Sig(IntegrityIssue i) => i.Category + "|" + i.Subject + "|" + i.Detail;
+
+        /// <summary>Signatures of every problem present at load time (the "before" baseline).</summary>
+        private HashSet<string> _baselineIssues;
+
+        /// <summary>Capture the current issues as the baseline (called once after a folder loads).</summary>
+        private void SnapshotIntegrityBaseline()
+        {
+            _baselineIssues = null;
+            _baselineIssues = new HashSet<string>(CheckIntegrity().Select(Sig));
         }
 
         // ============================ Helpers ============================
