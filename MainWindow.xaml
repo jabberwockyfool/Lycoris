@@ -3,6 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:yk="clr-namespace:Lycoris.Yokai"
         x:Name="Root"
+        Background="{StaticResource WindowBgBrush}" Foreground="{StaticResource FgBrush}"
         Title="Lycoris — YKW3 Editor" Height="720" Width="900">
     <Window.Resources>
         <Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
