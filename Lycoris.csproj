@@ -94,6 +94,7 @@
     <Compile Include="SearchableCombo.cs" />
     <Compile Include="Theme.cs" />
     <Compile Include="DarkMessage.cs" />
+    <Compile Include="FolderPicker.cs" />
     <Compile Include="App.xaml.cs">
       <DependentUpon>App.xaml</DependentUpon>
       <SubType>Code</SubType>

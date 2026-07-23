@@ -278,6 +278,23 @@
                 <Setter Property="Background" Value="{StaticResource PanelBgBrush}"/>
                 <Setter Property="BorderBrush" Value="{StaticResource BorderBrushC}"/>
                 <Setter Property="Foreground" Value="{StaticResource FgBrush}"/>
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="TabControl">
+                            <Grid ClipToBounds="True" SnapsToDevicePixels="True">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="*"/>
+                                </Grid.RowDefinitions>
+                                <TabPanel Grid.Row="0" IsItemsHost="True" Margin="2,0,0,0" Panel.ZIndex="1" Background="Transparent"/>
+                                <Border Grid.Row="1" Background="{StaticResource PanelBgBrush}" BorderBrush="{StaticResource BorderBrushC}"
+                                        BorderThickness="1" CornerRadius="0,3,3,3">
+                                    <ContentPresenter ContentSource="SelectedContent"/>
+                                </Border>
+                            </Grid>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
             </Style>
             <Style TargetType="TabItem">
                 <Setter Property="Foreground" Value="{StaticResource FgBrush}"/>

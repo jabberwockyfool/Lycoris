@@ -30,6 +30,8 @@ namespace Lycoris
         private ICollectionView _view;
         private readonly System.Collections.Generic.List<MapEntry> _maps;
 
+        private IntPtr Handle => new System.Windows.Interop.WindowInteropHelper(this).Handle;
+
         public NpcEditorWindow(Window owner, YokaiDatabase db)
         {
             _db = db;
@@ -266,17 +268,15 @@ namespace Lycoris
         {
             if (_npcs.Count == 0) return;
             CommitEdits();
-            using (var dlg = new System.Windows.Forms.FolderBrowserDialog { Description = "Dossier où écrire un .toml par NPC" })
+            string dir = FolderPicker.Pick("Dossier où écrire un .toml par NPC", Handle);
+            if (dir == null) return;
+            int n = 0;
+            foreach (var npc in _npcs)
             {
-                if (dlg.ShowDialog() != System.Windows.Forms.DialogResult.OK) return;
-                int n = 0;
-                foreach (var npc in _npcs)
-                {
-                    try { File.WriteAllText(Path.Combine(dlg.SelectedPath, SafeFileName(npc.NpcName) + ".toml"), NpcToml.Write(npc), new UTF8Encoding(false)); n++; }
-                    catch (Exception ex) { DarkMessage.Show($"{npc.DisplayName}: {ex.Message}", "Export tout"); }
-                }
-                _status.Text = $"{n} .toml écrit(s) dans {dlg.SelectedPath}.";
+                try { File.WriteAllText(Path.Combine(dir, SafeFileName(npc.NpcName) + ".toml"), NpcToml.Write(npc), new UTF8Encoding(false)); n++; }
+                catch (Exception ex) { DarkMessage.Show($"{npc.DisplayName}: {ex.Message}", "Export tout"); }
             }
+            _status.Text = $"{n} .toml écrit(s) dans {dir}.";
         }
 
         private void CompileNpc()
@@ -298,11 +298,8 @@ namespace Lycoris
             string mapFolder = FindMapDir(n.MapID);
             if (mapFolder == null)
             {
-                using (var dlg = new System.Windows.Forms.FolderBrowserDialog { Description = $"Dossier de la map « {n.MapID} » (contenant npc.pck, {n.MapID}.pck…)" })
-                {
-                    if (dlg.ShowDialog() != System.Windows.Forms.DialogResult.OK) return;
-                    mapFolder = dlg.SelectedPath;
-                }
+                mapFolder = FolderPicker.Pick($"Dossier de la map « {n.MapID} » (contenant npc.pck, {n.MapID}.pck…)", Handle);
+                if (mapFolder == null) return;
             }
 
             // Auto-merge target inside the loaded mod (mirrors res/map/<MapID>). Null if no mod loaded.
@@ -318,11 +315,9 @@ namespace Lycoris
 
             if (mergeMapDir == null)
             {
-                using (var dlg = new System.Windows.Forms.FolderBrowserDialog { Description = "Dossier de sortie (un dossier <Nom>_output y sera créé)" })
-                {
-                    if (dlg.ShowDialog() != System.Windows.Forms.DialogResult.OK) return;
-                    outRoot = dlg.SelectedPath;
-                }
+                string picked = FolderPicker.Pick("Dossier de sortie (un dossier <Nom>_output y sera créé)", Handle);
+                if (picked == null) return;
+                outRoot = picked;
             }
 
             try

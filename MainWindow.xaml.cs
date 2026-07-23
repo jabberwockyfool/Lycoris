@@ -57,23 +57,19 @@ namespace Lycoris
 
         private void OpenFolderButton_Click(object sender, RoutedEventArgs e)
         {
-            using (var dlg = new System.Windows.Forms.FolderBrowserDialog
+            string folder = FolderPicker.Pick("Dossier extrait (YWML) contenant chara_param / chara_base / chara_text…",
+                new System.Windows.Interop.WindowInteropHelper(this).Handle);
+            if (folder == null) return;
+            LoadSafely(() =>
             {
-                Description = "Dossier extrait (YWML) contenant chara_param / chara_base / chara_text…"
-            })
-            {
-                if (dlg.ShowDialog() != System.Windows.Forms.DialogResult.OK) return;
-                LoadSafely(() =>
-                {
-                    _db.LoadFolder(dlg.SelectedPath, _referenceFolder);
-                    string moves = _db.MoveOptions.Count > 0
-                        ? $"moves nommés {_db.MoveNameCount}"
-                        : "MOVES NON NOMMÉS — définis un « Dossier de référence » (jeu complet) puis rouvre";
-                    string refNote = _db.ResolverFromReference.Count > 0
-                        ? $"  |  réf: {string.Join(", ", _db.ResolverFromReference)}" : "";
-                    return $"{_db.Yokai.Count} yo-kai  |  noms {_db.NameTableCount}, desc {_db.DescTableCount}, {moves}{refNote}";
-                });
-            }
+                _db.LoadFolder(folder, _referenceFolder);
+                string moves = _db.MoveOptions.Count > 0
+                    ? $"moves nommés {_db.MoveNameCount}"
+                    : "MOVES NON NOMMÉS — définis un « Dossier de référence » (jeu complet) puis rouvre";
+                string refNote = _db.ResolverFromReference.Count > 0
+                    ? $"  |  réf: {string.Join(", ", _db.ResolverFromReference)}" : "";
+                return $"{_db.Yokai.Count} yo-kai  |  noms {_db.NameTableCount}, desc {_db.DescTableCount}, {moves}{refNote}";
+            });
         }
 
         private void LoadSafely(Func<string> load)

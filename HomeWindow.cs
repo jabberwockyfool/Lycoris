@@ -94,37 +94,33 @@ namespace Lycoris
 
         private void OpenFolder()
         {
-            using (var dlg = new System.Windows.Forms.FolderBrowserDialog
+            string folder = FolderPicker.Pick("Dossier extrait (YWML) contenant chara_param / chara_base / chara_text…",
+                new System.Windows.Interop.WindowInteropHelper(this).Handle);
+            if (folder == null) return;
+            try
             {
-                Description = "Dossier extrait (YWML) contenant chara_param / chara_base / chara_text…"
-            })
+                _db.LoadFolder(folder, _referenceFolder);
+
+                // A freshly loaded db invalidates any editor windows still bound to the previous state.
+                _yokaiWindow?.Close(); _yokaiWindow = null;
+                _itemWindow?.Close(); _itemWindow = null;
+                _skillWindow?.Close(); _skillWindow = null;
+                _npcWindow?.Close(); _npcWindow = null;
+
+                _yokaiBtn.IsEnabled = _db.ParamFile != null;
+                _itemBtn.IsEnabled = _db.Items.Count > 0;
+                _skillBtn.IsEnabled = _db.Skills.Count > 0;
+                _npcBtn.IsEnabled = _db.ParamFile != null;
+                _checkBtn.IsEnabled = _db.ParamFile != null;
+
+                string moves = _db.MoveOptions.Count > 0 ? $"moves nommés {_db.MoveNameCount}" : "moves non nommés";
+                _status.Text = $"Chargé — {_db.Yokai.Count} yo-kai, {_db.Items.Count} items, {_db.Skills.Count} skills  ({moves}).\n" +
+                               "Choisis un éditeur ci-dessus.";
+            }
+            catch (Exception ex)
             {
-                if (dlg.ShowDialog() != System.Windows.Forms.DialogResult.OK) return;
-                try
-                {
-                    _db.LoadFolder(dlg.SelectedPath, _referenceFolder);
-
-                    // A freshly loaded db invalidates any editor windows still bound to the previous state.
-                    _yokaiWindow?.Close(); _yokaiWindow = null;
-                    _itemWindow?.Close(); _itemWindow = null;
-                    _skillWindow?.Close(); _skillWindow = null;
-                    _npcWindow?.Close(); _npcWindow = null;
-
-                    _yokaiBtn.IsEnabled = _db.ParamFile != null;
-                    _itemBtn.IsEnabled = _db.Items.Count > 0;
-                    _skillBtn.IsEnabled = _db.Skills.Count > 0;
-                    _npcBtn.IsEnabled = _db.ParamFile != null;
-                    _checkBtn.IsEnabled = _db.ParamFile != null;
-
-                    string moves = _db.MoveOptions.Count > 0 ? $"moves nommés {_db.MoveNameCount}" : "moves non nommés";
-                    _status.Text = $"Chargé — {_db.Yokai.Count} yo-kai, {_db.Items.Count} items, {_db.Skills.Count} skills  ({moves}).\n" +
-                                   "Choisis un éditeur ci-dessus.";
-                }
-                catch (Exception ex)
-                {
-                    DarkMessage.Show(ex.Message, "Erreur", MessageBoxButton.OK, MessageBoxImage.Error);
-                    _status.Text = "Erreur: " + ex.Message;
-                }
+                DarkMessage.Show(ex.Message, "Erreur", MessageBoxButton.OK, MessageBoxImage.Error);
+                _status.Text = "Erreur: " + ex.Message;
             }
         }
 
