@@ -222,7 +222,7 @@ namespace Lycoris
                     _status.Text = $"{it.DisplayName} — icône à ({picker.PickedX}, {picker.PickedY}).";
                 }
             }
-            catch (Exception ex) { MessageBox.Show(ex.Message, "Atlas item"); }
+            catch (Exception ex) { DarkMessage.Show(ex.Message, "Atlas item"); }
         }
 
         private void ReplaceIcon()
@@ -230,7 +230,7 @@ namespace Lycoris
             var it = _list.SelectedItem as ItemInfo;
             if (it?.IconPosX == null || it.IconPosY == null) return;
             string atlas = AtlasPath();
-            if (atlas == null) { MessageBox.Show("Atlas item_icon.xi introuvable.", "Item"); return; }
+            if (atlas == null) { DarkMessage.Show("Atlas item_icon.xi introuvable.", "Item"); return; }
             var dlg = new Microsoft.Win32.OpenFileDialog { Filter = "Images PNG|*.png", Title = "Icône item — PNG 32×32" };
             if (dlg.ShowDialog() != true) return;
             try
@@ -238,7 +238,7 @@ namespace Lycoris
                 var img = Imgc.Decode(System.IO.File.ReadAllBytes(atlas));
                 byte[] cell = PngToBgra(dlg.FileName, Cell, Cell);
                 int x = it.IconPosX.Value * Cell, y = it.IconPosY.Value * Cell;
-                if (x + Cell > img.Width || y + Cell > img.Height) { MessageBox.Show("Position hors de l'atlas.", "Item"); return; }
+                if (x + Cell > img.Width || y + Cell > img.Height) { DarkMessage.Show("Position hors de l'atlas.", "Item"); return; }
                 for (int ry = 0; ry < Cell; ry++)
                     Array.Copy(cell, ry * Cell * 4, img.Bgra, ((y + ry) * img.Width + x) * 4, Cell * 4);
 
@@ -248,7 +248,7 @@ namespace Lycoris
                 _iconImg.Source = CropIcon(it);
                 _status.Text = $"Icône item remplacée à ({it.IconPosX},{it.IconPosY}).";
             }
-            catch (Exception ex) { MessageBox.Show(ex.Message, "Erreur icône item", MessageBoxButton.OK, MessageBoxImage.Error); }
+            catch (Exception ex) { DarkMessage.Show(ex.Message, "Erreur icône item", MessageBoxButton.OK, MessageBoxImage.Error); }
         }
 
         private void UpdateCount() => _countText.Text = $"{_db.Items.Count} items";
@@ -267,7 +267,7 @@ namespace Lycoris
                 _list.ScrollIntoView(it);
                 _status.Text = $"Item ajouté: {it.DisplayName} ({it.ItemIdHex}). Édite puis « Sauver le mod ».";
             }
-            catch (Exception ex) { MessageBox.Show(ex.Message, "Ajout d'item", MessageBoxButton.OK, MessageBoxImage.Warning); }
+            catch (Exception ex) { DarkMessage.Show(ex.Message, "Ajout d'item", MessageBoxButton.OK, MessageBoxImage.Warning); }
         }
 
         private void DuplicateItem()
@@ -285,14 +285,14 @@ namespace Lycoris
                 _list.ScrollIntoView(it);
                 _status.Text = $"Dupliqué: {it.DisplayName} ({it.ItemIdHex}). Édite puis « Sauver le mod ».";
             }
-            catch (Exception ex) { MessageBox.Show(ex.Message, "Duplication d'item", MessageBoxButton.OK, MessageBoxImage.Warning); }
+            catch (Exception ex) { DarkMessage.Show(ex.Message, "Duplication d'item", MessageBoxButton.OK, MessageBoxImage.Warning); }
         }
 
         private void DeleteItem()
         {
             var it = _list.SelectedItem as ItemInfo;
             if (it == null) return;
-            var confirm = MessageBox.Show(
+            var confirm = DarkMessage.Show(
                 $"Supprimer l'item « {it.DisplayName} » ({it.ItemIdHex}) ?\n\n" +
                 "Son nom/description ne sont retirés que si aucun autre item ne les partage. " +
                 "À confirmer avec « Sauver le mod ».",
@@ -316,7 +316,7 @@ namespace Lycoris
                 int n = _db.SaveItems();
                 _status.Text = n > 0 ? $"Sauvé — {n} valeur(s) d'items écrites." : "Aucune modification d'item à sauver.";
             }
-            catch (Exception ex) { MessageBox.Show(ex.Message, "Sauvegarde items", MessageBoxButton.OK, MessageBoxImage.Error); }
+            catch (Exception ex) { DarkMessage.Show(ex.Message, "Sauvegarde items", MessageBoxButton.OK, MessageBoxImage.Error); }
         }
 
         // ---------- image helpers ----------

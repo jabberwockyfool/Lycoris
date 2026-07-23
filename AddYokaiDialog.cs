@@ -67,7 +67,7 @@ namespace Lycoris
             {
                 if (string.IsNullOrWhiteSpace(_name.Text))
                 {
-                    MessageBox.Show("Le nom est obligatoire.", "Ajouter un yo-kai");
+                    DarkMessage.Show("Le nom est obligatoire.", "Ajouter un yo-kai");
                     return;
                 }
                 DialogResult = true;

@@ -246,7 +246,7 @@ namespace Lycoris
             foreach (var path in dlg.FileNames)
             {
                 try { _npcs.Add(NpcToml.Parse(File.ReadAllText(path))); added++; }
-                catch (Exception ex) { MessageBox.Show($"{Path.GetFileName(path)}: {ex.Message}", "Import TOML"); }
+                catch (Exception ex) { DarkMessage.Show($"{Path.GetFileName(path)}: {ex.Message}", "Import TOML"); }
             }
             if (added > 0) { _list.SelectedIndex = _npcs.Count - 1; _status.Text = $"{added} NPC importé(s)."; }
         }
@@ -259,7 +259,7 @@ namespace Lycoris
             var dlg = new Microsoft.Win32.SaveFileDialog { Filter = "Fichiers TOML|*.toml", FileName = SafeFileName(n.NpcName) + ".toml", Title = "Exporter le NPC en .toml" };
             if (dlg.ShowDialog() != true) return;
             try { File.WriteAllText(dlg.FileName, NpcToml.Write(n), new UTF8Encoding(false)); _status.Text = $"Exporté: {Path.GetFileName(dlg.FileName)}"; }
-            catch (Exception ex) { MessageBox.Show(ex.Message, "Export TOML", MessageBoxButton.OK, MessageBoxImage.Error); }
+            catch (Exception ex) { DarkMessage.Show(ex.Message, "Export TOML", MessageBoxButton.OK, MessageBoxImage.Error); }
         }
 
         private void ExportAll()
@@ -273,7 +273,7 @@ namespace Lycoris
                 foreach (var npc in _npcs)
                 {
                     try { File.WriteAllText(Path.Combine(dlg.SelectedPath, SafeFileName(npc.NpcName) + ".toml"), NpcToml.Write(npc), new UTF8Encoding(false)); n++; }
-                    catch (Exception ex) { MessageBox.Show($"{npc.DisplayName}: {ex.Message}", "Export tout"); }
+                    catch (Exception ex) { DarkMessage.Show($"{npc.DisplayName}: {ex.Message}", "Export tout"); }
                 }
                 _status.Text = $"{n} .toml écrit(s) dans {dlg.SelectedPath}.";
             }
@@ -284,11 +284,11 @@ namespace Lycoris
             var n = Selected;
             if (n == null) return;
             CommitEdits();
-            if (string.IsNullOrWhiteSpace(n.NpcName)) { MessageBox.Show("Donne un nom au NPC.", "Compiler"); return; }
+            if (string.IsNullOrWhiteSpace(n.NpcName)) { DarkMessage.Show("Donne un nom au NPC.", "Compiler"); return; }
 
             if (!string.IsNullOrWhiteSpace(n.OnTalk) && !NpcXq.IsAvailable())
             {
-                MessageBox.Show("xtractquery est introuvable dans le PATH — nécessaire pour compiler le code OnTalk.\n" +
+                DarkMessage.Show("xtractquery est introuvable dans le PATH — nécessaire pour compiler le code OnTalk.\n" +
                     "Installe-le globalement (voir yo-docs), ou vide le champ OnTalk pour compiler sans dialogue.",
                     "xtractquery manquant", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
@@ -313,7 +313,7 @@ namespace Lycoris
             string plan = mergeMapDir != null
                 ? $"Les fichiers seront AJOUTÉS à ton mod :\n{mergeMapDir}"
                 : "Aucun mod chargé : choisis un dossier de sortie (fusion manuelle).";
-            if (MessageBox.Show($"Compiler « {n.NpcName} » pour la map {n.MapID} ?\n\n{plan}",
+            if (DarkMessage.Show($"Compiler « {n.NpcName} » pour la map {n.MapID} ?\n\n{plan}",
                 "Compiler le NPC", MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK) return;
 
             if (mergeMapDir == null)
@@ -334,11 +334,11 @@ namespace Lycoris
                              (r.MergedDir != null
                                 ? $"\n✔ Fusionné automatiquement dans le mod :\n{r.MergedDir}\n\n(copie de secours : {r.OutputDir})"
                                 : $"\nFichiers écrits dans :\n{r.OutputDir}\nFusionne ce dossier dans ton mod (res/map/…).");
-                MessageBox.Show(msg, "Compilation réussie", MessageBoxButton.OK, MessageBoxImage.Information);
+                DarkMessage.Show(msg, "Compilation réussie", MessageBoxButton.OK, MessageBoxImage.Information);
             }
             catch (Exception ex)
             {
-                MessageBox.Show(ex.Message, "Échec de la compilation", MessageBoxButton.OK, MessageBoxImage.Error);
+                DarkMessage.Show(ex.Message, "Échec de la compilation", MessageBoxButton.OK, MessageBoxImage.Error);
                 _status.Text = "Échec de la compilation: " + ex.Message;
             }
         }
@@ -365,7 +365,7 @@ namespace Lycoris
             if (n == null) return;
             if (_db == null || _db.Yokai.Count == 0)
             {
-                MessageBox.Show("Aucun yo-kai chargé (ouvre un dossier de mod d'abord).", "Depuis un yo-kai");
+                DarkMessage.Show("Aucun yo-kai chargé (ouvre un dossier de mod d'abord).", "Depuis un yo-kai");
                 return;
             }
             var dlg = new PickYokaiDialog(this, _db) { Owner = this };
@@ -373,7 +373,7 @@ namespace Lycoris
             string model = dlg.Picked.ModelName;
             if (string.IsNullOrEmpty(model))
             {
-                MessageBox.Show("Ce yo-kai n'a pas de nom de modèle.", "Depuis un yo-kai");
+                DarkMessage.Show("Ce yo-kai n'a pas de nom de modèle.", "Depuis un yo-kai");
                 return;
             }
             n.BaseId = unchecked((int)Crc32.Standard(Encoding.UTF8.GetBytes(model)));

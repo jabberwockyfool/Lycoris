@@ -86,7 +86,7 @@ namespace Lycoris
             }
             catch (Exception ex)
             {
-                MessageBox.Show(ex.Message, "Erreur", MessageBoxButton.OK, MessageBoxImage.Error);
+                DarkMessage.Show(ex.Message, "Erreur", MessageBoxButton.OK, MessageBoxImage.Error);
                 StatusText.Text = "Erreur: " + ex.Message;
             }
         }
@@ -184,7 +184,7 @@ namespace Lycoris
             if (y == null || y.HasBlasterT) return;
             if (!_db.EnableBlasterT(y))
             {
-                MessageBox.Show("hackslash_chara_param introuvable (fournis-le, ou ouvre un dossier de référence).", "Blaster T");
+                DarkMessage.Show("hackslash_chara_param introuvable (fournis-le, ou ouvre un dossier de référence).", "Blaster T");
                 return;
             }
             EnableBtButton.IsEnabled = false;
@@ -197,7 +197,7 @@ namespace Lycoris
             if (y == null || y.HasDrops) return;
             if (!_db.EnableDrops(y))
             {
-                MessageBox.Show("battle_chara_param introuvable (fournis-le, ou ouvre un dossier de référence).", "Drops");
+                DarkMessage.Show("battle_chara_param introuvable (fournis-le, ou ouvre un dossier de référence).", "Drops");
                 return;
             }
             EnableDropsButton.IsEnabled = false;
@@ -334,7 +334,7 @@ namespace Lycoris
             string atlasPath = CurrentAtlasPath();
             if (y == null || atlasPath == null)
             {
-                MessageBox.Show("Atlas face_icon.xi introuvable (ouvre un dossier avec un face_icon).", "Atlas");
+                DarkMessage.Show("Atlas face_icon.xi introuvable (ouvre un dossier avec un face_icon).", "Atlas");
                 return;
             }
             try
@@ -350,7 +350,7 @@ namespace Lycoris
                     StatusText.Text = $"{y.DisplayName} — médaille à ({picker.PickedX}, {picker.PickedY}).";
                 }
             }
-            catch (Exception ex) { MessageBox.Show(ex.Message, "Atlas", MessageBoxButton.OK, MessageBoxImage.Error); }
+            catch (Exception ex) { DarkMessage.Show(ex.Message, "Atlas", MessageBoxButton.OK, MessageBoxImage.Error); }
         }
 
         private void ReplaceMedalIcon_Click(object sender, RoutedEventArgs e)
@@ -361,7 +361,7 @@ namespace Lycoris
                 ? IconNaming.GetFileModelText(y.FileNamePrefix.Value, y.FileNameNumber ?? 0, y.FileNameVariant ?? 0) : null);
             string src = y.MedalIconFile ?? (_db.ModMedalIconDir != null && baseName != null
                 ? System.IO.Path.Combine(_db.ModMedalIconDir, baseName + ".xi") : null);
-            if (src == null) { MessageBox.Show("Pas de dossier medal_icon disponible.", "medal_icon"); return; }
+            if (src == null) { DarkMessage.Show("Pas de dossier medal_icon disponible.", "medal_icon"); return; }
 
             var dlg = new Microsoft.Win32.OpenFileDialog { Filter = "Images PNG|*.png", Title = "medal_icon — PNG (64×64 idéalement)" };
             if (dlg.ShowDialog() != true) return;
@@ -373,7 +373,7 @@ namespace Lycoris
                 MedalIconImage.Source = LoadIconFile(target);
                 StatusText.Text = $"medal_icon remplacé: {System.IO.Path.GetFileName(target)}";
             }
-            catch (Exception ex) { MessageBox.Show(ex.Message, "Erreur medal_icon", MessageBoxButton.OK, MessageBoxImage.Error); }
+            catch (Exception ex) { DarkMessage.Show(ex.Message, "Erreur medal_icon", MessageBoxButton.OK, MessageBoxImage.Error); }
         }
 
         private void ReplaceMedalAtlas_Click(object sender, RoutedEventArgs e)
@@ -381,7 +381,7 @@ namespace Lycoris
             var y = Selector.SelectedItem as YokaiInfo;
             CommitEdits();
             if (y == null || !y.MedalPosX.HasValue || !y.MedalPosY.HasValue) return;
-            if (CurrentAtlasPath() == null) { MessageBox.Show("Atlas face_icon.xi introuvable.", "Medal"); return; }
+            if (CurrentAtlasPath() == null) { DarkMessage.Show("Atlas face_icon.xi introuvable.", "Medal"); return; }
 
             var dlg = new Microsoft.Win32.OpenFileDialog { Filter = "Images PNG|*.png", Title = "Mini-médaille — PNG (32×32)" };
             if (dlg.ShowDialog() != true) return;
@@ -391,7 +391,7 @@ namespace Lycoris
                 byte[] cell = PngToBgra(dlg.FileName, MedalCell, MedalCell);
                 int x = y.MedalPosX.Value * MedalCell, y0 = y.MedalPosY.Value * MedalCell;
                 if (x + MedalCell > atlas.Width || y0 + MedalCell > atlas.Height)
-                { MessageBox.Show("Position medal hors de l'atlas.", "Medal"); return; }
+                { DarkMessage.Show("Position medal hors de l'atlas.", "Medal"); return; }
                 for (int ry = 0; ry < MedalCell; ry++)
                     Array.Copy(cell, ry * MedalCell * 4, atlas.Bgra, ((y0 + ry) * atlas.Width + x) * 4, MedalCell * 4);
 
@@ -401,7 +401,7 @@ namespace Lycoris
                 MedalAtlasImage.Source = CropAtlasMedal(y);
                 StatusText.Text = $"Médaille insérée dans l'atlas à ({y.MedalPosX},{y.MedalPosY}) → {System.IO.Path.GetFileName(target)}";
             }
-            catch (Exception ex) { MessageBox.Show(ex.Message, "Erreur atlas medal", MessageBoxButton.OK, MessageBoxImage.Error); }
+            catch (Exception ex) { DarkMessage.Show(ex.Message, "Erreur atlas medal", MessageBoxButton.OK, MessageBoxImage.Error); }
         }
 
         private void ReplaceIconButton_Click(object sender, RoutedEventArgs e)
@@ -410,7 +410,7 @@ namespace Lycoris
             if (y == null) return;
             if (y.IconFile == null && _db.ModFaceIconDir == null)
             {
-                MessageBox.Show("Aucun dossier face_icon dans le mod pour y écrire l'icône.", "Remplacer l'icône");
+                DarkMessage.Show("Aucun dossier face_icon dans le mod pour y écrire l'icône.", "Remplacer l'icône");
                 return;
             }
             var dlg = new Microsoft.Win32.OpenFileDialog { Filter = "Images PNG|*.png", Title = "Choisir un PNG (idéalement 64×64)" };
@@ -423,7 +423,7 @@ namespace Lycoris
             }
             catch (Exception ex)
             {
-                MessageBox.Show(ex.Message, "Erreur conversion PNG→.xi", MessageBoxButton.OK, MessageBoxImage.Error);
+                DarkMessage.Show(ex.Message, "Erreur conversion PNG→.xi", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -481,7 +481,7 @@ namespace Lycoris
             }
             catch (Exception ex)
             {
-                MessageBox.Show(ex.Message, "Ajout impossible", MessageBoxButton.OK, MessageBoxImage.Warning);
+                DarkMessage.Show(ex.Message, "Ajout impossible", MessageBoxButton.OK, MessageBoxImage.Warning);
             }
         }
 
@@ -499,7 +499,7 @@ namespace Lycoris
             }
             catch (Exception ex)
             {
-                MessageBox.Show(ex.Message, "Duplication impossible", MessageBoxButton.OK, MessageBoxImage.Warning);
+                DarkMessage.Show(ex.Message, "Duplication impossible", MessageBoxButton.OK, MessageBoxImage.Warning);
             }
         }
 
@@ -513,7 +513,7 @@ namespace Lycoris
         {
             if (_db.Items.Count == 0)
             {
-                MessageBox.Show("Aucun item chargé (item_config introuvable — vérifie le dossier de référence).", "Items");
+                DarkMessage.Show("Aucun item chargé (item_config introuvable — vérifie le dossier de référence).", "Items");
                 return;
             }
             new ItemEditorWindow(this, _db) { Owner = this }.Show();
@@ -523,7 +523,7 @@ namespace Lycoris
         {
             var y = Selector.SelectedItem as YokaiInfo;
             if (y == null) return;
-            var confirm = MessageBox.Show(
+            var confirm = DarkMessage.Show(
                 $"Supprimer {y.DisplayName} ({y.ParamIdHex}) du registre ?\n\n" +
                 "Son entrée param (et hackslash/battle) est retirée ; les données partagées " +
                 "(base, nom, description…) ne le sont que si aucun autre yo-kai ne les utilise. " +
@@ -549,7 +549,7 @@ namespace Lycoris
 
             var files = new[] { _db.ParamFile, _db.BaseFile, _db.TextFile, _db.DescFile, _db.ScaleFile }
                 .Where(f => f != null).Select(System.IO.Path.GetFileName);
-            var confirm = MessageBox.Show(
+            var confirm = DarkMessage.Show(
                 "Écraser les fichiers du mod :\n" + string.Join("\n", files) + "\n\navec les modifications ?",
                 "Sauver le mod", MessageBoxButton.OKCancel, MessageBoxImage.Question);
             if (confirm != MessageBoxResult.OK) return;
@@ -558,11 +558,11 @@ namespace Lycoris
             {
                 string summary = _db.SaveAll();
                 StatusText.Text = "Sauvé — " + summary;
-                MessageBox.Show("Sauvegarde OK.\n" + summary, "Sauvegarde", MessageBoxButton.OK, MessageBoxImage.Information);
+                DarkMessage.Show("Sauvegarde OK.\n" + summary, "Sauvegarde", MessageBoxButton.OK, MessageBoxImage.Information);
             }
             catch (Exception ex)
             {
-                MessageBox.Show(ex.Message, "Erreur de sauvegarde", MessageBoxButton.OK, MessageBoxImage.Error);
+                DarkMessage.Show(ex.Message, "Erreur de sauvegarde", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
     }

@@ -205,7 +205,7 @@ namespace Lycoris
                 _list.ScrollIntoView(s);
                 _status.Text = $"Skill ajouté: {s.DisplayName} ({s.SkillIdHex}). Édite puis « Sauver le mod ».";
             }
-            catch (Exception ex) { MessageBox.Show(ex.Message, "Ajout de skill", MessageBoxButton.OK, MessageBoxImage.Warning); }
+            catch (Exception ex) { DarkMessage.Show(ex.Message, "Ajout de skill", MessageBoxButton.OK, MessageBoxImage.Warning); }
         }
 
         private void DuplicateSkill()
@@ -224,14 +224,14 @@ namespace Lycoris
                 _list.ScrollIntoView(s);
                 _status.Text = $"Dupliqué: {s.DisplayName} ({s.SkillIdHex}). Édite puis « Sauver le mod ».";
             }
-            catch (Exception ex) { MessageBox.Show(ex.Message, "Duplication de skill", MessageBoxButton.OK, MessageBoxImage.Warning); }
+            catch (Exception ex) { DarkMessage.Show(ex.Message, "Duplication de skill", MessageBoxButton.OK, MessageBoxImage.Warning); }
         }
 
         private void DeleteSkill()
         {
             var s = _list.SelectedItem as SkillInfo;
             if (s == null) return;
-            var confirm = MessageBox.Show(
+            var confirm = DarkMessage.Show(
                 $"Supprimer le skill « {s.DisplayName} » ({s.SkillIdHex}) ?\n\n" +
                 "Attention: un yo-kai qui l'utilise pointerait dans le vide. Son nom n'est retiré que si aucun " +
                 "autre skill ne le partage. À confirmer avec « Sauver le mod ».",
@@ -255,7 +255,7 @@ namespace Lycoris
                 int n = _db.SaveSkills();
                 _status.Text = n > 0 ? $"Sauvé — {n} valeur(s) de skills écrites." : "Aucune modification de skill à sauver.";
             }
-            catch (Exception ex) { MessageBox.Show(ex.Message, "Sauvegarde skills", MessageBoxButton.OK, MessageBoxImage.Error); }
+            catch (Exception ex) { DarkMessage.Show(ex.Message, "Sauvegarde skills", MessageBoxButton.OK, MessageBoxImage.Error); }
         }
     }
 

@@ -122,7 +122,7 @@ namespace Lycoris
                 }
                 catch (Exception ex)
                 {
-                    MessageBox.Show(ex.Message, "Erreur", MessageBoxButton.OK, MessageBoxImage.Error);
+                    DarkMessage.Show(ex.Message, "Erreur", MessageBoxButton.OK, MessageBoxImage.Error);
                     _status.Text = "Erreur: " + ex.Message;
                 }
             }

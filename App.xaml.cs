@@ -16,6 +16,9 @@ namespace Lycoris
 		protected override void OnStartup(StartupEventArgs e)
 		{
 			base.OnStartup(e);
+			// Dark native title bar on every window (the OS chrome WPF styles can't reach).
+			EventManager.RegisterClassHandler(typeof(Window), FrameworkElement.LoadedEvent,
+				new RoutedEventHandler((s, ev) => Theme.ApplyDarkTitleBar((Window)s)));
 			new HomeWindow().Show();
 		}
 	}
