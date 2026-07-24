@@ -5,7 +5,8 @@ Currently available:
 - Item Editor
 - Skill Editor
 - Map Editor
-- NPC Editor (not finished yet)
+- NPC Editor
+- Save Editor (to test your changes)
 
 ## Credits
 
