@@ -13,6 +13,6 @@ Formats and resolution mechanisms reverse-engineered from:
 - [**CfgBinEditor**](https://github.com/onepiecefreak3/CfgBinEditor) (onepiecefreak) — T2B format.
 - [**Albatross**](https://github.com/Tiniifan/Albatross) (Tiniifan) — YW3 game logic, IMGC pipeline,
   dictionaries, name resolution strings.
-  -[**NPCMake**](https://github.com/SuperTavor/NPCMake) (SuperTavor) — NPC integrations
+- [**NPCMake**](https://github.com/SuperTavor/NPCMake) (SuperTavor) — NPC integrations
 
 For personal and community modding use.
