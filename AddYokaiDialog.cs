@@ -26,14 +26,14 @@ namespace Lycoris
         public AddYokaiDialog(Window owner)
         {
             Owner = owner;
-            Title = "Ajouter un yo-kai";
+            Title = "Add a Yo-kai";
             Width = 420;
             SizeToContent = SizeToContent.Height;
             WindowStartupLocation = WindowStartupLocation.CenterOwner;
             ResizeMode = ResizeMode.NoResize;
 
             var panel = new StackPanel { Margin = new Thickness(12) };
-            panel.Children.Add(new TextBlock { Text = "Nom" });
+            panel.Children.Add(new TextBlock { Text = "Name" });
             panel.Children.Add(_name);
             panel.Children.Add(new TextBlock { Text = "Description" });
             panel.Children.Add(_desc);
@@ -41,8 +41,8 @@ namespace Lycoris
             var stats = new Grid();
             stats.ColumnDefinitions.Add(new ColumnDefinition());
             stats.ColumnDefinitions.Add(new ColumnDefinition());
-            var tribeLbl = new TextBlock { Text = "Tribu (index)" };
-            var rankLbl = new TextBlock { Text = "Rang (index)" };
+            var tribeLbl = new TextBlock { Text = "Tribe (index)" };
+            var rankLbl = new TextBlock { Text = "Rank (index)" };
             Grid.SetColumn(tribeLbl, 0); Grid.SetColumn(rankLbl, 1);
             var tribeStack = new StackPanel { Margin = new Thickness(0, 0, 6, 0) };
             tribeStack.Children.Add(tribeLbl); tribeStack.Children.Add(_tribe);
@@ -54,20 +54,20 @@ namespace Lycoris
 
             panel.Children.Add(new TextBlock
             {
-                Text = "Les stats sont copiées d'un modèle existant — édite-les ensuite dans la grille.",
+                Text = "Stats are copied from an existing template — edit them afterwards in the grid.",
                 TextWrapping = TextWrapping.Wrap,
                 Foreground = Theme.FgMuted,
                 Margin = new Thickness(0, 0, 0, 10)
             });
 
             var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
-            var ok = new Button { Content = "Créer", Padding = new Thickness(14, 4, 14, 4), IsDefault = true, Margin = new Thickness(0, 0, 6, 0) };
-            var cancel = new Button { Content = "Annuler", Padding = new Thickness(14, 4, 14, 4), IsCancel = true };
+            var ok = new Button { Content = "Create", Padding = new Thickness(14, 4, 14, 4), IsDefault = true, Margin = new Thickness(0, 0, 6, 0) };
+            var cancel = new Button { Content = "Cancel", Padding = new Thickness(14, 4, 14, 4), IsCancel = true };
             ok.Click += (s, e) =>
             {
                 if (string.IsNullOrWhiteSpace(_name.Text))
                 {
-                    DarkMessage.Show("Le nom est obligatoire.", "Ajouter un yo-kai");
+                    DarkMessage.Show("The name is required.", "Add a Yo-kai");
                     return;
                 }
                 DialogResult = true;

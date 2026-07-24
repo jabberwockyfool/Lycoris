@@ -34,20 +34,20 @@ namespace Lycoris
         {
             _db = db;
             Owner = owner;
-            Title = "Lycoris — Éditeur d'items";
+            Title = "Lycoris — Item Editor";
             Width = 760; Height = 620;
             WindowStartupLocation = WindowStartupLocation.CenterOwner;
 
             _moddedAtlas = _db.ModItemAtlasFile;
 
             // Toolbar
-            var add = new Button { Content = "+ Ajouter", Padding = new Thickness(10, 4, 10, 4) };
+            var add = new Button { Content = "+ Add", Padding = new Thickness(10, 4, 10, 4) };
             add.Click += (s, e) => AddItem();
-            var dup = new Button { Content = "Dupliquer", Padding = new Thickness(10, 4, 10, 4), Margin = new Thickness(6, 0, 0, 0) };
+            var dup = new Button { Content = "Duplicate", Padding = new Thickness(10, 4, 10, 4), Margin = new Thickness(6, 0, 0, 0) };
             dup.Click += (s, e) => DuplicateItem();
-            var del = new Button { Content = "Supprimer", Padding = new Thickness(10, 4, 10, 4), Margin = new Thickness(6, 0, 0, 0) };
+            var del = new Button { Content = "Delete", Padding = new Thickness(10, 4, 10, 4), Margin = new Thickness(6, 0, 0, 0) };
             del.Click += (s, e) => DeleteItem();
-            var save = new Button { Content = "Sauver le mod", Padding = new Thickness(10, 4, 10, 4), Margin = new Thickness(6, 0, 0, 0) };
+            var save = new Button { Content = "Save the mod", Padding = new Thickness(10, 4, 10, 4), Margin = new Thickness(6, 0, 0, 0) };
             save.Click += (s, e) => Save();
             var toolbar = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(6) };
             toolbar.Children.Add(add);
@@ -119,21 +119,21 @@ namespace Lycoris
             _fields.Children.Add(header);
 
             var iconBtns = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 8) };
-            var pick = new Button { Content = "Choisir position dans l'atlas…", Padding = new Thickness(8, 2, 8, 2) };
+            var pick = new Button { Content = "Choose position in the atlas…", Padding = new Thickness(8, 2, 8, 2) };
             pick.Click += (s, e) => PickPos();
-            var repl = new Button { Content = "Remplacer l'icône (PNG)", Padding = new Thickness(8, 2, 8, 2), Margin = new Thickness(6, 0, 0, 0) };
+            var repl = new Button { Content = "Replace the icon (PNG)", Padding = new Thickness(8, 2, 8, 2), Margin = new Thickness(6, 0, 0, 0) };
             repl.Click += (s, e) => ReplaceIcon();
             iconBtns.Children.Add(pick);
             iconBtns.Children.Add(repl);
             _fields.Children.Add(iconBtns);
 
-            _fields.Children.Add(TextRow("Nom", "Name", 220));
+            _fields.Children.Add(TextRow("Name", "Name", 220));
             _fields.Children.Add(DescRow());
-            _fields.Children.Add(NumRow("Ordre inventaire", "InventorySort"));
-            _fields.Children.Add(NumRow("Type d'item", "ItemType"));
-            _fields.Children.Add(NumRow("Capacité (carry)", "CarryCap"));
-            _fields.Children.Add(NumRow("Prix de vente", "SellPrice"));
-            _fields.Children.Add(NumRow("Prix en shop", "ShopPrice"));
+            _fields.Children.Add(NumRow("Inventory order", "InventorySort"));
+            _fields.Children.Add(NumRow("Item type", "ItemType"));
+            _fields.Children.Add(NumRow("Carry cap", "CarryCap"));
+            _fields.Children.Add(NumRow("Sell price", "SellPrice"));
+            _fields.Children.Add(NumRow("Shop price", "ShopPrice"));
             _fields.Children.Add(NumRow("Icon X", "IconPosX"));
             _fields.Children.Add(NumRow("Icon Y", "IconPosY"));
         }
@@ -219,10 +219,10 @@ namespace Lycoris
                     it.IconPosX = picker.PickedX;
                     it.IconPosY = picker.PickedY;
                     _iconImg.Source = CropIcon(it);
-                    _status.Text = $"{it.DisplayName} — icône à ({picker.PickedX}, {picker.PickedY}).";
+                    _status.Text = $"{it.DisplayName} — icon at ({picker.PickedX}, {picker.PickedY}).";
                 }
             }
-            catch (Exception ex) { DarkMessage.Show(ex.Message, "Atlas item"); }
+            catch (Exception ex) { DarkMessage.Show(ex.Message, "Item atlas"); }
         }
 
         private void ReplaceIcon()
@@ -230,15 +230,15 @@ namespace Lycoris
             var it = _list.SelectedItem as ItemInfo;
             if (it?.IconPosX == null || it.IconPosY == null) return;
             string atlas = AtlasPath();
-            if (atlas == null) { DarkMessage.Show("Atlas item_icon.xi introuvable.", "Item"); return; }
-            var dlg = new Microsoft.Win32.OpenFileDialog { Filter = "Images PNG|*.png", Title = "Icône item — PNG 32×32" };
+            if (atlas == null) { DarkMessage.Show("item_icon.xi atlas not found.", "Item"); return; }
+            var dlg = new Microsoft.Win32.OpenFileDialog { Filter = "PNG images|*.png", Title = "Item icon — PNG 32×32" };
             if (dlg.ShowDialog() != true) return;
             try
             {
                 var img = Imgc.Decode(System.IO.File.ReadAllBytes(atlas));
                 byte[] cell = PngToBgra(dlg.FileName, Cell, Cell);
                 int x = it.IconPosX.Value * Cell, y = it.IconPosY.Value * Cell;
-                if (x + Cell > img.Width || y + Cell > img.Height) { DarkMessage.Show("Position hors de l'atlas.", "Item"); return; }
+                if (x + Cell > img.Width || y + Cell > img.Height) { DarkMessage.Show("Position outside the atlas.", "Item"); return; }
                 for (int ry = 0; ry < Cell; ry++)
                     Array.Copy(cell, ry * Cell * 4, img.Bgra, ((y + ry) * img.Width + x) * 4, Cell * 4);
 
@@ -246,9 +246,9 @@ namespace Lycoris
                 System.IO.File.WriteAllBytes(target, Imgc.EncodeXi(img.Bgra, img.Width, img.Height));
                 _moddedAtlas = target;
                 _iconImg.Source = CropIcon(it);
-                _status.Text = $"Icône item remplacée à ({it.IconPosX},{it.IconPosY}).";
+                _status.Text = $"Item icon replaced at ({it.IconPosX},{it.IconPosY}).";
             }
-            catch (Exception ex) { DarkMessage.Show(ex.Message, "Erreur icône item", MessageBoxButton.OK, MessageBoxImage.Error); }
+            catch (Exception ex) { DarkMessage.Show(ex.Message, "Item icon error", MessageBoxButton.OK, MessageBoxImage.Error); }
         }
 
         private void UpdateCount() => _countText.Text = $"{_db.Items.Count} items";
@@ -265,9 +265,9 @@ namespace Lycoris
                 UpdateCount();
                 _list.SelectedItem = it;
                 _list.ScrollIntoView(it);
-                _status.Text = $"Item ajouté: {it.DisplayName} ({it.ItemIdHex}). Édite puis « Sauver le mod ».";
+                _status.Text = $"Item added: {it.DisplayName} ({it.ItemIdHex}). Edit then “Save the mod”.";
             }
-            catch (Exception ex) { DarkMessage.Show(ex.Message, "Ajout d'item", MessageBoxButton.OK, MessageBoxImage.Warning); }
+            catch (Exception ex) { DarkMessage.Show(ex.Message, "Add item", MessageBoxButton.OK, MessageBoxImage.Warning); }
         }
 
         private void DuplicateItem()
@@ -283,9 +283,9 @@ namespace Lycoris
                 UpdateCount();
                 _list.SelectedItem = it;
                 _list.ScrollIntoView(it);
-                _status.Text = $"Dupliqué: {it.DisplayName} ({it.ItemIdHex}). Édite puis « Sauver le mod ».";
+                _status.Text = $"Duplicated: {it.DisplayName} ({it.ItemIdHex}). Edit then “Save the mod”.";
             }
-            catch (Exception ex) { DarkMessage.Show(ex.Message, "Duplication d'item", MessageBoxButton.OK, MessageBoxImage.Warning); }
+            catch (Exception ex) { DarkMessage.Show(ex.Message, "Duplicate item", MessageBoxButton.OK, MessageBoxImage.Warning); }
         }
 
         private void DeleteItem()
@@ -293,10 +293,10 @@ namespace Lycoris
             var it = _list.SelectedItem as ItemInfo;
             if (it == null) return;
             var confirm = DarkMessage.Show(
-                $"Supprimer l'item « {it.DisplayName} » ({it.ItemIdHex}) ?\n\n" +
-                "Son nom/description ne sont retirés que si aucun autre item ne les partage. " +
-                "À confirmer avec « Sauver le mod ».",
-                "Supprimer un item", MessageBoxButton.OKCancel, MessageBoxImage.Warning);
+                $"Delete the item “{it.DisplayName}” ({it.ItemIdHex})?\n\n" +
+                "Its name/description are removed only if no other item shares them. " +
+                "Confirm with “Save the mod”.",
+                "Delete an item", MessageBoxButton.OKCancel, MessageBoxImage.Warning);
             if (confirm != MessageBoxResult.OK) return;
 
             int idx = _list.SelectedIndex;
@@ -304,7 +304,7 @@ namespace Lycoris
             _view.Refresh();
             UpdateCount();
             if (_list.Items.Count > 0) _list.SelectedIndex = Math.Min(idx, _list.Items.Count - 1);
-            _status.Text = $"Item supprimé — {_db.Items.Count} restants. Sauver pour appliquer.";
+            _status.Text = $"Item deleted — {_db.Items.Count} remaining. Save to apply.";
         }
 
         private void Save()
@@ -314,9 +314,9 @@ namespace Lycoris
             try
             {
                 int n = _db.SaveItems();
-                _status.Text = n > 0 ? $"Sauvé — {n} valeur(s) d'items écrites." : "Aucune modification d'item à sauver.";
+                _status.Text = n > 0 ? $"Saved — {n} item value(s) written." : "No item changes to save.";
             }
-            catch (Exception ex) { DarkMessage.Show(ex.Message, "Sauvegarde items", MessageBoxButton.OK, MessageBoxImage.Error); }
+            catch (Exception ex) { DarkMessage.Show(ex.Message, "Save items", MessageBoxButton.OK, MessageBoxImage.Error); }
         }
 
         // ---------- image helpers ----------
@@ -357,13 +357,13 @@ namespace Lycoris
         {
             switch (rec)
             {
-                case "ITEM_CONSUME": return "Consommable";
-                case "ITEM_CREATURE": return "Créature / appât";
-                case "ITEM_IMPORTANT": return "Objet important";
-                case "ITEM_EQUIPMENT": return "Équipement";
-                case "ITEM_HACKSLASH_BATTLE": return "Blaster T — combat";
-                case "ITEM_HACKSLASH_EQUIPMENT": return "Blaster T — équipement";
-                case "ITEM_SOUL": return "Âme (soul)";
+                case "ITEM_CONSUME": return "Consumable";
+                case "ITEM_CREATURE": return "Creature / bait";
+                case "ITEM_IMPORTANT": return "Important item";
+                case "ITEM_EQUIPMENT": return "Equipment";
+                case "ITEM_HACKSLASH_BATTLE": return "Blaster T — battle";
+                case "ITEM_HACKSLASH_EQUIPMENT": return "Blaster T — equipment";
+                case "ITEM_SOUL": return "Soul";
                 default: return rec;
             }
         }
@@ -371,7 +371,7 @@ namespace Lycoris
         public AddItemDialog(Window owner, string[] recordTypes)
         {
             Owner = owner;
-            Title = "Ajouter un item";
+            Title = "Add an item";
             Width = 380; Height = 190;
             WindowStartupLocation = WindowStartupLocation.CenterOwner;
             ResizeMode = ResizeMode.NoResize;
@@ -381,14 +381,14 @@ namespace Lycoris
             _type.SelectedIndex = 0;
 
             var grid = new StackPanel { Margin = new Thickness(12) };
-            grid.Children.Add(new TextBlock { Text = "Nom de l'item", Foreground = Theme.FgMuted });
+            grid.Children.Add(new TextBlock { Text = "Item name", Foreground = Theme.FgMuted });
             grid.Children.Add(_name);
-            grid.Children.Add(new TextBlock { Text = "Catégorie", Foreground = Theme.FgMuted, Margin = new Thickness(0, 8, 0, 0) });
+            grid.Children.Add(new TextBlock { Text = "Category", Foreground = Theme.FgMuted, Margin = new Thickness(0, 8, 0, 0) });
             grid.Children.Add(_type);
 
-            var ok = new Button { Content = "Ajouter", IsDefault = true, Width = 90, Margin = new Thickness(0, 12, 6, 0) };
+            var ok = new Button { Content = "Add", IsDefault = true, Width = 90, Margin = new Thickness(0, 12, 6, 0) };
             ok.Click += (s, e) => { DialogResult = !string.IsNullOrWhiteSpace(ItemName); };
-            var cancel = new Button { Content = "Annuler", IsCancel = true, Width = 90, Margin = new Thickness(0, 12, 0, 0) };
+            var cancel = new Button { Content = "Cancel", IsCancel = true, Width = 90, Margin = new Thickness(0, 12, 0, 0) };
             var btns = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
             btns.Children.Add(ok);
             btns.Children.Add(cancel);

@@ -45,7 +45,7 @@ namespace Lycoris.Npc
                 string txt = File.Exists(inXq + ".txt") ? inXq + ".txt"
                     : Directory.GetFiles(work, "*.txt").FirstOrDefault();
                 if (txt == null || !File.Exists(txt))
-                    throw new InvalidOperationException("xtractquery n'a pas produit de fichier décompilé (.txt).");
+                    throw new InvalidOperationException("xtractquery did not produce a decompiled file (.txt).");
 
                 string code = File.ReadAllText(txt);
                 funcId = NextRunCmdId(code);
@@ -56,7 +56,7 @@ namespace Lycoris.Npc
                 string outXq = File.Exists(txt + ".xq") ? txt + ".xq"
                     : Directory.GetFiles(work, "*.xq").FirstOrDefault(f => !string.Equals(f, inXq, StringComparison.OrdinalIgnoreCase));
                 if (outXq == null || !File.Exists(outXq))
-                    throw new InvalidOperationException("xtractquery n'a pas produit de fichier recompilé (.xq).");
+                    throw new InvalidOperationException("xtractquery did not produce a recompiled file (.xq).");
 
                 log = sb.ToString();
                 return File.ReadAllBytes(outXq);
@@ -96,16 +96,16 @@ namespace Lycoris.Npc
                 File.WriteAllBytes(inXq, xq);
                 RunOrThrow($"-o e -f \"{inXq}\"", work, sb);
                 string txt = File.Exists(inXq + ".txt") ? inXq + ".txt" : Directory.GetFiles(work, "*.txt").FirstOrDefault();
-                if (txt == null) throw new InvalidOperationException("Décompilation XQ échouée.");
+                if (txt == null) throw new InvalidOperationException("XQ decompilation failed.");
 
                 string code = File.ReadAllText(txt);
                 string replaced = ReplaceBody(code, funcId, newBody);
-                if (replaced == null) throw new InvalidOperationException($"Fonction RunCmd_Map{funcId} introuvable dans le script.");
+                if (replaced == null) throw new InvalidOperationException($"Function RunCmd_Map{funcId} not found in the script.");
                 File.WriteAllText(txt, replaced);
 
                 RunOrThrow($"-o c -t xq32 -f \"{txt}\"", work, sb);
                 string outXq = File.Exists(txt + ".xq") ? txt + ".xq" : Directory.GetFiles(work, "*.xq").FirstOrDefault(f => !string.Equals(f, inXq, StringComparison.OrdinalIgnoreCase));
-                if (outXq == null) throw new InvalidOperationException("Recompilation XQ échouée.");
+                if (outXq == null) throw new InvalidOperationException("XQ recompilation failed.");
                 log = sb.ToString();
                 return File.ReadAllBytes(outXq);
             }
@@ -179,7 +179,7 @@ namespace Lycoris.Npc
         private static void RunOrThrow(string args, string workdir, StringBuilder sb)
         {
             var p = Start(args, workdir, out _);
-            if (p == null) throw new InvalidOperationException("Impossible de lancer xtractquery (absent du PATH ?).");
+            if (p == null) throw new InvalidOperationException("Could not launch xtractquery (missing from PATH?).");
             string so = p.StandardOutput.ReadToEnd();
             string se = p.StandardError.ReadToEnd();
             p.WaitForExit();
@@ -187,7 +187,7 @@ namespace Lycoris.Npc
             if (so.Length > 0) sb.Append(so).Append('\n');
             if (se.Length > 0) sb.Append(se).Append('\n');
             if (p.ExitCode != 0)
-                throw new InvalidOperationException($"xtractquery a échoué (code {p.ExitCode}).\n{so}\n{se}");
+                throw new InvalidOperationException($"xtractquery failed (code {p.ExitCode}).\n{so}\n{se}");
         }
     }
 }

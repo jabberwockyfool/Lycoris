@@ -46,7 +46,7 @@ namespace Lycoris.Yokai
                 bt += SetBt(db, n => y.BtSoultimateHash = n, soul);
                 parts.Add($"BlasterT: {bt}/3 par nom");
             }
-            return parts.Count > 0 ? string.Join(", ", parts) : "aucun skill pour cet élément";
+            return parts.Count > 0 ? string.Join(", ", parts) : "no skill for this element";
         }
 
         private static YokaiDatabase.SkillMove? Pick(YokaiDatabase db, int element, int power)

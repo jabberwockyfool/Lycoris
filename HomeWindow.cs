@@ -9,7 +9,7 @@ namespace Lycoris
     /// <summary>
     /// Home launcher: open a mod folder once, then choose which editor to use (yo-kai or items).
     /// Both editors share the same in-memory database, so edits made in one are visible in the other
-    /// and a single "Sauver le mod" in each writes the corresponding files.
+    /// and a single "Save the mod" in each writes the corresponding files.
     /// </summary>
     public sealed class HomeWindow : Window
     {
@@ -32,7 +32,7 @@ namespace Lycoris
 
         public HomeWindow()
         {
-            Title = "Lycoris — Éditeur Yo-kai Watch 3";
+            Title = "Lycoris — Yo-kai Watch 3 Editor";
             Width = 460; Height = 730;
             WindowStartupLocation = WindowStartupLocation.CenterScreen;
             Background = Theme.WindowBg;
@@ -46,20 +46,20 @@ namespace Lycoris
             });
             root.Children.Add(new TextBlock
             {
-                Text = "Éditeur de mods Yo-kai Watch 3",
+                Text = "Yo-kai Watch 3 mod editor",
                 FontSize = 13, Foreground = Theme.FgMuted, Margin = new Thickness(0, 0, 0, 18)
             });
 
-            var open = new Button { Content = "📂  Ouvrir un dossier (mod extrait)…", Padding = new Thickness(12, 8, 12, 8), FontSize = 14 };
+            var open = new Button { Content = "📂  Open a folder (extracted mod)…", Padding = new Thickness(12, 8, 12, 8), FontSize = 14 };
             open.Click += (s, e) => OpenFolder();
             root.Children.Add(open);
 
-            _yokaiBtn = BigButton("👹  Éditeur Yo-kai", "Stats, moves, évolutions, Blaster T, drops, charabase, portraits…", OpenYokaiEditor);
-            _itemBtn = BigButton("🎁  Éditeur d'items", "Nom, description, prix, ordre d'inventaire, icône de l'atlas…", OpenItemEditor);
-            _skillBtn = BigButton("⚔  Éditeur de skills", "Type, élément, puissance, coups, portée Soultimate… (ajout/suppression)", OpenSkillEditor);
-            _npcBtn = BigButton("🧍  Éditeur de NPC", "Config NPCMake (TOML) éditable dans le GUI, import/export .toml.", OpenNpcEditor);
-            _mapBtn = BigButton("🗺  Éditeur de maps", "map_config : ajoute/édite les entrées de map (MapID, nom, ShowMapCard…).", OpenMapEditor);
-            _checkBtn = BigButton("🩺  Vérifier l'intégrité", "Détecte les références cassées (move/drop/évolution manquants) et les doublons.", OpenIntegrity);
+            _yokaiBtn = BigButton("👹  Yo-kai Editor", "Stats, moves, evolutions, Blaster T, drops, charabase, portraits…", OpenYokaiEditor);
+            _itemBtn = BigButton("🎁  Item Editor", "Name, description, price, inventory order, atlas icon…", OpenItemEditor);
+            _skillBtn = BigButton("⚔  Skill Editor", "Type, element, power, hits, Soultimate range… (add/delete)", OpenSkillEditor);
+            _npcBtn = BigButton("🧍  NPC Editor", "NPCMake config (TOML) editable in the GUI, import/export .toml.", OpenNpcEditor);
+            _mapBtn = BigButton("🗺  Map Editor", "map_config: add/edit map entries (MapID, name, ShowMapCard…).", OpenMapEditor);
+            _checkBtn = BigButton("🩺  Check integrity", "Detects broken references (missing move/drop/evolution) and duplicates.", OpenIntegrity);
             _yokaiBtn.IsEnabled = false;
             _itemBtn.IsEnabled = false;
             _skillBtn.IsEnabled = false;
@@ -75,8 +75,8 @@ namespace Lycoris
 
             root.Children.Add(_status);
             _status.Text = _referenceFolder != null
-                ? "Astuce: ouvre le dossier de ton mod extrait (YWML). Le dossier « cfg » sert de référence pour les noms manquants."
-                : "Ouvre le dossier de ton mod extrait (YWML).";
+                ? "Tip: open your extracted mod folder (YWML). The “cfg” folder serves as a reference for missing names."
+                : "Open your extracted mod folder (YWML).";
 
             Content = root;
         }
@@ -99,7 +99,7 @@ namespace Lycoris
 
         private void OpenFolder()
         {
-            string folder = FolderPicker.Pick("Dossier extrait (YWML) contenant chara_param / chara_base / chara_text…",
+            string folder = FolderPicker.Pick("Extracted folder (YWML) containing chara_param / chara_base / chara_text…",
                 new System.Windows.Interop.WindowInteropHelper(this).Handle);
             if (folder == null) return;
             try
@@ -120,14 +120,14 @@ namespace Lycoris
                 _mapBtn.IsEnabled = _db.Maps.Count > 0;
                 _checkBtn.IsEnabled = _db.ParamFile != null;
 
-                string moves = _db.MoveOptions.Count > 0 ? $"moves nommés {_db.MoveNameCount}" : "moves non nommés";
-                _status.Text = $"Chargé — {_db.Yokai.Count} yo-kai, {_db.Items.Count} items, {_db.Skills.Count} skills, {_db.Maps.Count} maps  ({moves}).\n" +
-                               "Choisis un éditeur ci-dessus.";
+                string moves = _db.MoveOptions.Count > 0 ? $"named moves {_db.MoveNameCount}" : "unnamed moves";
+                _status.Text = $"Loaded — {_db.Yokai.Count} yo-kai, {_db.Items.Count} items, {_db.Skills.Count} skills, {_db.Maps.Count} maps  ({moves}).\n" +
+                               "Choose an editor above.";
             }
             catch (Exception ex)
             {
-                DarkMessage.Show(ex.Message, "Erreur", MessageBoxButton.OK, MessageBoxImage.Error);
-                _status.Text = "Erreur: " + ex.Message;
+                DarkMessage.Show(ex.Message, "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                _status.Text = "Error: " + ex.Message;
             }
         }
 

@@ -23,7 +23,7 @@ namespace Lycoris
             _cell = cell;
             PickedX = curX;
             PickedY = curY;
-            Title = "Choisir la médaille dans l'atlas — clique une cellule";
+            Title = "Pick the medal from the atlas — click a cell";
             Width = 820;
             Height = 700;
             WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -71,8 +71,8 @@ namespace Lycoris
                 HorizontalAlignment = HorizontalAlignment.Right,
                 Margin = new Thickness(8)
             };
-            var ok = new Button { Content = "Valider", Padding = new Thickness(14, 4, 14, 4), IsDefault = true, Margin = new Thickness(0, 0, 6, 0) };
-            var cancel = new Button { Content = "Annuler", Padding = new Thickness(14, 4, 14, 4), IsCancel = true };
+            var ok = new Button { Content = "OK", Padding = new Thickness(14, 4, 14, 4), IsDefault = true, Margin = new Thickness(0, 0, 6, 0) };
+            var cancel = new Button { Content = "Cancel", Padding = new Thickness(14, 4, 14, 4), IsCancel = true };
             ok.Click += (s, e) => { DialogResult = true; };
             buttons.Children.Add(ok);
             buttons.Children.Add(cancel);

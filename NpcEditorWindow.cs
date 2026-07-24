@@ -16,12 +16,12 @@ namespace Lycoris
 {
     /// <summary>
     /// NPC editor with two tabs:
-    ///  • "NPC personnalisés (mod)" — manage a list of NPCMake NPC configs (the "TOML"), edit every field in
+    ///  • "Custom NPC (mod)" — manage a list of NPCMake NPC configs (the "TOML"), edit every field in
     ///    the GUI, import/export .toml, and compile. The list is persisted inside the mod (lycoris_npc/*.toml)
     ///    so custom NPCs can be re-opened, edited or removed later in case of a mistake.
-    ///  • "NPC existants (maps)" — browse/edit the NPCs already placed in the game's maps (BaseID, NpcType,
+    ///  • "Existing NPC (maps)" — browse/edit the NPCs already placed in the game's maps (BaseID, NpcType,
     ///    AppearCond, chapters, OnTalk XQ), saving into the mod.
-    /// "Depuis un yo-kai" computes BaseId = CRC32(model name) from the loaded mod.
+    /// "From a yo-kai" computes BaseId = CRC32(model name) from the loaded mod.
     /// </summary>
     public sealed class NpcEditorWindow : Window
     {
@@ -43,7 +43,7 @@ namespace Lycoris
         private readonly CheckBox[] _exChap = new CheckBox[12];
         private readonly TextBox _exOnTalk = new TextBox { Width = 380, Height = 90, AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, FontFamily = new FontFamily("Consolas"), VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
         private readonly TextBlock _exTalkInfo = new TextBlock { Foreground = Theme.FgMuted };
-        private readonly Button _exLoadScript = new Button { Content = "Charger le script XQ", Padding = new Thickness(8, 2, 8, 2), Margin = new Thickness(0, 0, 0, 4) };
+        private readonly Button _exLoadScript = new Button { Content = "Load XQ script", Padding = new Thickness(8, 2, 8, 2), Margin = new Thickness(0, 0, 0, 4) };
         private MapNpcs _exMap;
         private ExistingNpc _exNpc;
         private bool _exSuppress;
@@ -60,13 +60,13 @@ namespace Lycoris
                          .Select(m => new MapEntry(m.MapFolderName, m.Name)).ToList()
                 : MapList.Available(db?.ReferenceFolder, db?.ModFolder);
             Owner = owner;
-            Title = "Lycoris — Éditeur de NPC (NPCMake)";
+            Title = "Lycoris — NPC Editor (NPCMake)";
             Width = 860; Height = 640;
             WindowStartupLocation = WindowStartupLocation.CenterOwner;
 
             var tabs = new TabControl { Margin = new Thickness(4) };
-            tabs.Items.Add(new TabItem { Header = "NPC personnalisés (mod)", Content = BuildCustomTab() });
-            tabs.Items.Add(new TabItem { Header = "NPC existants (maps)", Content = BuildExistingTab() });
+            tabs.Items.Add(new TabItem { Header = "Custom NPC (mod)", Content = BuildCustomTab() });
+            tabs.Items.Add(new TabItem { Header = "Existing NPC (maps)", Content = BuildExistingTab() });
 
             DockPanel.SetDock(_status, Dock.Bottom);
             var root = new DockPanel();
@@ -87,8 +87,8 @@ namespace Lycoris
             Closing += (s, e) => PersistNpcs();
 
             _status.Text = PersistDir != null
-                ? "NPC personnalisés stockés dans le mod (lycoris_npc). « Depuis un yo-kai » calcule le BaseId."
-                : "Aucun mod chargé : les NPC personnalisés ne seront pas conservés. « Depuis un yo-kai » calcule le BaseId.";
+                ? "Custom NPCs stored in the mod (lycoris_npc). \"From a yo-kai\" computes the BaseId."
+                : "No mod loaded: custom NPCs will not be kept. \"From a yo-kai\" computes the BaseId.";
         }
 
         // ============================ custom NPC tab ============================
@@ -96,12 +96,12 @@ namespace Lycoris
         private FrameworkElement BuildCustomTab()
         {
             var toolbar = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(6) };
-            toolbar.Children.Add(ToolButton("+ Nouveau", NewNpc, 0));
-            toolbar.Children.Add(ToolButton("Dupliquer", DuplicateNpc));
-            toolbar.Children.Add(ToolButton("Supprimer", DeleteNpc));
-            toolbar.Children.Add(ToolButton("Importer TOML…", ImportToml));
-            toolbar.Children.Add(ToolButton("Exporter TOML…", ExportToml));
-            toolbar.Children.Add(ToolButton("Compiler…", CompileNpc));
+            toolbar.Children.Add(ToolButton("+ New", NewNpc, 0));
+            toolbar.Children.Add(ToolButton("Duplicate", DuplicateNpc));
+            toolbar.Children.Add(ToolButton("Delete", DeleteNpc));
+            toolbar.Children.Add(ToolButton("Import TOML…", ImportToml));
+            toolbar.Children.Add(ToolButton("Export TOML…", ExportToml));
+            toolbar.Children.Add(ToolButton("Compile…", CompileNpc));
             DockPanel.SetDock(toolbar, Dock.Top);
 
             var left = new DockPanel { Width = 220, Margin = new Thickness(6) };
@@ -144,18 +144,18 @@ namespace Lycoris
 
         private void BuildFields()
         {
-            _fields.Children.Add(TextRow("Nom du NPC", "NpcName", 260));
+            _fields.Children.Add(TextRow("NPC name", "NpcName", 260));
             _fields.Children.Add(BaseIdRow());
             _fields.Children.Add(NumRow("NpcX", "NpcX"));
             _fields.Children.Add(NumRow("NpcY (2D)", "NpcY"));
-            _fields.Children.Add(NumRow("NpcZ (hauteur)", "NpcZ"));
+            _fields.Children.Add(NumRow("NpcZ (height)", "NpcZ"));
             _fields.Children.Add(NumRow("Rotation (°)", "NpcRotation"));
-            _fields.Children.Add(ComboRow("Chapitre", "ChapterCode",
+            _fields.Children.Add(ComboRow("Chapter", "ChapterCode",
                 new[] { "c01", "c02", "c03", "c04", "c05", "c06", "c07", "c08", "c09", "c10", "c11", "C99" }));
             _fields.Children.Add(MapRow());
-            _fields.Children.Add(DescRow("OnTalk (code XQ)", "OnTalk"));
+            _fields.Children.Add(DescRow("OnTalk (XQ code)", "OnTalk"));
             _fields.Children.Add(TextRow("AppearCond", "AppearCond", 200));
-            _fields.Children.Add(CheckRow("IsYw1 (laisser décoché pour YW3)", "IsYw1"));
+            _fields.Children.Add(CheckRow("IsYw1 (leave unchecked for YW3)", "IsYw1"));
             _fields.Children.Add(ComboRow("NpcType", "NpcType", new[] { "HUMAN", "YOKAI" }));
         }
 
@@ -235,7 +235,7 @@ namespace Lycoris
             var tb = new TextBox { Width = 130 };
             tb.SetBinding(TextBox.TextProperty, new Binding("BaseIdHex") { UpdateSourceTrigger = UpdateSourceTrigger.LostFocus });
             sp.Children.Add(tb);
-            var pick = new Button { Content = "Depuis un yo-kai…", Padding = new Thickness(8, 2, 8, 2), Margin = new Thickness(6, 0, 0, 0) };
+            var pick = new Button { Content = "From a yo-kai…", Padding = new Thickness(8, 2, 8, 2), Margin = new Thickness(6, 0, 0, 0) };
             pick.Click += (s, e) => BaseIdFromYokai();
             sp.Children.Add(pick);
             return sp;
@@ -265,10 +265,10 @@ namespace Lycoris
             if (src == null) return;
             CommitEdits();
             var n = src.Clone();
-            n.NpcName = src.NpcName + " (copie)";
+            n.NpcName = src.NpcName + " (copy)";
             _npcs.Add(n);
             _list.SelectedItem = n;
-            _status.Text = $"Dupliqué: {n.DisplayName}.";
+            _status.Text = $"Duplicated: {n.DisplayName}.";
             PersistNpcs();
         }
 
@@ -279,13 +279,13 @@ namespace Lycoris
             int idx = _list.SelectedIndex;
             _npcs.Remove(n);
             if (_npcs.Count > 0) _list.SelectedIndex = Math.Min(idx, _npcs.Count - 1);
-            _status.Text = "NPC retiré de la liste.";
+            _status.Text = "NPC removed from the list.";
             PersistNpcs();
         }
 
         private void ImportToml()
         {
-            var dlg = new Microsoft.Win32.OpenFileDialog { Filter = "Fichiers TOML|*.toml|Tous|*.*", Multiselect = true, Title = "Importer un ou des .toml NPCMake" };
+            var dlg = new Microsoft.Win32.OpenFileDialog { Filter = "TOML files|*.toml|All|*.*", Multiselect = true, Title = "Import one or more NPCMake .toml" };
             if (dlg.ShowDialog() != true) return;
             int added = 0;
             foreach (var path in dlg.FileNames)
@@ -293,7 +293,7 @@ namespace Lycoris
                 try { _npcs.Add(NpcToml.Parse(File.ReadAllText(path))); added++; }
                 catch (Exception ex) { DarkMessage.Show($"{Path.GetFileName(path)}: {ex.Message}", "Import TOML"); }
             }
-            if (added > 0) { _list.SelectedIndex = _npcs.Count - 1; _status.Text = $"{added} NPC importé(s)."; PersistNpcs(); }
+            if (added > 0) { _list.SelectedIndex = _npcs.Count - 1; _status.Text = $"{added} NPC imported."; PersistNpcs(); }
         }
 
         private void ExportToml()
@@ -301,9 +301,9 @@ namespace Lycoris
             var n = Selected;
             if (n == null) return;
             CommitEdits();
-            var dlg = new Microsoft.Win32.SaveFileDialog { Filter = "Fichiers TOML|*.toml", FileName = SafeFileName(n.NpcName) + ".toml", Title = "Exporter le NPC en .toml" };
+            var dlg = new Microsoft.Win32.SaveFileDialog { Filter = "TOML files|*.toml", FileName = SafeFileName(n.NpcName) + ".toml", Title = "Export the NPC as .toml" };
             if (dlg.ShowDialog() != true) return;
-            try { File.WriteAllText(dlg.FileName, NpcToml.Write(n), new UTF8Encoding(false)); _status.Text = $"Exporté: {Path.GetFileName(dlg.FileName)}"; }
+            try { File.WriteAllText(dlg.FileName, NpcToml.Write(n), new UTF8Encoding(false)); _status.Text = $"Exported: {Path.GetFileName(dlg.FileName)}"; }
             catch (Exception ex) { DarkMessage.Show(ex.Message, "Export TOML", MessageBoxButton.OK, MessageBoxImage.Error); }
         }
 
@@ -312,13 +312,13 @@ namespace Lycoris
             var n = Selected;
             if (n == null) return;
             CommitEdits();
-            if (string.IsNullOrWhiteSpace(n.NpcName)) { DarkMessage.Show("Donne un nom au NPC.", "Compiler"); return; }
+            if (string.IsNullOrWhiteSpace(n.NpcName)) { DarkMessage.Show("Give the NPC a name.", "Compile"); return; }
 
             if (!string.IsNullOrWhiteSpace(n.OnTalk) && !NpcXq.IsAvailable())
             {
-                DarkMessage.Show("xtractquery est introuvable dans le PATH — nécessaire pour compiler le code OnTalk.\n" +
-                    "Installe-le globalement (voir yo-docs), ou vide le champ OnTalk pour compiler sans dialogue.",
-                    "xtractquery manquant", MessageBoxButton.OK, MessageBoxImage.Warning);
+                DarkMessage.Show("xtractquery was not found in PATH — required to compile the OnTalk code.\n" +
+                    "Install it globally (see yo-docs), or clear the OnTalk field to compile without dialogue.",
+                    "xtractquery missing", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
 
@@ -326,7 +326,7 @@ namespace Lycoris
             string mapFolder = FindMapDir(n.MapID);
             if (mapFolder == null)
             {
-                mapFolder = FolderPicker.Pick($"Dossier de la map « {n.MapID} » (contenant npc.pck, {n.MapID}.pck…)", Handle);
+                mapFolder = FolderPicker.Pick($"Folder for map \"{n.MapID}\" (containing npc.pck, {n.MapID}.pck…)", Handle);
                 if (mapFolder == null) return;
             }
 
@@ -336,14 +336,14 @@ namespace Lycoris
             string outRoot = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "lycoris_npc_build");
 
             string plan = mergeMapDir != null
-                ? $"Les fichiers seront AJOUTÉS à ton mod :\n{mergeMapDir}"
-                : "Aucun mod chargé : choisis un dossier de sortie (fusion manuelle).";
-            if (DarkMessage.Show($"Compiler « {n.NpcName} » pour la map {n.MapID} ?\n\n{plan}",
-                "Compiler le NPC", MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK) return;
+                ? $"The files will be ADDED to your mod:\n{mergeMapDir}"
+                : "No mod loaded: choose an output folder (manual merge).";
+            if (DarkMessage.Show($"Compile \"{n.NpcName}\" for map {n.MapID}?\n\n{plan}",
+                "Compile the NPC", MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK) return;
 
             if (mergeMapDir == null)
             {
-                string picked = FolderPicker.Pick("Dossier de sortie (un dossier <Nom>_output y sera créé)", Handle);
+                string picked = FolderPicker.Pick("Output folder (a <Name>_output folder will be created there)", Handle);
                 if (picked == null) return;
                 outRoot = picked;
             }
@@ -351,19 +351,19 @@ namespace Lycoris
             try
             {
                 var r = NpcCompiler.Compile(n, mapFolder, outRoot, mergeMapDir);
-                _status.Text = $"NPC compilé — ID {r.NpcIdHex}." + (r.MergedDir != null ? " Fusionné dans le mod." : "");
-                string msg = $"NPC « {n.NpcName} » compilé.\n\nID NPC (hex) : {r.NpcIdHex}\n" +
-                             (r.FuncId >= 0 ? $"Fonction OnTalk : RunCmd_Map{r.FuncId}\n" : "OnTalk : (aucun)\n") +
+                _status.Text = $"NPC compiled — ID {r.NpcIdHex}." + (r.MergedDir != null ? " Merged into the mod." : "");
+                string msg = $"NPC \"{n.NpcName}\" compiled.\n\nNPC ID (hex): {r.NpcIdHex}\n" +
+                             (r.FuncId >= 0 ? $"OnTalk function: RunCmd_Map{r.FuncId}\n" : "OnTalk: (none)\n") +
                              (r.MergedDir != null
-                                ? $"\n✔ Fusionné automatiquement dans le mod :\n{r.MergedDir}\n\n(copie de secours : {r.OutputDir})"
-                                : $"\nFichiers écrits dans :\n{r.OutputDir}\nFusionne ce dossier dans ton mod (res/map/…).");
-                DarkMessage.Show(msg, "Compilation réussie", MessageBoxButton.OK, MessageBoxImage.Information);
+                                ? $"\n✔ Automatically merged into the mod:\n{r.MergedDir}\n\n(backup copy: {r.OutputDir})"
+                                : $"\nFiles written to:\n{r.OutputDir}\nMerge this folder into your mod (res/map/…).");
+                DarkMessage.Show(msg, "Compilation succeeded", MessageBoxButton.OK, MessageBoxImage.Information);
                 PersistNpcs();
             }
             catch (Exception ex)
             {
-                DarkMessage.Show(ex.Message, "Échec de la compilation", MessageBoxButton.OK, MessageBoxImage.Error);
-                _status.Text = "Échec de la compilation: " + ex.Message;
+                DarkMessage.Show(ex.Message, "Compilation failed", MessageBoxButton.OK, MessageBoxImage.Error);
+                _status.Text = "Compilation failed: " + ex.Message;
             }
         }
 
@@ -389,7 +389,7 @@ namespace Lycoris
             if (n == null) return;
             if (_db == null || _db.Yokai.Count == 0)
             {
-                DarkMessage.Show("Aucun yo-kai chargé (ouvre un dossier de mod d'abord).", "Depuis un yo-kai");
+                DarkMessage.Show("No yo-kai loaded (open a mod folder first).", "From a yo-kai");
                 return;
             }
             var dlg = new PickYokaiDialog(this, _db) { Owner = this };
@@ -397,12 +397,12 @@ namespace Lycoris
             string model = dlg.Picked.ModelName;
             if (string.IsNullOrEmpty(model))
             {
-                DarkMessage.Show("Ce yo-kai n'a pas de nom de modèle.", "Depuis un yo-kai");
+                DarkMessage.Show("This yo-kai has no model name.", "From a yo-kai");
                 return;
             }
             n.BaseId = unchecked((int)Crc32.Standard(Encoding.UTF8.GetBytes(model)));
             n.NpcType = "YOKAI";
-            _status.Text = $"BaseId = {n.BaseIdHex} (CRC32 de « {model} »), NpcType = YOKAI.";
+            _status.Text = $"BaseId = {n.BaseIdHex} (CRC32 of \"{model}\"), NpcType = YOKAI.";
         }
 
         private static string SafeFileName(string s)
@@ -450,7 +450,7 @@ namespace Lycoris
 
         private FrameworkElement BuildExistingTab()
         {
-            var save = new Button { Content = "Sauver le mod", Padding = new Thickness(10, 4, 10, 4), Margin = new Thickness(10, 0, 0, 0) };
+            var save = new Button { Content = "Save the mod", Padding = new Thickness(10, 4, 10, 4), Margin = new Thickness(10, 0, 0, 0) };
             save.Click += (s, e) => SaveExisting();
             var toolbar = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(6) };
             toolbar.Children.Add(new TextBlock { Text = "Map ", VerticalAlignment = VerticalAlignment.Center, Foreground = Theme.FgMuted });
@@ -478,14 +478,14 @@ namespace Lycoris
 
         private void BuildExistingFields()
         {
-            _exFields.Children.Add(ReadOnlyRow("Modèle (npcbin)", "ModelName"));
+            _exFields.Children.Add(ReadOnlyRow("Model (npcbin)", "ModelName"));
             _exFields.Children.Add(ReadOnlyRow("NpcID", "NpcIdHex"));
             _exFields.Children.Add(ExBaseIdRow());
             _exFields.Children.Add(ExNpcTypeRow());
             _exFields.Children.Add(TextRow("AppearCond", "AppearCond", 300));
 
             var chGrid = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 6, 0, 2) };
-            chGrid.Children.Add(Label("Chapitres"));
+            chGrid.Children.Add(Label("Chapters"));
             var wrap = new WrapPanel { Width = 400 };
             for (int ch = 1; ch <= 11; ch++)
             {
@@ -541,7 +541,7 @@ namespace Lycoris
             var tb = new TextBox { Width = 130 };
             tb.SetBinding(TextBox.TextProperty, new Binding("BaseIdHex") { UpdateSourceTrigger = UpdateSourceTrigger.LostFocus });
             sp.Children.Add(tb);
-            var pick = new Button { Content = "Depuis un yo-kai…", Padding = new Thickness(8, 2, 8, 2), Margin = new Thickness(6, 0, 0, 0) };
+            var pick = new Button { Content = "From a yo-kai…", Padding = new Thickness(8, 2, 8, 2), Margin = new Thickness(6, 0, 0, 0) };
             pick.Click += (s, e) => ExBaseIdFromYokai();
             sp.Children.Add(pick);
             return sp;
@@ -552,12 +552,12 @@ namespace Lycoris
             string mapId = _exMapCombo.SelectedValue as string;
             if (string.IsNullOrEmpty(mapId)) return;
             string dir = FindMapDirWithSet(mapId);
-            if (dir == null) { _exList.ItemsSource = null; _exFields.IsEnabled = false; _status.Text = $"Aucun dossier res/map/{mapId} (ni mod, ni référence)."; return; }
+            if (dir == null) { _exList.ItemsSource = null; _exFields.IsEnabled = false; _status.Text = $"No res/map/{mapId} folder (neither mod nor reference)."; return; }
             _exMap = ExistingNpcs.Load(dir, mapId);
-            if (_exMap == null || _exMap.Npcs.Count == 0) { _exList.ItemsSource = null; _exFields.IsEnabled = false; _status.Text = "Cette map n'a pas de NPC (npc_set)."; return; }
+            if (_exMap == null || _exMap.Npcs.Count == 0) { _exList.ItemsSource = null; _exFields.IsEnabled = false; _status.Text = "This map has no NPC (npc_set)."; return; }
             _exList.ItemsSource = _exMap.Npcs;
             _exList.SelectedIndex = 0;
-            _status.Text = $"{_exMap.Npcs.Count} NPC dans {mapId}.";
+            _status.Text = $"{_exMap.Npcs.Count} NPC in {mapId}.";
         }
 
         private void ShowExNpc(ExistingNpc n)
@@ -569,7 +569,7 @@ namespace Lycoris
             for (int ch = 1; ch <= 11; ch++) _exChap[ch].IsChecked = n != null && n.Chapters[ch];
             _exSuppress = false;
             bool xq = n != null && n.HasXqTalk;
-            _exTalkInfo.Text = n == null ? "" : (xq ? $"Script XQ : RunCmd_Map{n.FuncId}" : "Talk vanilla (données, pas de script XQ).");
+            _exTalkInfo.Text = n == null ? "" : (xq ? $"XQ script: RunCmd_Map{n.FuncId}" : "Vanilla talk (data, no XQ script).");
             _exLoadScript.IsEnabled = xq && _exMap?.PckPath != null;
             _exOnTalk.IsEnabled = xq;
             _exOnTalk.Text = ""; // loaded on demand
@@ -580,23 +580,23 @@ namespace Lycoris
             if (_exSuppress || _exNpc == null) return;
             _exNpc.Chapters[ch] = on;
             _exNpc.ChaptersDirty = true;
-            _status.Text = "Chapitres modifiés — pense à « Sauver le mod ».";
+            _status.Text = "Chapters modified — remember to \"Save the mod\".";
         }
 
         private void LoadExScript()
         {
             if (_exNpc == null || !_exNpc.HasXqTalk || _exMap?.PckPath == null) return;
-            if (!NpcXq.IsAvailable()) { DarkMessage.Show("xtractquery introuvable dans le PATH — nécessaire pour lire/éditer le script XQ.", "OnTalk", MessageBoxButton.OK, MessageBoxImage.Warning); return; }
+            if (!NpcXq.IsAvailable()) { DarkMessage.Show("xtractquery not found in PATH — required to read/edit the XQ script.", "OnTalk", MessageBoxButton.OK, MessageBoxImage.Warning); return; }
             try
             {
                 var pck = Xpck.Read(File.ReadAllBytes(_exMap.PckPath));
                 var xqFile = pck.FirstOrDefault(x => x.Name.EndsWith(".xq", StringComparison.OrdinalIgnoreCase) && x.Name.IndexOf("quest", StringComparison.OrdinalIgnoreCase) < 0);
-                if (xqFile == null) { DarkMessage.Show("Pas de .xq dans le .pck.", "OnTalk"); return; }
+                if (xqFile == null) { DarkMessage.Show("No .xq in the .pck.", "OnTalk"); return; }
                 string body = NpcXq.ExtractFunction(xqFile.Data, _exNpc.FuncId);
                 _exNpc.OnTalk = body;
                 _exNpc.OnTalkDirty = false;
                 _exOnTalk.Text = body;
-                _status.Text = $"Script RunCmd_Map{_exNpc.FuncId} chargé.";
+                _status.Text = $"Script RunCmd_Map{_exNpc.FuncId} loaded.";
             }
             catch (Exception ex) { DarkMessage.Show(ex.Message, "OnTalk", MessageBoxButton.OK, MessageBoxImage.Error); }
         }
@@ -607,10 +607,10 @@ namespace Lycoris
             var dlg = new PickYokaiDialog(this, _db) { Owner = this };
             if (dlg.ShowDialog() != true || dlg.Picked == null) return;
             string model = dlg.Picked.ModelName;
-            if (string.IsNullOrEmpty(model)) { DarkMessage.Show("Ce yo-kai n'a pas de modèle.", "BaseID"); return; }
+            if (string.IsNullOrEmpty(model)) { DarkMessage.Show("This yo-kai has no model.", "BaseID"); return; }
             _exNpc.BaseId = unchecked((int)Crc32.Standard(Encoding.UTF8.GetBytes(model)));
             _exNpc.NpcType = 0; // yokai
-            _status.Text = $"BaseID = {_exNpc.BaseIdHex} (CRC32 de « {model} »).";
+            _status.Text = $"BaseID = {_exNpc.BaseIdHex} (CRC32 of \"{model}\").";
         }
 
         private void SaveExisting()
@@ -626,7 +626,7 @@ namespace Lycoris
                 var onTalkEdited = _exMap.Npcs.Where(n => n.OnTalkDirty && n.HasXqTalk).ToList();
                 if (onTalkEdited.Count > 0 && _exMap.PckPath != null)
                 {
-                    if (!NpcXq.IsAvailable()) { DarkMessage.Show("xtractquery introuvable — les scripts OnTalk n'ont pas été recompilés (le reste est sauvé).", "OnTalk", MessageBoxButton.OK, MessageBoxImage.Warning); }
+                    if (!NpcXq.IsAvailable()) { DarkMessage.Show("xtractquery not found — the OnTalk scripts were not recompiled (the rest is saved).", "OnTalk", MessageBoxButton.OK, MessageBoxImage.Warning); }
                     else
                     {
                         var pck = Xpck.Read(File.ReadAllBytes(_exMap.PckPath));
@@ -644,10 +644,10 @@ namespace Lycoris
                     }
                 }
                 foreach (var n in _exMap.Npcs) { n.IsDirty = false; n.ChaptersDirty = false; }
-                _status.Text = written.Count > 0 ? $"Sauvé — {written.Count} fichier(s) écrits dans le mod." : "Aucune modification à sauver.";
-                if (written.Count > 0) DarkMessage.Show("NPC sauvegardés dans le mod :\n" + string.Join("\n", written.Select(Path.GetFileName)), "Sauvegarde", MessageBoxButton.OK, MessageBoxImage.Information);
+                _status.Text = written.Count > 0 ? $"Saved — {written.Count} file(s) written to the mod." : "No changes to save.";
+                if (written.Count > 0) DarkMessage.Show("NPCs saved to the mod:\n" + string.Join("\n", written.Select(Path.GetFileName)), "Save", MessageBoxButton.OK, MessageBoxImage.Information);
             }
-            catch (Exception ex) { DarkMessage.Show(ex.Message, "Sauvegarde NPC", MessageBoxButton.OK, MessageBoxImage.Error); }
+            catch (Exception ex) { DarkMessage.Show(ex.Message, "Save NPC", MessageBoxButton.OK, MessageBoxImage.Error); }
         }
 
         private string FindMapDirWithSet(string mapId)
@@ -678,7 +678,7 @@ namespace Lycoris
         public PickYokaiDialog(Window owner, YokaiDatabase db)
         {
             Owner = owner;
-            Title = "Choisir un yo-kai";
+            Title = "Choose a yo-kai";
             Width = 320; Height = 460;
             WindowStartupLocation = WindowStartupLocation.CenterOwner;
 
@@ -688,9 +688,9 @@ namespace Lycoris
             _list.DisplayMemberPath = "DisplayName";
             _list.MouseDoubleClick += (s, e) => Accept();
 
-            var ok = new Button { Content = "Choisir", IsDefault = true, Width = 90, Margin = new Thickness(0, 6, 6, 0) };
+            var ok = new Button { Content = "Choose", IsDefault = true, Width = 90, Margin = new Thickness(0, 6, 6, 0) };
             ok.Click += (s, e) => Accept();
-            var cancel = new Button { Content = "Annuler", IsCancel = true, Width = 90, Margin = new Thickness(0, 6, 0, 0) };
+            var cancel = new Button { Content = "Cancel", IsCancel = true, Width = 90, Margin = new Thickness(0, 6, 0, 0) };
             var btns = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
             btns.Children.Add(ok); btns.Children.Add(cancel);
             DockPanel.SetDock(btns, Dock.Bottom);

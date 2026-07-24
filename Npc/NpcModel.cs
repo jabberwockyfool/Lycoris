@@ -41,7 +41,7 @@ namespace Lycoris.Npc
             set => BaseId = ParseHex(value);
         }
 
-        public string DisplayName => string.IsNullOrEmpty(NpcName) ? "(sans nom)" : NpcName;
+        public string DisplayName => string.IsNullOrEmpty(NpcName) ? "(no name)" : NpcName;
 
         private static int ParseHex(string s)
         {

@@ -23,13 +23,13 @@
     <DockPanel Margin="8">
         <!-- Toolbar -->
         <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,8">
-            <Button x:Name="OpenFolderButton" Content="Ouvrir un dossier…" Padding="10,4" Click="OpenFolderButton_Click"/>
-            <Button x:Name="AddButton" Content="+ Ajouter" Padding="10,4" Margin="6,0,0,0" Click="AddButton_Click" IsEnabled="False"/>
-            <Button x:Name="DuplicateButton" Content="Dupliquer" Padding="10,4" Margin="6,0,0,0" Click="DuplicateButton_Click" IsEnabled="False"/>
-            <Button x:Name="DeleteButton" Content="Supprimer" Padding="10,4" Margin="6,0,0,0" Click="DeleteButton_Click" IsEnabled="False"/>
-            <Button x:Name="SaveButton" Content="Sauver le mod" Padding="10,4" Margin="6,0,0,0" Click="SaveButton_Click" IsEnabled="False"/>
+            <Button x:Name="OpenFolderButton" Content="Open a folder…" Padding="10,4" Click="OpenFolderButton_Click"/>
+            <Button x:Name="AddButton" Content="+ Add" Padding="10,4" Margin="6,0,0,0" Click="AddButton_Click" IsEnabled="False"/>
+            <Button x:Name="DuplicateButton" Content="Duplicate" Padding="10,4" Margin="6,0,0,0" Click="DuplicateButton_Click" IsEnabled="False"/>
+            <Button x:Name="DeleteButton" Content="Delete" Padding="10,4" Margin="6,0,0,0" Click="DeleteButton_Click" IsEnabled="False"/>
+            <Button x:Name="SaveButton" Content="Save the mod" Padding="10,4" Margin="6,0,0,0" Click="SaveButton_Click" IsEnabled="False"/>
             <Button x:Name="ItemsButton" Content="Items…" Padding="10,4" Margin="6,0,0,0" Click="ItemsButton_Click" IsEnabled="False"/>
-            <Button x:Name="CheckButton" Content="Vérifier l'intégrité" Padding="10,4" Margin="6,0,0,0" Click="CheckButton_Click" IsEnabled="False"/>
+            <Button x:Name="CheckButton" Content="Check integrity" Padding="10,4" Margin="6,0,0,0" Click="CheckButton_Click" IsEnabled="False"/>
         </StackPanel>
 
         <!-- Selector -->
@@ -39,12 +39,12 @@
                       SelectionChanged="Selector_SelectionChanged" IsTextSearchEnabled="True"/>
             <Button Content="◀" Width="30" Margin="6,0,0,0" Click="Prev_Click"/>
             <Button Content="▶" Width="30" Margin="3,0,0,0" Click="Next_Click"/>
-            <TextBlock Text="Filtre:" Margin="16,0,4,0"/>
+            <TextBlock Text="Filter:" Margin="16,0,4,0"/>
             <TextBox x:Name="FilterBox" Width="180" TextChanged="FilterBox_TextChanged"/>
         </StackPanel>
 
         <TextBlock x:Name="StatusText" DockPanel.Dock="Bottom" Margin="0,6,0,0" Foreground="{StaticResource FgMutedBrush}"
-                   TextWrapping="Wrap" Text="Ouvre un dossier extrait / mod YWML."/>
+                   TextWrapping="Wrap" Text="Open an extracted folder / YWML mod."/>
 
         <!-- Character panel -->
         <GroupBox Header="Character" x:Name="Panel" IsEnabled="False">
@@ -66,7 +66,7 @@
                                        RenderOptions.BitmapScalingMode="NearestNeighbor"/>
                                 <Button x:Name="ReplaceIconButton" Content="PNG…" FontSize="9" Padding="3,0"
                                         HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="1"
-                                        Click="ReplaceIconButton_Click" ToolTip="Remplacer l'icône par un PNG"/>
+                                        Click="ReplaceIconButton_Click" ToolTip="Replace the icon with a PNG"/>
                             </Grid>
                         </Border>
                         <StackPanel Grid.Column="1">
@@ -132,13 +132,13 @@
 
                                 <!-- Power scale -->
                                 <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
-                                    <TextBlock Text="Puissance" VerticalAlignment="Center"/>
+                                    <TextBlock Text="Power" VerticalAlignment="Center"/>
                                     <Slider x:Name="PowerSlider" Minimum="1" Maximum="10" Width="220" Value="5"
                                             TickFrequency="1" IsSnapToTickEnabled="True" TickPlacement="BottomRight"
                                             VerticalAlignment="Center" Margin="6,0,0,0"/>
                                     <TextBlock Text="{Binding Value, ElementName=PowerSlider, StringFormat=N0}" Width="24"
                                                VerticalAlignment="Center" Margin="6,0,0,0" FontWeight="Bold"/>
-                                    <Button Content="Appliquer stats cohérentes" Padding="8,2" Margin="10,0,0,0"
+                                    <Button Content="Apply consistent stats" Padding="8,2" Margin="10,0,0,0"
                                             Click="ApplyPower_Click"/>
                                 </StackPanel>
 
@@ -200,15 +200,15 @@
                                     </Grid>
                                 </GroupBox>
 
-                                <GroupBox Header="Profil d'attaque (élément + puissance ci-dessus)" Margin="0,10,0,0">
+                                <GroupBox Header="Attack profile (element + power above)" Margin="0,10,0,0">
                                     <StackPanel Orientation="Horizontal" Margin="4">
-                                        <TextBlock Text="Élément" VerticalAlignment="Center"/>
+                                        <TextBlock Text="Element" VerticalAlignment="Center"/>
                                         <ComboBox x:Name="ProfileElementCombo" Width="120" Margin="6,0,0,0"
                                                   ItemsSource="{x:Static yk:YokaiEnums.Attributes}"
                                                   SelectedValuePath="Key" DisplayMemberPath="Name"/>
-                                        <CheckBox x:Name="ProfileBtCheck" Content="Blaster T aussi" IsChecked="True"
+                                        <CheckBox x:Name="ProfileBtCheck" Content="Blaster T too" IsChecked="True"
                                                   VerticalAlignment="Center" Margin="16,0,0,0"/>
-                                        <Button Content="Appliquer le profil" Padding="8,2" Margin="16,0,0,0" Click="ApplyProfile_Click"/>
+                                        <Button Content="Apply the profile" Padding="8,2" Margin="16,0,0,0" Click="ApplyProfile_Click"/>
                                     </StackPanel>
                                 </GroupBox>
                             </StackPanel>
@@ -217,7 +217,7 @@
                         <!-- ================= Blaster T ================= -->
                         <TabItem Header="Blaster T">
                           <StackPanel Margin="8">
-                            <Button x:Name="EnableBtButton" Content="Activer le Blaster T pour ce yo-kai"
+                            <Button x:Name="EnableBtButton" Content="Enable Blaster T for this yo-kai"
                                     HorizontalAlignment="Left" Padding="8,3" Margin="0,0,0,8" Click="EnableBt_Click"/>
                             <Grid IsEnabled="{Binding HasBlasterT}">
                                 <Grid.ColumnDefinitions>
@@ -227,13 +227,13 @@
                                 <Grid.RowDefinitions>
                                     <RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/>
                                 </Grid.RowDefinitions>
-                                <TextBlock Grid.Row="0" Grid.Column="0" Text="Attaque A"/>
+                                <TextBlock Grid.Row="0" Grid.Column="0" Text="Attack A"/>
                                 <ComboBox x:Name="BtAtkACombo" Grid.Row="0" Grid.Column="1" IsTextSearchEnabled="True" Margin="0,2"
                                           SelectedValuePath="Key" DisplayMemberPath="Name" TextSearch.TextPath="Name" SelectedValue="{Binding BtAttackAHash}"/>
-                                <TextBlock Grid.Row="1" Grid.Column="0" Text="Attaque Y"/>
+                                <TextBlock Grid.Row="1" Grid.Column="0" Text="Attack Y"/>
                                 <ComboBox x:Name="BtAtkYCombo" Grid.Row="1" Grid.Column="1" IsTextSearchEnabled="True" Margin="0,2"
                                           SelectedValuePath="Key" DisplayMemberPath="Name" TextSearch.TextPath="Name" SelectedValue="{Binding BtAttackYHash}"/>
-                                <TextBlock Grid.Row="2" Grid.Column="0" Text="Attaque X"/>
+                                <TextBlock Grid.Row="2" Grid.Column="0" Text="Attack X"/>
                                 <ComboBox x:Name="BtAtkXCombo" Grid.Row="2" Grid.Column="1" IsTextSearchEnabled="True" Margin="0,2"
                                           SelectedValuePath="Key" DisplayMemberPath="Name" TextSearch.TextPath="Name" SelectedValue="{Binding BtAttackXHash}"/>
                                 <TextBlock Grid.Row="3" Grid.Column="0" Text="Soultimate"/>
@@ -249,30 +249,30 @@
                         <!-- ================= Drops ================= -->
                         <TabItem Header="Drops">
                           <StackPanel Margin="8">
-                            <Button x:Name="EnableDropsButton" Content="Activer les Drops pour ce yo-kai"
+                            <Button x:Name="EnableDropsButton" Content="Enable Drops for this yo-kai"
                                     HorizontalAlignment="Left" Padding="8,3" Margin="0,0,0,8" Click="EnableDrops_Click"/>
                             <StackPanel IsEnabled="{Binding HasDrops}">
                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                                    <TextBlock Text="Argent" Width="70"/>
+                                    <TextBlock Text="Money" Width="70"/>
                                     <TextBox Text="{Binding Money}" Width="80"/>
                                     <TextBlock Text="Exp" Width="40" Margin="16,0,0,0"/>
                                     <TextBox Text="{Binding Experience}" Width="80"/>
                                 </StackPanel>
                                 <GroupBox Header="Drop 1">
                                     <StackPanel Orientation="Horizontal" Margin="4">
-                                        <TextBlock Text="Objet" Width="60"/>
+                                        <TextBlock Text="Item" Width="60"/>
                                         <ComboBox x:Name="Drop1Combo" Width="200" IsTextSearchEnabled="True"
                                                   SelectedValuePath="Key" DisplayMemberPath="Name" TextSearch.TextPath="Name" SelectedValue="{Binding Drop1Hash}"/>
-                                        <TextBlock Text="Taux %" Width="55" Margin="16,0,4,0"/>
+                                        <TextBlock Text="Rate %" Width="55" Margin="16,0,4,0"/>
                                         <TextBox Text="{Binding Drop1Rate}" Width="60"/>
                                     </StackPanel>
                                 </GroupBox>
                                 <GroupBox Header="Drop 2" Margin="0,8,0,0">
                                     <StackPanel Orientation="Horizontal" Margin="4">
-                                        <TextBlock Text="Objet" Width="60"/>
+                                        <TextBlock Text="Item" Width="60"/>
                                         <ComboBox x:Name="Drop2Combo" Width="200" IsTextSearchEnabled="True"
                                                   SelectedValuePath="Key" DisplayMemberPath="Name" TextSearch.TextPath="Name" SelectedValue="{Binding Drop2Hash}"/>
-                                        <TextBlock Text="Taux %" Width="55" Margin="16,0,4,0"/>
+                                        <TextBlock Text="Rate %" Width="55" Margin="16,0,4,0"/>
                                         <TextBox Text="{Binding Drop2Rate}" Width="60"/>
                                     </StackPanel>
                                 </GroupBox>
@@ -291,16 +291,16 @@
                                     <ComboBox Width="100" ItemsSource="{x:Static yk:YokaiEnums.Ranks}"
                                               SelectedValuePath="Key" DisplayMemberPath="Name" SelectedValue="{Binding Rank}"/>
                                 </StackPanel>
-                                <GroupBox Header="Évolution" Margin="0,0,0,6">
+                                <GroupBox Header="Evolution" Margin="0,0,0,6">
                                   <StackPanel Margin="4">
-                                    <CheckBox x:Name="EvolvableCheck" Content="Évoluable" Margin="0,0,0,6"
+                                    <CheckBox x:Name="EvolvableCheck" Content="Evolvable" Margin="0,0,0,6"
                                               Checked="EvolvableCheck_Changed" Unchecked="EvolvableCheck_Changed"/>
                                     <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="Évolue en"/>
+                                        <TextBlock Text="Evolves into"/>
                                         <ComboBox x:Name="EvolveCombo" Width="180" IsTextSearchEnabled="True"
                                                   SelectedValuePath="Key" DisplayMemberPath="Name" TextSearch.TextPath="Name"
                                                   SelectedValue="{Binding EvolveTargetHash}" IsEnabled="{Binding CanEvolve}"/>
-                                        <TextBlock Text="au niveau" Margin="12,0,4,0"/>
+                                        <TextBlock Text="at level" Margin="12,0,4,0"/>
                                         <TextBox Text="{Binding EvolveLevel}" Width="45" IsEnabled="{Binding CanEvolve}"/>
                                         <TextBlock Text="{Binding EvolvesToName}" Margin="12,0,0,0" Foreground="{StaticResource FgMutedBrush}"/>
                                     </StackPanel>
@@ -312,16 +312,16 @@
                                 <GroupBox Header="Scale (chara_scale)" Margin="0,10,0,0">
                                   <StackPanel Margin="4">
                                     <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
-                                        <TextBlock Text="Morphologie" VerticalAlignment="Center"/>
+                                        <TextBlock Text="Morphology" VerticalAlignment="Center"/>
                                         <Slider x:Name="MorphoSlider" Minimum="1" Maximum="10" Width="200" Value="1"
                                                 TickFrequency="1" IsSnapToTickEnabled="True" TickPlacement="BottomRight"
                                                 VerticalAlignment="Center" Margin="6,0,0,0"
                                                 ValueChanged="MorphoSlider_ValueChanged"/>
                                         <TextBlock x:Name="MorphoLabel" VerticalAlignment="Center" Margin="8,0,0,0"
                                                    FontWeight="Bold" MinWidth="140"/>
-                                        <Button Content="Appliquer" Padding="8,2" Margin="8,0,0,0" Click="ApplyMorpho_Click"/>
+                                        <Button Content="Apply" Padding="8,2" Margin="8,0,0,0" Click="ApplyMorpho_Click"/>
                                     </StackPanel>
-                                    <TextBlock Text="Jibanyan (Nyan) → Usapyon (mascotte) → Mark Evans (humain) → Enma (humanoïde)"
+                                    <TextBlock Text="Jibanyan (Nyan) → Usapyon (mascot) → Mark Evans (human) → Enma (humanoid)"
                                                Foreground="{StaticResource FgMutedBrush}" FontSize="10" Margin="0,0,0,4"/>
                                     <WrapPanel>
                                         <StackPanel Orientation="Horizontal" Margin="0,0,10,4"><TextBlock Text="1"/><TextBox Text="{Binding Scale1}" Width="70"/></StackPanel>
@@ -341,14 +341,14 @@
                         <TabItem Header="Charabase">
                             <StackPanel Margin="8">
                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                                    <TextBlock Text="Modèle"/>
+                                    <TextBlock Text="Model"/>
                                     <TextBox Text="{Binding ModelName, UpdateSourceTrigger=LostFocus}" Width="90" FontFamily="Consolas"/>
                                     <Border Width="48" Height="48" BorderBrush="{StaticResource BorderBrushC}" BorderThickness="1" Background="{StaticResource FieldBgBrush}" Margin="16,0,0,0">
                                         <Image x:Name="MedalIconImage" RenderOptions.BitmapScalingMode="NearestNeighbor"/>
                                     </Border>
                                     <StackPanel VerticalAlignment="Center" Margin="4,0,0,0">
                                         <TextBlock Text="medal_icon" Foreground="{StaticResource FgMutedBrush}" FontSize="10"/>
-                                        <Button Content="Remplacer (PNG)" FontSize="10" Padding="4,1" Click="ReplaceMedalIcon_Click"/>
+                                        <Button Content="Replace (PNG)" FontSize="10" Padding="4,1" Click="ReplaceMedalIcon_Click"/>
                                     </StackPanel>
                                 </StackPanel>
 
@@ -372,15 +372,15 @@
                                               SelectedValuePath="Key" DisplayMemberPath="Name" SelectedValue="{Binding Role}"/>
                                 </StackPanel>
                                 <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
-                                    <TextBlock Text="Favori" Width="60"/>
+                                    <TextBlock Text="Favorite" Width="60"/>
                                     <ComboBox Width="150" ItemsSource="{x:Static yk:YokaiEnums.Foods}"
                                               SelectedValuePath="Key" DisplayMemberPath="Name" SelectedValue="{Binding FavoriteFood}"/>
-                                    <TextBlock Text="Détesté" Width="60" Margin="16,0,0,0"/>
+                                    <TextBlock Text="Hated" Width="60" Margin="16,0,0,0"/>
                                     <ComboBox Width="150" ItemsSource="{x:Static yk:YokaiEnums.Foods}"
                                               SelectedValuePath="Key" DisplayMemberPath="Name" SelectedValue="{Binding HatedFood}"/>
                                 </StackPanel>
 
-                                <GroupBox Header="Medal (mini-icône dans l'atlas face_icon.xi)" Margin="0,8,0,0">
+                                <GroupBox Header="Medal (mini-icon in the face_icon.xi atlas)" Margin="0,8,0,0">
                                     <StackPanel Orientation="Horizontal" Margin="4">
                                         <TextBlock Text="X"/>
                                         <TextBox Text="{Binding MedalPosX, UpdateSourceTrigger=LostFocus}" Width="45" Margin="4,0"/>
@@ -389,8 +389,8 @@
                                         <Border Width="48" Height="48" BorderBrush="{StaticResource BorderBrushC}" BorderThickness="1" Background="{StaticResource FieldBgBrush}" Margin="12,0,0,0">
                                             <Image x:Name="MedalAtlasImage" RenderOptions.BitmapScalingMode="NearestNeighbor"/>
                                         </Border>
-                                        <Button Content="Choisir dans l'atlas…" Padding="6,2" Margin="6,0,0,0" VerticalAlignment="Center" Click="PickMedal_Click"/>
-                                        <Button Content="Remplacer par PNG" Padding="6,2" Margin="6,0,0,0" VerticalAlignment="Center" Click="ReplaceMedalAtlas_Click"/>
+                                        <Button Content="Choose in the atlas…" Padding="6,2" Margin="6,0,0,0" VerticalAlignment="Center" Click="PickMedal_Click"/>
+                                        <Button Content="Replace with PNG" Padding="6,2" Margin="6,0,0,0" VerticalAlignment="Center" Click="ReplaceMedalAtlas_Click"/>
                                     </StackPanel>
                                 </GroupBox>
                             </StackPanel>
@@ -399,7 +399,7 @@
                         <!-- ================= Quotes ================= -->
                         <TabItem Header="Quotes">
                             <TextBlock Margin="12" Foreground="{StaticResource FgMutedBrush}"
-                                       Text="Les citations (befriend quotes) seront ajoutées ultérieurement."/>
+                                       Text="Quotes (befriend quotes) will be added later."/>
                         </TabItem>
                     </TabControl>
                 </StackPanel>

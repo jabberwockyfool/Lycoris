@@ -44,9 +44,9 @@ namespace Lycoris
             }
             switch (buttons)
             {
-                case MessageBoxButton.OKCancel: Add("OK", MessageBoxResult.OK, true); Add("Annuler", MessageBoxResult.Cancel, false, true); break;
-                case MessageBoxButton.YesNo: Add("Oui", MessageBoxResult.Yes, true); Add("Non", MessageBoxResult.No, false, true); break;
-                case MessageBoxButton.YesNoCancel: Add("Oui", MessageBoxResult.Yes, true); Add("Non", MessageBoxResult.No); Add("Annuler", MessageBoxResult.Cancel, false, true); break;
+                case MessageBoxButton.OKCancel: Add("OK", MessageBoxResult.OK, true); Add("Cancel", MessageBoxResult.Cancel, false, true); break;
+                case MessageBoxButton.YesNo: Add("Yes", MessageBoxResult.Yes, true); Add("No", MessageBoxResult.No, false, true); break;
+                case MessageBoxButton.YesNoCancel: Add("Yes", MessageBoxResult.Yes, true); Add("No", MessageBoxResult.No); Add("Cancel", MessageBoxResult.Cancel, false, true); break;
                 default: Add("OK", MessageBoxResult.OK, true, true); break;
             }
 

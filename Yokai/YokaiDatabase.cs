@@ -559,7 +559,7 @@ namespace Lycoris.Yokai
         public MapInfo AddMap(string folder, string name)
         {
             var tpl = MapConfigData?.Records(Schema.MapRecord).FirstOrDefault();
-            if (tpl == null) throw new InvalidOperationException("map_config non chargé.");
+            if (tpl == null) throw new InvalidOperationException("map_config not loaded.");
             int id = unchecked((int)Crc32.Standard(Encoding.UTF8.GetBytes(folder ?? "")));
 
             var rec = tpl.Clone();
@@ -585,7 +585,7 @@ namespace Lycoris.Yokai
         /// <summary>Duplicate a map's config (all fields), keyed to a new folder name (CRC32 → new MapID/NounID).</summary>
         public MapInfo DuplicateMap(MapInfo src, string newFolder)
         {
-            if (src?.Entry == null) throw new InvalidOperationException("Aucune map à dupliquer.");
+            if (src?.Entry == null) throw new InvalidOperationException("No map to duplicate.");
             int id = unchecked((int)Crc32.Standard(Encoding.UTF8.GetBytes(newFolder ?? "")));
             var rec = src.Entry.Clone();
             SetIntForce(rec, Schema.Map_IdIndex, id);
@@ -771,22 +771,22 @@ namespace Lycoris.Yokai
         public SkillInfo AddSkill(string name, int skillType)
         {
             var tpl = SkillConfigData?.Records(Schema.SkillConfigRecord).FirstOrDefault();
-            if (tpl == null) throw new InvalidOperationException("Aucun skill modèle dans skill_config.");
+            if (tpl == null) throw new InvalidOperationException("No template skill in skill_config.");
             return CreateSkill(tpl, name, skillType, null, applyDefaults: true);
         }
 
         /// <summary>Duplicate an existing skill: same fields (incl. description), a new name/ID pair.</summary>
         public SkillInfo DuplicateSkill(SkillInfo src)
         {
-            if (src?.Entry == null) throw new InvalidOperationException("Aucun skill à dupliquer.");
-            string name = (string.IsNullOrEmpty(src.Name) ? src.SkillIdHex : src.Name) + " (copie)";
+            if (src?.Entry == null) throw new InvalidOperationException("No skill to duplicate.");
+            string name = (string.IsNullOrEmpty(src.Name) ? src.SkillIdHex : src.Name) + " (copy)";
             return CreateSkill(src.Entry, name, src.SkillType, src.Description, applyDefaults: false);
         }
 
         /// <summary>Shared record-builder for AddSkill/DuplicateSkill. Clones <paramref name="template"/>.</summary>
         private SkillInfo CreateSkill(T2bEntry template, string name, int? skillType, string description, bool applyDefaults)
         {
-            if (SkillConfigData == null) throw new InvalidOperationException("skill_config non chargé.");
+            if (SkillConfigData == null) throw new InvalidOperationException("skill_config not loaded.");
 
             string code = "lycoris_skill_" + Sanitize(name);
             int id = UniqueHash(code, ExistingKeys(SkillConfigData.Records(Schema.SkillConfigRecord), Schema.Skill_IdIndex));
@@ -960,7 +960,7 @@ namespace Lycoris.Yokai
         public ItemInfo AddItem(string name, string recordType)
         {
             if (_itemConfigData == null)
-                throw new InvalidOperationException("item_config non chargé.");
+                throw new InvalidOperationException("item_config not loaded.");
             if (string.IsNullOrEmpty(recordType) || !Schema.ItemRecords.Contains(recordType))
                 recordType = Schema.ItemRecords[0];
 
@@ -973,7 +973,7 @@ namespace Lycoris.Yokai
                     tpl = _itemConfigData.Records(rt).FirstOrDefault();
                     if (tpl != null) { useType = rt; break; }
                 }
-            if (tpl == null) throw new InvalidOperationException("Aucun item modèle dans item_config.");
+            if (tpl == null) throw new InvalidOperationException("No template item in item_config.");
             return CreateItem(tpl, useType, name, "");
         }
 
@@ -981,8 +981,8 @@ namespace Lycoris.Yokai
         public ItemInfo DuplicateItem(ItemInfo src)
         {
             if (src?.Entry == null || _itemConfigData == null)
-                throw new InvalidOperationException("Aucun item à dupliquer.");
-            string name = (string.IsNullOrEmpty(src.Name) ? src.ItemIdHex : src.Name) + " (copie)";
+                throw new InvalidOperationException("No item to duplicate.");
+            string name = (string.IsNullOrEmpty(src.Name) ? src.ItemIdHex : src.Name) + " (copy)";
             return CreateItem(src.Entry, src.RecordType, name, src.Description);
         }
 
@@ -1244,7 +1244,7 @@ namespace Lycoris.Yokai
         {
             if (BaseData == null || TextData == null || DescData == null)
                 throw new InvalidOperationException(
-                    "Ajouter un yo-kai nécessite chara_base + chara_text + chara_desc_text chargés (mod complet).");
+                    "Adding a Yo-kai requires chara_base + chara_text + chara_desc_text to be loaded (full mod).");
 
             string code = "lycoris_" + Sanitize(name);
             int baseHash = UniqueHash(code + "_base", ExistingKeys(BaseData.Records(Schema.BaseYokaiRecord), Schema.Base_BaseHashIndex));
@@ -1322,12 +1322,12 @@ namespace Lycoris.Yokai
         /// </summary>
         public YokaiInfo DuplicateYokai(YokaiInfo src)
         {
-            if (src?.SourceEntry == null) throw new InvalidOperationException("Aucun yo-kai à dupliquer.");
+            if (src?.SourceEntry == null) throw new InvalidOperationException("No Yo-kai to duplicate.");
             if (BaseData == null || TextData == null || DescData == null)
                 throw new InvalidOperationException(
-                    "Dupliquer nécessite chara_base + chara_text + chara_desc_text chargés (mod complet).");
+                    "Duplicating requires chara_base + chara_text + chara_desc_text to be loaded (full mod).");
 
-            string name = (string.IsNullOrEmpty(src.Name) ? src.ParamIdHex : src.Name) + " (copie)";
+            string name = (string.IsNullOrEmpty(src.Name) ? src.ParamIdHex : src.Name) + " (copy)";
             string code = "lycoris_" + Sanitize(name);
             int baseHash = UniqueHash(code + "_base", ExistingKeys(BaseData.Records(Schema.BaseYokaiRecord), Schema.Base_BaseHashIndex));
             int paramHash = UniqueHash(code + "_param", ExistingKeys(ParamData.Records(Schema.ParamRecord), Schema.ParamHashIndex));
@@ -1588,7 +1588,7 @@ namespace Lycoris.Yokai
                 if (set == null || !hash.HasValue || hash.Value == 0) return;
                 if (!set.Contains(hash.Value))
                     issues.Add(new IntegrityIssue { Category = cat, Level = lvl, Subject = subject,
-                        Detail = $"{what} → 0x{unchecked((uint)hash.Value):X8} introuvable" });
+                        Detail = $"{what} → 0x{unchecked((uint)hash.Value):X8} not found" });
             }
 
             // --- Yo-kai ---
@@ -1597,18 +1597,18 @@ namespace Lycoris.Yokai
             {
                 string subj = y.DisplayName + " (" + y.ParamIdHex + ")";
                 if (!seenParam.Add(y.ParamHash))
-                    issues.Add(new IntegrityIssue { Category = "Doublon", Level = IssueLevel.Warning, Subject = subj, Detail = "ParamHash en double" });
+                    issues.Add(new IntegrityIssue { Category = "Duplicate", Level = IssueLevel.Warning, Subject = subj, Detail = "Duplicate ParamHash" });
                 if (baseHashes != null && !baseHashes.Contains(y.BaseHash))
-                    issues.Add(new IntegrityIssue { Category = "Charabase", Level = IssueLevel.Error, Subject = subj, Detail = $"BaseHash → {y.BaseHex} introuvable" });
-                Ref(charaNoun, y.NameHash, "Nom", IssueLevel.Error, subj, "NameHash");
+                    issues.Add(new IntegrityIssue { Category = "Charabase", Level = IssueLevel.Error, Subject = subj, Detail = $"BaseHash → {y.BaseHex} not found" });
+                Ref(charaNoun, y.NameHash, "Name", IssueLevel.Error, subj, "NameHash");
                 Ref(charaText, y.DescriptionHash, "Description", IssueLevel.Warning, subj, "DescHash");
-                Ref(skillIds, y.AttackHash, "Move", IssueLevel.Error, subj, "Attaque");
+                Ref(skillIds, y.AttackHash, "Move", IssueLevel.Error, subj, "Attack");
                 Ref(skillIds, y.TechniqueHash, "Move", IssueLevel.Error, subj, "Technique");
                 Ref(skillIds, y.InspiritHash, "Move", IssueLevel.Error, subj, "Inspiration");
-                Ref(skillIds, y.GuardHash, "Move", IssueLevel.Error, subj, "Garde");
+                Ref(skillIds, y.GuardHash, "Move", IssueLevel.Error, subj, "Guard");
                 Ref(skillIds, y.SoultimateHash, "Move", IssueLevel.Error, subj, "Soultimate");
                 Ref(abilityKeys, y.AbilityHash, "Ability", IssueLevel.Error, subj, "Ability");
-                if (y.CanEvolve) Ref(paramHashes, y.EvolveTargetHash, "Évolution", IssueLevel.Error, subj, "Cible d'évolution");
+                if (y.CanEvolve) Ref(paramHashes, y.EvolveTargetHash, "Evolution", IssueLevel.Error, subj, "Evolution target");
                 if (y.HasDrops)
                 {
                     Ref(itemIds, y.Drop1Hash, "Drop", IssueLevel.Error, subj, "Drop 1");
@@ -1617,9 +1617,9 @@ namespace Lycoris.Yokai
                 if (y.HasBlasterT)
                 {
                     Ref(hsTechKeys, y.BtSoultimateHash, "Blaster T", IssueLevel.Error, subj, "BT Soultimate");
-                    Ref(hsTechKeys, y.BtAttackAHash, "Blaster T", IssueLevel.Error, subj, "BT Attaque A");
-                    Ref(hsTechKeys, y.BtAttackYHash, "Blaster T", IssueLevel.Error, subj, "BT Attaque Y");
-                    Ref(hsTechKeys, y.BtAttackXHash, "Blaster T", IssueLevel.Error, subj, "BT Attaque X");
+                    Ref(hsTechKeys, y.BtAttackAHash, "Blaster T", IssueLevel.Error, subj, "BT Attack A");
+                    Ref(hsTechKeys, y.BtAttackYHash, "Blaster T", IssueLevel.Error, subj, "BT Attack Y");
+                    Ref(hsTechKeys, y.BtAttackXHash, "Blaster T", IssueLevel.Error, subj, "BT Attack X");
                     Ref(hsAbilKeys, y.BtAbilityHash, "Blaster T", IssueLevel.Error, subj, "BT Ability");
                 }
             }
@@ -1630,9 +1630,9 @@ namespace Lycoris.Yokai
             {
                 string subj = s.DisplayName + " (" + s.SkillIdHex + ")";
                 if (!seenSkill.Add(s.SkillConfigID))
-                    issues.Add(new IntegrityIssue { Category = "Doublon", Level = IssueLevel.Warning, Subject = subj, Detail = "SkillConfigID en double" });
-                Ref(skillNoun, s.NameID, "Nom skill", IssueLevel.Warning, subj, "NameID");
-                Ref(skillDesc, s.DescID, "Desc skill", IssueLevel.Warning, subj, "DescID");
+                    issues.Add(new IntegrityIssue { Category = "Duplicate", Level = IssueLevel.Warning, Subject = subj, Detail = "Duplicate SkillConfigID" });
+                Ref(skillNoun, s.NameID, "Skill name", IssueLevel.Warning, subj, "NameID");
+                Ref(skillDesc, s.DescID, "Skill desc", IssueLevel.Warning, subj, "DescID");
             }
 
             // --- Items ---
@@ -1641,9 +1641,9 @@ namespace Lycoris.Yokai
             {
                 string subj = it.DisplayName + " (" + it.ItemIdHex + ")";
                 if (!seenItem.Add(it.ItemId))
-                    issues.Add(new IntegrityIssue { Category = "Doublon", Level = IssueLevel.Warning, Subject = subj, Detail = "ItemID en double" });
-                Ref(itemNoun, it.NounTextID, "Nom item", IssueLevel.Warning, subj, "NounTextID");
-                Ref(itemText, it.DescTextID, "Desc item", IssueLevel.Warning, subj, "DescTextID");
+                    issues.Add(new IntegrityIssue { Category = "Duplicate", Level = IssueLevel.Warning, Subject = subj, Detail = "Duplicate ItemID" });
+                Ref(itemNoun, it.NounTextID, "Item name", IssueLevel.Warning, subj, "NounTextID");
+                Ref(itemText, it.DescTextID, "Item desc", IssueLevel.Warning, subj, "DescTextID");
             }
 
             // Flag which problems already existed in the files at load, so the UI can separate the ones

@@ -27,18 +27,18 @@ namespace Lycoris
         {
             _db = db;
             Owner = owner;
-            Title = "Lycoris — Éditeur de skills";
+            Title = "Lycoris — Skill Editor";
             Width = 720; Height = 620;
             WindowStartupLocation = WindowStartupLocation.CenterOwner;
 
             // Toolbar
-            var add = new Button { Content = "+ Ajouter", Padding = new Thickness(10, 4, 10, 4) };
+            var add = new Button { Content = "+ Add", Padding = new Thickness(10, 4, 10, 4) };
             add.Click += (s, e) => AddSkill();
-            var dup = new Button { Content = "Dupliquer", Padding = new Thickness(10, 4, 10, 4), Margin = new Thickness(6, 0, 0, 0) };
+            var dup = new Button { Content = "Duplicate", Padding = new Thickness(10, 4, 10, 4), Margin = new Thickness(6, 0, 0, 0) };
             dup.Click += (s, e) => DuplicateSkill();
-            var del = new Button { Content = "Supprimer", Padding = new Thickness(10, 4, 10, 4), Margin = new Thickness(6, 0, 0, 0) };
+            var del = new Button { Content = "Delete", Padding = new Thickness(10, 4, 10, 4), Margin = new Thickness(6, 0, 0, 0) };
             del.Click += (s, e) => DeleteSkill();
-            var save = new Button { Content = "Sauver le mod", Padding = new Thickness(10, 4, 10, 4), Margin = new Thickness(6, 0, 0, 0) };
+            var save = new Button { Content = "Save the mod", Padding = new Thickness(10, 4, 10, 4), Margin = new Thickness(6, 0, 0, 0) };
             save.Click += (s, e) => Save();
             var toolbar = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(6) };
             toolbar.Children.Add(add);
@@ -125,12 +125,12 @@ namespace Lycoris
         {
             _fields.Children.Add(ReadOnlyRow("SkillConfigID", "SkillIdHex"));
             _fields.Children.Add(ReadOnlyRow("NameID", "NameIDHex"));
-            _fields.Children.Add(TextRow("Nom", "Name", 260));
+            _fields.Children.Add(TextRow("Name", "Name", 260));
             _fields.Children.Add(DescRow());
             _fields.Children.Add(ComboRow("Type", "SkillType", YokaiEnums.SkillTypes));
-            _fields.Children.Add(ComboRow("Élément", "Element", YokaiEnums.Attributes));
-            _fields.Children.Add(NumRow("Puissance", "Power"));
-            _fields.Children.Add(NumRow("Nombre de coups", "Hits"));
+            _fields.Children.Add(ComboRow("Element", "Element", YokaiEnums.Attributes));
+            _fields.Children.Add(NumRow("Power", "Power"));
+            _fields.Children.Add(NumRow("Number of hits", "Hits"));
             _fields.Children.Add(NumRow("SkillGrowth", "SkillGrowth"));
             _fields.Children.Add(NumRow("SoultChargeSpeed", "SoultChargeSpeed"));
             _fields.Children.Add(NumRow("SoultimateRange", "SoultimateRange"));
@@ -203,9 +203,9 @@ namespace Lycoris
                 UpdateCount();
                 _list.SelectedItem = s;
                 _list.ScrollIntoView(s);
-                _status.Text = $"Skill ajouté: {s.DisplayName} ({s.SkillIdHex}). Édite puis « Sauver le mod ».";
+                _status.Text = $"Skill added: {s.DisplayName} ({s.SkillIdHex}). Edit then “Save the mod”.";
             }
-            catch (Exception ex) { DarkMessage.Show(ex.Message, "Ajout de skill", MessageBoxButton.OK, MessageBoxImage.Warning); }
+            catch (Exception ex) { DarkMessage.Show(ex.Message, "Add skill", MessageBoxButton.OK, MessageBoxImage.Warning); }
         }
 
         private void DuplicateSkill()
@@ -222,9 +222,9 @@ namespace Lycoris
                 UpdateCount();
                 _list.SelectedItem = s;
                 _list.ScrollIntoView(s);
-                _status.Text = $"Dupliqué: {s.DisplayName} ({s.SkillIdHex}). Édite puis « Sauver le mod ».";
+                _status.Text = $"Duplicated: {s.DisplayName} ({s.SkillIdHex}). Edit then “Save the mod”.";
             }
-            catch (Exception ex) { DarkMessage.Show(ex.Message, "Duplication de skill", MessageBoxButton.OK, MessageBoxImage.Warning); }
+            catch (Exception ex) { DarkMessage.Show(ex.Message, "Duplicate skill", MessageBoxButton.OK, MessageBoxImage.Warning); }
         }
 
         private void DeleteSkill()
@@ -232,10 +232,10 @@ namespace Lycoris
             var s = _list.SelectedItem as SkillInfo;
             if (s == null) return;
             var confirm = DarkMessage.Show(
-                $"Supprimer le skill « {s.DisplayName} » ({s.SkillIdHex}) ?\n\n" +
-                "Attention: un yo-kai qui l'utilise pointerait dans le vide. Son nom n'est retiré que si aucun " +
-                "autre skill ne le partage. À confirmer avec « Sauver le mod ».",
-                "Supprimer un skill", MessageBoxButton.OKCancel, MessageBoxImage.Warning);
+                $"Delete the skill “{s.DisplayName}” ({s.SkillIdHex})?\n\n" +
+                "Warning: a yo-kai that uses it would point to nothing. Its name is removed only if no " +
+                "other skill shares it. Confirm with “Save the mod”.",
+                "Delete a skill", MessageBoxButton.OKCancel, MessageBoxImage.Warning);
             if (confirm != MessageBoxResult.OK) return;
 
             int idx = _list.SelectedIndex;
@@ -243,7 +243,7 @@ namespace Lycoris
             _view.Refresh();
             UpdateCount();
             if (_list.Items.Count > 0) _list.SelectedIndex = Math.Min(idx, _list.Items.Count - 1);
-            _status.Text = $"Skill supprimé — {_db.Skills.Count} restants. Sauver pour appliquer.";
+            _status.Text = $"Skill deleted — {_db.Skills.Count} remaining. Save to apply.";
         }
 
         private void Save()
@@ -253,9 +253,9 @@ namespace Lycoris
             try
             {
                 int n = _db.SaveSkills();
-                _status.Text = n > 0 ? $"Sauvé — {n} valeur(s) de skills écrites." : "Aucune modification de skill à sauver.";
+                _status.Text = n > 0 ? $"Saved — {n} skill value(s) written." : "No skill changes to save.";
             }
-            catch (Exception ex) { DarkMessage.Show(ex.Message, "Sauvegarde skills", MessageBoxButton.OK, MessageBoxImage.Error); }
+            catch (Exception ex) { DarkMessage.Show(ex.Message, "Save skills", MessageBoxButton.OK, MessageBoxImage.Error); }
         }
     }
 
@@ -271,21 +271,21 @@ namespace Lycoris
         public AddSkillDialog(Window owner)
         {
             Owner = owner;
-            Title = "Ajouter un skill";
+            Title = "Add a skill";
             Width = 380; Height = 190;
             WindowStartupLocation = WindowStartupLocation.CenterOwner;
             ResizeMode = ResizeMode.NoResize;
             _type.SelectedIndex = 0;
 
             var grid = new StackPanel { Margin = new Thickness(12) };
-            grid.Children.Add(new TextBlock { Text = "Nom du skill", Foreground = Theme.FgMuted });
+            grid.Children.Add(new TextBlock { Text = "Skill name", Foreground = Theme.FgMuted });
             grid.Children.Add(_name);
             grid.Children.Add(new TextBlock { Text = "Type", Foreground = Theme.FgMuted, Margin = new Thickness(0, 8, 0, 0) });
             grid.Children.Add(_type);
 
-            var ok = new Button { Content = "Ajouter", IsDefault = true, Width = 90, Margin = new Thickness(0, 12, 6, 0) };
+            var ok = new Button { Content = "Add", IsDefault = true, Width = 90, Margin = new Thickness(0, 12, 6, 0) };
             ok.Click += (s, e) => { DialogResult = !string.IsNullOrWhiteSpace(SkillName); };
-            var cancel = new Button { Content = "Annuler", IsCancel = true, Width = 90, Margin = new Thickness(0, 12, 0, 0) };
+            var cancel = new Button { Content = "Cancel", IsCancel = true, Width = 90, Margin = new Thickness(0, 12, 0, 0) };
             var btns = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
             btns.Children.Add(ok);
             btns.Children.Add(cancel);

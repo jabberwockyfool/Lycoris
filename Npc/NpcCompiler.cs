@@ -34,19 +34,19 @@ namespace Lycoris.Npc
         /// </summary>
         public static Result Compile(NpcModel npc, string mapFolder, string outRoot, string mergeMapDir = null)
         {
-            if (string.IsNullOrWhiteSpace(npc.NpcName)) throw new InvalidOperationException("Le NPC doit avoir un nom.");
+            if (string.IsNullOrWhiteSpace(npc.NpcName)) throw new InvalidOperationException("The NPC must have a name.");
             string mapDir = ResolveMapDir(mapFolder, npc.MapID);
             if (mapDir == null)
-                throw new InvalidOperationException($"Dossier map introuvable pour « {npc.MapID} » (npc.pck absent).");
+                throw new InvalidOperationException($"Map folder not found for \"{npc.MapID}\" (npc.pck missing).");
 
             string npcPckPath = Path.Combine(mapDir, "npc.pck");
             string mapPckPath = Path.Combine(mapDir, npc.MapID + ".pck");
             string npcSetPath = FindByPrefix(mapDir, npc.MapID + "_npc_set");
             string talkPath = FindByPrefix(mapDir, npc.MapID + "_npc_base_talk_" + npc.ChapterCode);
             foreach (var (p, label) in new[] { (npcPckPath, "npc.pck"), (mapPckPath, npc.MapID + ".pck") })
-                if (!File.Exists(p)) throw new InvalidOperationException($"Fichier requis manquant: {label}");
-            if (npcSetPath == null) throw new InvalidOperationException($"Fichier requis manquant: {npc.MapID}_npc_set*");
-            if (talkPath == null) throw new InvalidOperationException($"Fichier requis manquant: {npc.MapID}_npc_base_talk_{npc.ChapterCode}*");
+                if (!File.Exists(p)) throw new InvalidOperationException($"Required file missing: {label}");
+            if (npcSetPath == null) throw new InvalidOperationException($"Required file missing: {npc.MapID}_npc_set*");
+            if (talkPath == null) throw new InvalidOperationException($"Required file missing: {npc.MapID}_npc_base_talk_{npc.ChapterCode}*");
 
             var res = new Result();
             res.NpcId = unchecked((int)Crc32.Standard(Encoding.UTF8.GetBytes(npc.NpcName)));
@@ -81,7 +81,7 @@ namespace Lycoris.Npc
             var npcPck = Xpck.Read(File.ReadAllBytes(npcPckPath));
             var template = npcPck.FirstOrDefault(f => f.Name.EndsWith(".npcbin", StringComparison.OrdinalIgnoreCase))
                            ?? LooseNpcbinTemplate(mapDir);
-            if (template == null) throw new InvalidOperationException("Aucun .npcbin modèle trouvé (npc.pck vide).");
+            if (template == null) throw new InvalidOperationException("No template .npcbin found (npc.pck empty).");
             var npcbin = T2bReader.Read(template.Data);
             SetPoint(npcbin, npc);
             byte[] npcbinBytes = T2bWriter.Write(npcbin);
@@ -94,7 +94,7 @@ namespace Lycoris.Npc
             if (!string.IsNullOrWhiteSpace(npc.OnTalk))
             {
                 var xqFile = mapPck.FirstOrDefault(f => f.Name == npc.MapID + ".xq")
-                             ?? throw new InvalidOperationException($"{npc.MapID}.xq introuvable dans {npc.MapID}.pck");
+                             ?? throw new InvalidOperationException($"{npc.MapID}.xq not found in {npc.MapID}.pck");
                 byte[] newXq = NpcXq.AddOnTalkFunction(xqFile.Data, npc.OnTalk, out int funcId, out string xqLog);
                 res.FuncId = funcId; res.XqLog = xqLog;
                 Xpck.AddOrReplace(mapPck, xqFile.Name, newXq);
@@ -136,14 +136,14 @@ namespace Lycoris.Npc
         private static T2bEntry CloneRecord(T2bFile f, string name)
         {
             var tpl = f.Entries.FirstOrDefault(e => e.Name == name)
-                      ?? throw new InvalidOperationException($"Enregistrement modèle « {name} » introuvable.");
+                      ?? throw new InvalidOperationException($"Template record \"{name}\" not found.");
             return tpl.Clone();
         }
 
         private static void AddToGroup(T2bFile f, string beginName, string endName, T2bEntry entry)
         {
             int endIdx = f.Entries.FindIndex(e => e.Name == endName);
-            if (endIdx < 0) throw new InvalidDataException($"Marqueur de groupe « {endName} » introuvable.");
+            if (endIdx < 0) throw new InvalidDataException($"Group marker \"{endName}\" not found.");
             f.Entries.Insert(endIdx, entry);
             var begin = f.Entries.FirstOrDefault(e => e.Name == beginName);
             if (begin != null && begin.Values.Count > 0 && begin.Values[0].Value is int c)
@@ -172,7 +172,7 @@ namespace Lycoris.Npc
         private static void SetPoint(T2bFile npcbin, NpcModel npc)
         {
             var pt = npcbin.Entries.FirstOrDefault(e => e.Name == "POINT")
-                     ?? throw new InvalidOperationException("Entrée POINT absente du .npcbin modèle.");
+                     ?? throw new InvalidOperationException("POINT entry missing from the template .npcbin.");
             // POINT = [X, Y, Z, rotation], types preserved from the template ([Float, Int, Float, Int]).
             double[] vals = { npc.NpcX, npc.NpcY, npc.NpcZ, npc.NpcRotation };
             for (int i = 0; i < 4 && i < pt.Values.Count; i++)

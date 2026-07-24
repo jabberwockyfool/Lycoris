@@ -28,15 +28,15 @@ namespace Lycoris
         {
             _db = db;
             Owner = owner;
-            Title = "Lycoris — Éditeur de maps";
+            Title = "Lycoris — Map Editor";
             Width = 720; Height = 620;
             WindowStartupLocation = WindowStartupLocation.CenterOwner;
 
-            var add = ToolBtn("+ Ajouter", 0, AddMap);
-            var dup = ToolBtn("Dupliquer", 6, DuplicateMap);
-            var del = ToolBtn("Supprimer", 6, DeleteMap);
-            var enc = ToolBtn("Rencontres…", 6, OpenEncounters);
-            var save = ToolBtn("Sauver le mod", 6, Save);
+            var add = ToolBtn("+ Add", 0, AddMap);
+            var dup = ToolBtn("Duplicate", 6, DuplicateMap);
+            var del = ToolBtn("Delete", 6, DeleteMap);
+            var enc = ToolBtn("Encounters…", 6, OpenEncounters);
+            var save = ToolBtn("Save mod", 6, Save);
             var toolbar = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(6) };
             toolbar.Children.Add(add); toolbar.Children.Add(dup); toolbar.Children.Add(del); toolbar.Children.Add(enc); toolbar.Children.Add(save);
             UpdateCount(); toolbar.Children.Add(_countText);
@@ -87,7 +87,7 @@ namespace Lycoris
         private void BuildFields()
         {
             _fields.Children.Add(FolderRow());
-            _fields.Children.Add(TextRow("Nom (system_text)", "Name", 260));
+            _fields.Children.Add(TextRow("Name (system_text)", "Name", 260));
             _fields.Children.Add(ReadOnlyRow("MapID", "MapIdHex"));
             _fields.Children.Add(ReadOnlyRow("NounID", "NounIdHex"));
             _fields.Children.Add(NumRow("ShowMapCard", "ShowMapCard"));
@@ -122,12 +122,12 @@ namespace Lycoris
         private FrameworkElement FolderRow()
         {
             var sp = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 2, 0, 2) };
-            sp.Children.Add(Label("Dossier map (id)"));
+            sp.Children.Add(Label("Map folder (id)"));
             var tb = new TextBox { Width = 130 };
             tb.SetBinding(TextBox.TextProperty, new Binding("MapFolderName") { UpdateSourceTrigger = UpdateSourceTrigger.LostFocus });
             sp.Children.Add(tb);
-            var recalc = new Button { Content = "↻ Recalculer les ID", Padding = new Thickness(8, 2, 8, 2), Margin = new Thickness(6, 0, 0, 0),
-                ToolTip = "MapID et NounID = CRC32 du nom de dossier" };
+            var recalc = new Button { Content = "↻ Recalculate IDs", Padding = new Thickness(8, 2, 8, 2), Margin = new Thickness(6, 0, 0, 0),
+                ToolTip = "MapID and NounID = CRC32 of the folder name" };
             recalc.Click += (s, e) =>
             {
                 var m = _list.SelectedItem as MapInfo;
@@ -157,9 +157,9 @@ namespace Lycoris
                 var m = _db.AddMap(dlg.Folder.Trim(), dlg.MapName?.Trim());
                 _view.Refresh(); UpdateCount();
                 _list.SelectedItem = m; _list.ScrollIntoView(m);
-                _status.Text = $"Map ajoutée: {m.DisplayName} — MapID {m.MapIdHex}. Édite puis « Sauver le mod ».";
+                _status.Text = $"Map added: {m.DisplayName} — MapID {m.MapIdHex}. Edit, then \"Save mod\".";
             }
-            catch (Exception ex) { DarkMessage.Show(ex.Message, "Ajout de map", MessageBoxButton.OK, MessageBoxImage.Warning); }
+            catch (Exception ex) { DarkMessage.Show(ex.Message, "Add map", MessageBoxButton.OK, MessageBoxImage.Warning); }
         }
 
         private void DuplicateMap()
@@ -167,29 +167,29 @@ namespace Lycoris
             var src = _list.SelectedItem as MapInfo;
             if (src == null) return;
             CommitEdits();
-            var dlg = new AddMapDialog(this, "Dupliquer — nouveau dossier map", src.MapFolderName + "x", src.Name) { Owner = this };
+            var dlg = new AddMapDialog(this, "Duplicate — new map folder", src.MapFolderName + "x", src.Name) { Owner = this };
             if (dlg.ShowDialog() != true || string.IsNullOrWhiteSpace(dlg.Folder)) return;
             try
             {
                 var m = _db.DuplicateMap(src, dlg.Folder.Trim());
                 _view.Refresh(); UpdateCount();
                 _list.SelectedItem = m; _list.ScrollIntoView(m);
-                _status.Text = $"Dupliqué: {m.DisplayName} — MapID {m.MapIdHex}.";
+                _status.Text = $"Duplicated: {m.DisplayName} — MapID {m.MapIdHex}.";
             }
-            catch (Exception ex) { DarkMessage.Show(ex.Message, "Duplication de map", MessageBoxButton.OK, MessageBoxImage.Warning); }
+            catch (Exception ex) { DarkMessage.Show(ex.Message, "Duplicate map", MessageBoxButton.OK, MessageBoxImage.Warning); }
         }
 
         private void DeleteMap()
         {
             var m = _list.SelectedItem as MapInfo;
             if (m == null) return;
-            if (DarkMessage.Show($"Supprimer la map « {m.DisplayName} » ({m.MapIdHex}) du config ?\n\nÀ confirmer avec « Sauver le mod ».",
-                "Supprimer une map", MessageBoxButton.OKCancel, MessageBoxImage.Warning) != MessageBoxResult.OK) return;
+            if (DarkMessage.Show($"Delete the map \"{m.DisplayName}\" ({m.MapIdHex}) from the config?\n\nConfirm with \"Save mod\".",
+                "Delete a map", MessageBoxButton.OKCancel, MessageBoxImage.Warning) != MessageBoxResult.OK) return;
             int idx = _list.SelectedIndex;
             _db.RemoveMap(m);
             _view.Refresh(); UpdateCount();
             if (_list.Items.Count > 0) _list.SelectedIndex = Math.Min(idx, _list.Items.Count - 1);
-            _status.Text = $"Map supprimée — {_db.Maps.Count} restantes. Sauver pour appliquer.";
+            _status.Text = $"Map deleted — {_db.Maps.Count} remaining. Save to apply.";
         }
 
         private void OpenEncounters()
@@ -199,17 +199,17 @@ namespace Lycoris
             string src = FindMapPck(m.MapFolderName);
             if (src == null)
             {
-                DarkMessage.Show($"Fichier {m.MapFolderName}.pck introuvable (ni dans le mod, ni dans la référence).\n" +
-                    "Les rencontres sont dans data/res/map/" + m.MapFolderName + "/" + m.MapFolderName + ".pck.",
-                    "Rencontres", MessageBoxButton.OK, MessageBoxImage.Warning);
+                DarkMessage.Show($"File {m.MapFolderName}.pck not found (neither in the mod, nor in the reference).\n" +
+                    "Encounters are in data/res/map/" + m.MapFolderName + "/" + m.MapFolderName + ".pck.",
+                    "Encounters", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
             EncounterSet set;
             try { set = Encounters.Load(src, _db); }
-            catch (Exception ex) { DarkMessage.Show(ex.Message, "Rencontres", MessageBoxButton.OK, MessageBoxImage.Error); return; }
+            catch (Exception ex) { DarkMessage.Show(ex.Message, "Encounters", MessageBoxButton.OK, MessageBoxImage.Error); return; }
             if (set == null || set.Tables.Count == 0)
             {
-                DarkMessage.Show("Cette map n'a pas de fichier de rencontres (_enc_) dans son .pck.", "Rencontres", MessageBoxButton.OK, MessageBoxImage.Information);
+                DarkMessage.Show("This map has no encounter file (_enc_) in its .pck.", "Encounters", MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
             // Write target: if the .pck was found in the mod, overwrite it in place; if it came from the
@@ -260,9 +260,9 @@ namespace Lycoris
             try
             {
                 int n = _db.SaveMaps();
-                _status.Text = n > 0 ? $"Sauvé — {n} valeur(s) de map écrites." : "Aucune modification de map à sauver.";
+                _status.Text = n > 0 ? $"Saved — {n} map value(s) written." : "No map changes to save.";
             }
-            catch (Exception ex) { DarkMessage.Show(ex.Message, "Sauvegarde maps", MessageBoxButton.OK, MessageBoxImage.Error); }
+            catch (Exception ex) { DarkMessage.Show(ex.Message, "Save maps", MessageBoxButton.OK, MessageBoxImage.Error); }
         }
     }
 
@@ -274,7 +274,7 @@ namespace Lycoris
         public string Folder => _folder.Text;
         public string MapName => _name.Text;
 
-        public AddMapDialog(Window owner, string title = "Ajouter une map", string folder = "", string name = "")
+        public AddMapDialog(Window owner, string title = "Add a map", string folder = "", string name = "")
         {
             Owner = owner;
             Title = title;
@@ -284,14 +284,14 @@ namespace Lycoris
             _folder.Text = folder; _name.Text = name;
 
             var grid = new StackPanel { Margin = new Thickness(12) };
-            grid.Children.Add(new TextBlock { Text = "Dossier map (ex. t101g00) — MapID = CRC32 de ce nom", Foreground = Theme.FgMuted });
+            grid.Children.Add(new TextBlock { Text = "Map folder (e.g. t101g00) — MapID = CRC32 of this name", Foreground = Theme.FgMuted });
             grid.Children.Add(_folder);
-            grid.Children.Add(new TextBlock { Text = "Nom affiché (system_text)", Foreground = Theme.FgMuted, Margin = new Thickness(0, 8, 0, 0) });
+            grid.Children.Add(new TextBlock { Text = "Display name (system_text)", Foreground = Theme.FgMuted, Margin = new Thickness(0, 8, 0, 0) });
             grid.Children.Add(_name);
 
             var ok = new Button { Content = "OK", IsDefault = true, Width = 90, Margin = new Thickness(0, 12, 6, 0) };
             ok.Click += (s, e) => { DialogResult = !string.IsNullOrWhiteSpace(Folder); };
-            var cancel = new Button { Content = "Annuler", IsCancel = true, Width = 90, Margin = new Thickness(0, 12, 0, 0) };
+            var cancel = new Button { Content = "Cancel", IsCancel = true, Width = 90, Margin = new Thickness(0, 12, 0, 0) };
             var btns = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
             btns.Children.Add(ok); btns.Children.Add(cancel);
             grid.Children.Add(btns);

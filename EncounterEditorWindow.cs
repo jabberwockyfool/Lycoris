@@ -34,11 +34,11 @@ namespace Lycoris
         {
             _db = db; _set = set; _outPckPath = outPckPath;
             Owner = owner;
-            Title = "Lycoris — Rencontres sauvages : " + mapLabel;
+            Title = "Lycoris — Wild Encounters: " + mapLabel;
             Width = 720; Height = 560;
             WindowStartupLocation = WindowStartupLocation.CenterOwner;
 
-            var save = new Button { Content = "Sauver le mod", Padding = new Thickness(10, 4, 10, 4) };
+            var save = new Button { Content = "Save mod", Padding = new Thickness(10, 4, 10, 4) };
             save.Click += (s, e) => Save();
             var toolbar = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(6) };
             toolbar.Children.Add(save);
@@ -53,7 +53,7 @@ namespace Lycoris
             DockPanel.SetDock(left, Dock.Left);
 
             var right = new StackPanel { Margin = new Thickness(8) };
-            right.Children.Add(new TextBlock { Text = "Yo-kai de cette rencontre (6 emplacements) :", Foreground = Theme.FgMuted, Margin = new Thickness(0, 0, 0, 6) });
+            right.Children.Add(new TextBlock { Text = "Yo-kai for this encounter (6 slots):", Foreground = Theme.FgMuted, Margin = new Thickness(0, 0, 0, 6) });
             for (int i = 0; i < 6; i++) right.Children.Add(BuildSlot(i));
 
             DockPanel.SetDock(_status, Dock.Bottom);
@@ -84,7 +84,7 @@ namespace Lycoris
             var mid = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 0, 0), Width = 220 };
             _name[i] = new TextBlock { Foreground = Theme.Fg, FontWeight = FontWeights.SemiBold };
             var lvlRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 2, 0, 0) };
-            lvlRow.Children.Add(new TextBlock { Text = "Niveau ", Foreground = Theme.FgMuted, VerticalAlignment = VerticalAlignment.Center });
+            lvlRow.Children.Add(new TextBlock { Text = "Level ", Foreground = Theme.FgMuted, VerticalAlignment = VerticalAlignment.Center });
             _level[i] = new TextBox { Width = 60 };
             int idx = i;
             _level[i].LostFocus += (s, e) => LevelChanged(idx);
@@ -93,7 +93,7 @@ namespace Lycoris
             mid.Children.Add(lvlRow);
             row.Children.Add(mid);
 
-            _change[i] = new Button { Content = "Changer le yo-kai…", Padding = new Thickness(8, 3, 8, 3), VerticalAlignment = VerticalAlignment.Center };
+            _change[i] = new Button { Content = "Change yo-kai…", Padding = new Thickness(8, 3, 8, 3), VerticalAlignment = VerticalAlignment.Center };
             _change[i].Click += (s, e) => ChangeYokai(idx);
             row.Children.Add(_change[i]);
 
@@ -116,7 +116,7 @@ namespace Lycoris
                     _name[i].Text = c.YokaiName;
                     _level[i].Text = c.Level?.ToString();
                 }
-                else { _icon[i].Source = null; _name[i].Text = "(vide)"; _level[i].Text = ""; }
+                else { _icon[i].Source = null; _name[i].Text = "(empty)"; _level[i].Text = ""; }
                 _level[i].IsEnabled = on;
                 _change[i].IsEnabled = on;
             }
@@ -137,7 +137,7 @@ namespace Lycoris
             }
             else _table.Offsets[i] = -1;
             ShowTable(_table);
-            _status.Text = "Modifié — pense à « Sauver le mod ».";
+            _status.Text = "Modified — remember to \"Save mod\".";
         }
 
         private void LevelChanged(int i)
@@ -159,7 +159,7 @@ namespace Lycoris
             c.ParamId = dlg.Picked.ParamHash;
             Encounters.Resolve(c, _db);
             ShowTable(_table);
-            _status.Text = $"Emplacement {i + 1} → {dlg.Picked.DisplayName}. Sauver pour appliquer.";
+            _status.Text = $"Slot {i + 1} → {dlg.Picked.DisplayName}. Save to apply.";
         }
 
         private void Save()
@@ -169,10 +169,10 @@ namespace Lycoris
             try
             {
                 Encounters.Save(_set, _outPckPath);
-                _status.Text = "Sauvé — rencontres écrites dans " + _outPckPath;
-                DarkMessage.Show("Rencontres sauvegardées dans le mod :\n" + _outPckPath, "Sauvegarde", MessageBoxButton.OK, MessageBoxImage.Information);
+                _status.Text = "Saved — encounters written to " + _outPckPath;
+                DarkMessage.Show("Encounters saved to the mod:\n" + _outPckPath, "Save", MessageBoxButton.OK, MessageBoxImage.Information);
             }
-            catch (Exception ex) { DarkMessage.Show(ex.Message, "Sauvegarde rencontres", MessageBoxButton.OK, MessageBoxImage.Error); }
+            catch (Exception ex) { DarkMessage.Show(ex.Message, "Save encounters", MessageBoxButton.OK, MessageBoxImage.Error); }
         }
 
         private static BitmapSource LoadIcon(string path)

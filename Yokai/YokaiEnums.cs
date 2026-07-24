@@ -39,7 +39,7 @@ namespace Lycoris.Yokai
         // SKILL_CONFIG_INFO SkillType tags (from CfgBinEditor). Others are left editable as raw ints.
         public static readonly List<EnumEntry> SkillTypes = Build(new Dictionary<int, string>
         {
-            {1, "Attaque normale"}, {3, "Technique (élémentaire)"}, {4, "Soultimate"}, {5, "Inspiration"},
+            {1, "Normal attack"}, {3, "Technique (elemental)"}, {4, "Soultimate"}, {5, "Inspiration"},
         });
 
         public static readonly List<EnumEntry> Speeds = Build(new Dictionary<int, string>
@@ -55,7 +55,7 @@ namespace Lycoris.Yokai
         // FoodsType.YW3 — sparse (0x0A and 0x1B skipped); the stored value is the KEY.
         public static readonly List<EnumEntry> Foods = Build(new Dictionary<int, string>
         {
-            {0x00, "(aucun)"}, {0x01, "Rice Balls"}, {0x02, "Bread"}, {0x03, "Candy"}, {0x04, "Milk"},
+            {0x00, "(none)"}, {0x01, "Rice Balls"}, {0x02, "Bread"}, {0x03, "Candy"}, {0x04, "Milk"},
             {0x05, "Juice"}, {0x06, "Hamburgers"}, {0x07, "Ramen"}, {0x08, "Sushi"}, {0x09, "Chinese Food"},
             {0x0B, "Vegetables"}, {0x0C, "Meat"}, {0x0D, "Seafood"}, {0x0E, "Curry"}, {0x0F, "Sweets"},
             {0x10, "Oden Stew"}, {0x11, "Soba"}, {0x12, "Snacks"}, {0x13, "Chocobars"}, {0x14, "Ice Cream"},
@@ -79,14 +79,14 @@ namespace Lycoris.Yokai
         /// </summary>
         public static (int sort, string name) SkillCategoryInfo(int? type, string name)
         {
-            if (string.IsNullOrWhiteSpace(name)) return (99, "Non identifié");
+            if (string.IsNullOrWhiteSpace(name)) return (99, "Unidentified");
             switch (type)
             {
-                case 1: return (0, "Attaque normale");
-                case 3: return (1, "Technique (élémentaire)");
+                case 1: return (0, "Normal attack");
+                case 3: return (1, "Technique (elemental)");
                 case 5: return (2, "Inspiration");
                 case 4: return (3, "Soultimate");
-                default: return (99, "Non identifié");
+                default: return (99, "Unidentified");
             }
         }
 

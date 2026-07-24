@@ -19,7 +19,7 @@ namespace Lycoris
         private readonly YokaiDatabase _db;
         private readonly ListView _list = new ListView();
         private readonly TextBlock _summary = new TextBlock { Margin = new Thickness(6), TextWrapping = TextWrapping.Wrap };
-        private readonly CheckBox _showPre = new CheckBox { Content = "Afficher aussi les problèmes préexistants (fichiers d'origine)", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 0, 0) };
+        private readonly CheckBox _showPre = new CheckBox { Content = "Also show pre-existing issues (original files)", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 0, 0) };
         private ICollectionView _view;
         private System.Collections.Generic.List<IntegrityIssue> _issues;
 
@@ -27,11 +27,11 @@ namespace Lycoris
         {
             _db = db;
             Owner = owner;
-            Title = "Lycoris — Vérificateur d'intégrité";
+            Title = "Lycoris — Integrity checker";
             Width = 780; Height = 560;
             WindowStartupLocation = WindowStartupLocation.CenterOwner;
 
-            var recheck = new Button { Content = "Re-vérifier", Padding = new Thickness(10, 4, 10, 4) };
+            var recheck = new Button { Content = "Re-check", Padding = new Thickness(10, 4, 10, 4) };
             recheck.Click += (s, e) => Run();
             var toolbar = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(6) };
             toolbar.Children.Add(recheck);
@@ -45,7 +45,7 @@ namespace Lycoris
             _list.GroupStyle.Add(new GroupStyle { HeaderTemplate = GroupHeader() });
             // Colour error rows.
             var itemStyle = new Style(typeof(ListViewItem));
-            var trig = new DataTrigger { Binding = new Binding("LevelText"), Value = "Erreur" };
+            var trig = new DataTrigger { Binding = new Binding("LevelText"), Value = "Error" };
             trig.Setters.Add(new Setter(ForegroundProperty, Theme.Error));
             itemStyle.Triggers.Add(trig);
             _list.ItemContainerStyle = itemStyle;
@@ -68,10 +68,10 @@ namespace Lycoris
 
             if (newErr + newWarn == 0)
                 _summary.Text = pre == 0
-                    ? "✔ Aucun problème détecté."
-                    : $"✔ Aucun problème introduit par tes modifications.  ({pre} problème(s) préexistant(s) dans les fichiers d'origine — coche la case pour les voir.)";
+                    ? "✔ No issues detected."
+                    : $"✔ No issues introduced by your changes.  ({pre} pre-existing issue(s) in the original files — tick the box to see them.)";
             else
-                _summary.Text = $"⚠ {newErr} erreur(s) et {newWarn} avertissement(s) introduits par tes modifications.  ({pre} préexistant(s).)";
+                _summary.Text = $"⚠ {newErr} error(s) and {newWarn} warning(s) introduced by your changes.  ({pre} pre-existing.)";
 
             _view = CollectionViewSource.GetDefaultView(_issues);
             _view.Filter = o => _showPre.IsChecked == true || !((IntegrityIssue)o).Preexisting;
@@ -85,10 +85,10 @@ namespace Lycoris
         private static GridView BuildColumns()
         {
             var gv = new GridView();
-            gv.Columns.Add(Col("Niveau", "LevelText", 90));
-            gv.Columns.Add(Col("Origine", "OriginText", 90));
-            gv.Columns.Add(Col("Sujet", "Subject", 260));
-            gv.Columns.Add(Col("Problème", "Detail", 300));
+            gv.Columns.Add(Col("Level", "LevelText", 90));
+            gv.Columns.Add(Col("Origin", "OriginText", 90));
+            gv.Columns.Add(Col("Subject", "Subject", 260));
+            gv.Columns.Add(Col("Issue", "Detail", 300));
             return gv;
         }
 

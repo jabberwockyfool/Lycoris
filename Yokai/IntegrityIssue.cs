@@ -11,8 +11,8 @@ namespace Lycoris.Yokai
         /// <summary>True if this problem already existed in the files at load (not caused by this session's edits).</summary>
         public bool Preexisting { get; set; }
 
-        public string LevelText => Level == IssueLevel.Error ? "Erreur" : "Avertissement";
-        public string OriginText => Preexisting ? "préexistant" : "nouveau";
+        public string LevelText => Level == IssueLevel.Error ? "Error" : "Warning";
+        public string OriginText => Preexisting ? "pre-existing" : "new";
     }
 
     public enum IssueLevel { Error, Warning }

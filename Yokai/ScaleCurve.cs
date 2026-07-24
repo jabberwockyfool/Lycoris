@@ -32,9 +32,9 @@ namespace Lycoris.Yokai
         public static string Morphology(int level)
         {
             if (level <= 2) return "Nyan (Jibanyan)";
-            if (level <= 4) return "Mascotte (Usapyon)";
-            if (level <= 7) return "Humain (Mark Evans)";
-            return "Humanoïde (Enma)";
+            if (level <= 4) return "Mascot (Usapyon)";
+            if (level <= 7) return "Human (Mark Evans)";
+            return "Humanoid (Enma)";
         }
     }
 }
