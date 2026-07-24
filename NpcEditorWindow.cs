@@ -553,7 +553,18 @@ namespace Lycoris
             if (string.IsNullOrEmpty(mapId)) return;
             string dir = FindMapDirWithSet(mapId);
             if (dir == null) { _exList.ItemsSource = null; _exFields.IsEnabled = false; _status.Text = $"No res/map/{mapId} folder (neither mod nor reference)."; return; }
-            _exMap = ExistingNpcs.Load(dir, mapId);
+            try
+            {
+                _exMap = ExistingNpcs.Load(dir, mapId);
+            }
+            catch (Exception ex)
+            {
+                _exMap = null; _exList.ItemsSource = null; _exFields.IsEnabled = false;
+                _status.Text = $"Could not read {mapId}: {ex.Message}";
+                DarkMessage.Show($"The NPC data for « {mapId} » could not be read — the map's files in your mod may be " +
+                    $"edited or corrupt.\n\n{ex.Message}", "Cannot open map", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
             if (_exMap == null || _exMap.Npcs.Count == 0) { _exList.ItemsSource = null; _exFields.IsEnabled = false; _status.Text = "This map has no NPC (npc_set)."; return; }
             _exList.ItemsSource = _exMap.Npcs;
             _exList.SelectedIndex = 0;

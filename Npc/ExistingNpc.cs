@@ -76,14 +76,23 @@ namespace Lycoris.Npc
             if (setPath == null) return null;
             var m = new MapNpcs { MapId = mapId, MapDir = mapDir, NpcSetPath = setPath, NpcSet = T2bReader.ReadFile(setPath) };
 
-            var bases = m.NpcSet.Records("NPC_BASE").ToDictionary(e => e.GetInt(Base_NpcId) ?? 0, e => e);
+            // Keep the first NPC_BASE per npcId. An edited npc_set can contain duplicate ids (or several
+            // records whose id field isn't an int, all keying to 0) — ToDictionary would throw on those.
+            var bases = new Dictionary<int, T2bEntry>();
+            foreach (var e in m.NpcSet.Records("NPC_BASE"))
+            {
+                int k = e.GetInt(Base_NpcId) ?? 0;
+                if (!bases.ContainsKey(k)) bases[k] = e;
+            }
 
-            // chapter talk files (exclude *_text*)
+            // chapter talk files (exclude *_text*) — skip any file that fails to parse (edited/corrupt)
             for (int ch = 1; ch <= 11; ch++)
             {
                 string tp = Directory.EnumerateFiles(mapDir, $"{mapId}_npc_base_talk_c{ch:00}*")
                     .FirstOrDefault(x => x.IndexOf("_text", StringComparison.OrdinalIgnoreCase) < 0);
-                if (tp != null) m.Talk[ch] = (T2bReader.ReadFile(tp), tp);
+                if (tp == null) continue;
+                try { m.Talk[ch] = (T2bReader.ReadFile(tp), tp); }
+                catch { /* a broken chapter-talk file just means that chapter's toggles are unknown */ }
             }
 
             // XQ triggers (npcId -> funcId), from [MapId].pck if present

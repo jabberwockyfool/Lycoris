@@ -133,6 +133,30 @@ namespace Lycoris.Formats
             return true;
         }
 
+        /// <summary>
+        /// Replace the species (and level/nickname) of a yo-kai the game already owns, in place. This is the
+        /// reliable mutation: the slot is already tracked by the game, so overwriting +0x04 changes what that
+        /// yo-kai is (mirrors the known-working reference-tool behaviour). Unique ids are left untouched.
+        /// </summary>
+        public bool TryReplaceYokai(int slot, int paramHash, int level, string nickname, out string error)
+        {
+            error = null;
+            if (paramHash == 0) { error = "Invalid yo-kai id (0)."; return false; }
+            if (slot < 0 || slot >= BoxCapacity) { error = "Invalid box slot."; return false; }
+            int rec = BoxOffset + slot * RecStride;
+            if (I32(Body, rec + Off_Param) == 0) { error = "That slot is empty — pick an existing yo-kai to replace."; return false; }
+            if (level < 1) level = 1; if (level > 99) level = 99;
+            W32(Body, rec + Off_Param, paramHash);
+            Body[rec + Off_Level] = (byte)level;
+            for (int k = 0; k < 16; k++) Body[rec + Off_Nick + k] = 0;
+            if (!string.IsNullOrEmpty(nickname))
+            {
+                var nb = Encoding.UTF8.GetBytes(nickname);
+                Array.Copy(nb, 0, Body, rec + Off_Nick, Math.Min(nb.Length, 15));
+            }
+            return true;
+        }
+
         // Find the box section (type 0x07) inside the container so offsets adapt to any save.
         private void LocateBox()
         {

@@ -61,7 +61,7 @@ namespace Lycoris
             // right: add panel
             var right = new StackPanel { Margin = new Thickness(10) };
             right.Children.Add(_info);
-            right.Children.Add(new TextBlock { Text = "Add a yo-kai to the box", FontSize = 14, Margin = new Thickness(0, 4, 0, 8) });
+            right.Children.Add(new TextBlock { Text = "Choose the yo-kai to place", FontSize = 14, Margin = new Thickness(0, 4, 0, 8) });
 
             var pickRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 2, 0, 2) };
             var pickBtn = new Button { Content = "Choose yo-kai…", Padding = new Thickness(10, 4, 10, 4) };
@@ -76,18 +76,34 @@ namespace Lycoris
             right.Children.Add(FieldRow("Level (1–99)", _level));
             right.Children.Add(FieldRow("Nickname (optional)", _nick));
 
-            var addBtn = new Button { Content = "Add to box", Padding = new Thickness(12, 5, 12, 5), Margin = new Thickness(0, 10, 0, 0), HorizontalAlignment = HorizontalAlignment.Left };
+            // Replace = the reliable operation (the slot is already tracked by the game).
+            var replaceBtn = new Button { Content = "Replace selected box yo-kai", Padding = new Thickness(12, 5, 12, 5), Margin = new Thickness(0, 12, 0, 0), HorizontalAlignment = HorizontalAlignment.Left };
+            replaceBtn.Click += (s, e) => ReplaceYokai();
+            right.Children.Add(replaceBtn);
+            right.Children.Add(new TextBlock
+            {
+                Margin = new Thickness(0, 4, 0, 0), Foreground = Theme.FgMuted, TextWrapping = TextWrapping.Wrap, FontSize = 11,
+                Text = "Reliable: pick an existing yo-kai in the list on the left, then overwrite it with the chosen one. " +
+                       "Best for getting a modded yo-kai in-game — replace one you don't need."
+            });
+
+            var addBtn = new Button { Content = "Add to empty slot", Padding = new Thickness(12, 5, 12, 5), Margin = new Thickness(0, 14, 0, 0), HorizontalAlignment = HorizontalAlignment.Left };
             addBtn.Click += (s, e) => AddYokai();
             right.Children.Add(addBtn);
+            right.Children.Add(new TextBlock
+            {
+                Margin = new Thickness(0, 4, 0, 0), Foreground = Theme.FgMuted, TextWrapping = TextWrapping.Wrap, FontSize = 11,
+                Text = "Experimental: appends to a free slot. The game may not detect yo-kai added this way (it seems to " +
+                       "track an owned count), so prefer Replace."
+            });
 
             right.Children.Add(new TextBlock
             {
                 Margin = new Thickness(0, 16, 0, 0),
                 Foreground = Theme.FgMuted,
                 TextWrapping = TextWrapping.Wrap,
-                Text = "The yo-kai lands in your storage box (accessible in-game). Its stats start from a template " +
-                       "and the game recalculates them from species + level. A .bak backup of the original save is " +
-                       "written on the first save. Test in a copy first."
+                Text = "Stats start from the existing/template record; the game recalculates them from species + level. " +
+                       "A .bak backup of the original save is written on the first save. Test on a copy first."
             });
 
             DockPanel.SetDock(_status, Dock.Bottom);
@@ -193,6 +209,31 @@ namespace Lycoris
             _box.SelectedIndex = _box.Items.Count - 1;
         }
 
+        private void ReplaceYokai()
+        {
+            if (_save == null) { DarkMessage.Show("Open a save first.", "Replace yo-kai"); return; }
+            if (_picked == null) { DarkMessage.Show("Choose the replacement yo-kai first.", "Replace yo-kai"); return; }
+            var row = _box.SelectedItem as BoxRow;
+            if (row == null) { DarkMessage.Show("Select an existing yo-kai in the box list (left) to replace.", "Replace yo-kai"); return; }
+            if (!int.TryParse(_level.Text.Trim(), out int lvl)) { DarkMessage.Show("Level must be a number (1–99).", "Replace yo-kai"); return; }
+
+            string oldName = _nameByParam.TryGetValue(row.ParamHash, out var on) ? on : $"0x{unchecked((uint)row.ParamHash):X8}";
+            if (DarkMessage.Show($"Replace « {oldName} » (slot {row.Slot}) with « {_picked.DisplayName} » (Lv {lvl})?",
+                "Replace yo-kai", MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK) return;
+
+            if (!_save.TryReplaceYokai(row.Slot, _picked.ParamHash, lvl, _nick.Text?.Trim(), out string err))
+            {
+                DarkMessage.Show(err, "Replace yo-kai", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+            _dirty = true;
+            int keepSlot = row.Slot;
+            RefreshBox();
+            var again = (_box.ItemsSource as System.Collections.Generic.IEnumerable<BoxRow>)?.FirstOrDefault(r => r.Slot == keepSlot);
+            if (again != null) _box.SelectedItem = again;
+            _status.Text = $"Replaced slot {keepSlot} with {_picked.DisplayName} (Lv {Math.Max(1, Math.Min(99, lvl))}). Click « Save… ».";
+        }
+
         private void SaveFile()
         {
             if (_save == null) { DarkMessage.Show("Open a save first.", "Save"); return; }
@@ -223,9 +264,13 @@ namespace Lycoris
 
         private sealed class BoxRow
         {
+            public int Slot { get; }
+            public int ParamHash { get; }
             public string Label { get; }
             public BoxRow(YwSave.BoxEntry e, Dictionary<int, string> names)
             {
+                Slot = e.Slot;
+                ParamHash = e.ParamHash;
                 string name = names.TryGetValue(e.ParamHash, out var n) ? n : $"0x{unchecked((uint)e.ParamHash):X8}";
                 string nick = string.IsNullOrEmpty(e.Nickname) ? "" : $" « {e.Nickname} »";
                 Label = $"Lv {e.Level,2}  {name}{nick}";
