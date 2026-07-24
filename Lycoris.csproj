@@ -68,6 +68,7 @@
     <Compile Include="Formats\T2bEntryExtensions.cs" />
     <Compile Include="Formats\Imgc.cs" />
     <Compile Include="Formats\Xpck.cs" />
+    <Compile Include="Formats\YwSave.cs" />
     <Compile Include="Yokai\IconNaming.cs" />
     <Compile Include="Yokai\YokaiSchema.cs" />
     <Compile Include="Yokai\YokaiEnums.cs" />
@@ -93,6 +94,7 @@
     <Compile Include="NpcEditorWindow.cs" />
     <Compile Include="MapEditorWindow.cs" />
     <Compile Include="EncounterEditorWindow.cs" />
+    <Compile Include="SaveEditorWindow.cs" />
     <Compile Include="HomeWindow.cs" />
     <Compile Include="AddYokaiDialog.cs" />
     <Compile Include="AtlasPickerWindow.cs" />
