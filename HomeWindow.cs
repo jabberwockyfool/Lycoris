@@ -21,17 +21,19 @@ namespace Lycoris
         private readonly Button _itemBtn;
         private readonly Button _skillBtn;
         private readonly Button _npcBtn;
+        private readonly Button _mapBtn;
         private readonly Button _checkBtn;
 
         private MainWindow _yokaiWindow;
         private ItemEditorWindow _itemWindow;
         private SkillEditorWindow _skillWindow;
         private NpcEditorWindow _npcWindow;
+        private MapEditorWindow _mapWindow;
 
         public HomeWindow()
         {
             Title = "Lycoris — Éditeur Yo-kai Watch 3";
-            Width = 460; Height = 650;
+            Width = 460; Height = 730;
             WindowStartupLocation = WindowStartupLocation.CenterScreen;
             Background = Theme.WindowBg;
 
@@ -56,16 +58,19 @@ namespace Lycoris
             _itemBtn = BigButton("🎁  Éditeur d'items", "Nom, description, prix, ordre d'inventaire, icône de l'atlas…", OpenItemEditor);
             _skillBtn = BigButton("⚔  Éditeur de skills", "Type, élément, puissance, coups, portée Soultimate… (ajout/suppression)", OpenSkillEditor);
             _npcBtn = BigButton("🧍  Éditeur de NPC", "Config NPCMake (TOML) éditable dans le GUI, import/export .toml.", OpenNpcEditor);
+            _mapBtn = BigButton("🗺  Éditeur de maps", "map_config : ajoute/édite les entrées de map (MapID, nom, ShowMapCard…).", OpenMapEditor);
             _checkBtn = BigButton("🩺  Vérifier l'intégrité", "Détecte les références cassées (move/drop/évolution manquants) et les doublons.", OpenIntegrity);
             _yokaiBtn.IsEnabled = false;
             _itemBtn.IsEnabled = false;
             _skillBtn.IsEnabled = false;
             _npcBtn.IsEnabled = false;
+            _mapBtn.IsEnabled = false;
             _checkBtn.IsEnabled = false;
             root.Children.Add(_yokaiBtn);
             root.Children.Add(_itemBtn);
             root.Children.Add(_skillBtn);
             root.Children.Add(_npcBtn);
+            root.Children.Add(_mapBtn);
             root.Children.Add(_checkBtn);
 
             root.Children.Add(_status);
@@ -106,15 +111,17 @@ namespace Lycoris
                 _itemWindow?.Close(); _itemWindow = null;
                 _skillWindow?.Close(); _skillWindow = null;
                 _npcWindow?.Close(); _npcWindow = null;
+                _mapWindow?.Close(); _mapWindow = null;
 
                 _yokaiBtn.IsEnabled = _db.ParamFile != null;
                 _itemBtn.IsEnabled = _db.Items.Count > 0;
                 _skillBtn.IsEnabled = _db.Skills.Count > 0;
                 _npcBtn.IsEnabled = _db.ParamFile != null;
+                _mapBtn.IsEnabled = _db.Maps.Count > 0;
                 _checkBtn.IsEnabled = _db.ParamFile != null;
 
                 string moves = _db.MoveOptions.Count > 0 ? $"moves nommés {_db.MoveNameCount}" : "moves non nommés";
-                _status.Text = $"Chargé — {_db.Yokai.Count} yo-kai, {_db.Items.Count} items, {_db.Skills.Count} skills  ({moves}).\n" +
+                _status.Text = $"Chargé — {_db.Yokai.Count} yo-kai, {_db.Items.Count} items, {_db.Skills.Count} skills, {_db.Maps.Count} maps  ({moves}).\n" +
                                "Choisis un éditeur ci-dessus.";
             }
             catch (Exception ex)
@@ -158,6 +165,15 @@ namespace Lycoris
             _npcWindow = new NpcEditorWindow(this, _db) { Owner = this };
             _npcWindow.Closed += (s, e) => _npcWindow = null;
             _npcWindow.Show();
+        }
+
+        private void OpenMapEditor()
+        {
+            if (_db.Maps.Count == 0) return;
+            if (_mapWindow != null && _mapWindow.IsLoaded) { _mapWindow.Activate(); return; }
+            _mapWindow = new MapEditorWindow(this, _db) { Owner = this };
+            _mapWindow.Closed += (s, e) => _mapWindow = null;
+            _mapWindow.Show();
         }
 
         private void OpenIntegrity()

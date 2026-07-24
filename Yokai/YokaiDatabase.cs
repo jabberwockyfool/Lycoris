@@ -25,6 +25,8 @@ namespace Lycoris.Yokai
         public T2bFile ScaleData { get; private set; }
         public T2bFile SkillTextData { get; private set; }
         public T2bFile SkillDescTextData { get; private set; }
+        public T2bFile MapConfigData { get; private set; }
+        public T2bFile SystemTextData { get; private set; }
         public T2bFile AbilityData { get; private set; }
         public T2bFile AbilityTextData { get; private set; }
         public T2bFile SkillConfigData { get; private set; }
@@ -62,6 +64,8 @@ namespace Lycoris.Yokai
         public string ScaleFile { get; private set; }
         public string SkillTextFile { get; private set; }
         public string SkillDescTextFile { get; private set; }
+        public string MapConfigFile { get; private set; }
+        public string SystemTextFile { get; private set; }
         public string AbilityFile { get; private set; }
         public string AbilityTextFile { get; private set; }
         public string SkillConfigFile { get; private set; }
@@ -86,6 +90,10 @@ namespace Lycoris.Yokai
 
         /// <summary>All editable skills (for the standalone skill editor).</summary>
         public List<SkillInfo> Skills { get; } = new List<SkillInfo>();
+
+        /// <summary>All editable maps (for the standalone map editor).</summary>
+        public List<MapInfo> Maps { get; } = new List<MapInfo>();
+        private bool _mapStructureDirty;
 
         /// <summary>Set when a skill is added or removed, so SaveSkills writes even with no field edits.</summary>
         private bool _skillStructureDirty;
@@ -127,6 +135,8 @@ namespace Lycoris.Yokai
             // Read-only resolvers: mod folder, else reference folder.
             SkillTextFile = FindResolver(folder, referenceFolder, Schema.SkillTextFilePrefix, "desc");
             SkillDescTextFile = FindResolver(folder, referenceFolder, Schema.SkillDescTextFilePrefix, null);
+            MapConfigFile = FindResolver(folder, referenceFolder, Schema.MapConfigFilePrefix, null);
+            SystemTextFile = FindResolver(folder, referenceFolder, Schema.SystemTextFilePrefix, null);
             AbilityTextFile = FindResolver(folder, referenceFolder, Schema.AbilityTextFilePrefix, null);
             AbilityFile = FindResolver(folder, referenceFolder, Schema.AbilityFilePrefix, "text");
             SkillConfigFile = FindResolver(folder, referenceFolder, Schema.SkillConfigFilePrefix, null);
@@ -259,6 +269,7 @@ namespace Lycoris.Yokai
         {
             ParamFile = paramFilePath;
             BaseFile = TextFile = DescFile = ScaleFile = SkillTextFile = SkillDescTextFile = null;
+            MapConfigFile = SystemTextFile = null;
             AbilityFile = AbilityTextFile = SkillConfigFile = null;
             HackslashFile = BattleFile = _hsTechnicFile = _hsTechnicTextFile = null;
             _hsAbilityFile = _hsAbilityTextFile = _itemConfigFile = _itemTextFile = null;
@@ -277,6 +288,8 @@ namespace Lycoris.Yokai
             ScaleData = ScaleFile != null ? T2bReader.ReadFile(ScaleFile) : null;
             SkillTextData = SkillTextFile != null ? T2bReader.ReadFile(SkillTextFile) : null;
             SkillDescTextData = SkillDescTextFile != null ? T2bReader.ReadFile(SkillDescTextFile) : null;
+            MapConfigData = MapConfigFile != null ? T2bReader.ReadFile(MapConfigFile) : null;
+            SystemTextData = SystemTextFile != null ? T2bReader.ReadFile(SystemTextFile) : null;
             AbilityData = AbilityFile != null ? T2bReader.ReadFile(AbilityFile) : null;
             AbilityTextData = AbilityTextFile != null ? T2bReader.ReadFile(AbilityTextFile) : null;
             SkillConfigData = SkillConfigFile != null ? T2bReader.ReadFile(SkillConfigFile) : null;
@@ -447,8 +460,161 @@ namespace Lycoris.Yokai
 
             LoadItems();
             LoadSkills();
+            LoadMaps();
             BuildSkillSlotOptions();
             SnapshotIntegrityBaseline();
+        }
+
+        private void LoadMaps()
+        {
+            Maps.Clear();
+            _mapStructureDirty = false;
+            if (MapConfigData == null) return;
+
+            var textByKey = new Dictionary<int, T2bEntry>();
+            if (SystemTextData != null)
+                foreach (var e in SystemTextData.Records(Schema.DescRecord)) // TEXT_INFO: key[0] -> text[2]
+                { int? k = e.FirstIntKey(); if (k.HasValue && !textByKey.ContainsKey(k.Value)) textByKey[k.Value] = e; }
+
+            foreach (var e in MapConfigData.Records(Schema.MapRecord))
+            {
+                if (e.Values.Count <= Schema.Map_NounIdIndex) continue;
+                var m = new MapInfo
+                {
+                    Entry = e,
+                    MapId = e.GetInt(Schema.Map_IdIndex) ?? 0,
+                    NounID = e.GetInt(Schema.Map_NounIdIndex) ?? 0,
+                    MapFolderName = e.GetString(Schema.Map_FolderIndex),
+                    ShowMapCard = e.GetInt(Schema.Map_ShowCardIndex),
+                };
+                for (int i = 1; i <= 8; i++) m.InitUnk(i, e.GetInt(i));
+                // Map names live in system_text keyed by CRC32(folder). For overworld maps that equals the
+                // stored NounID; for indoor/instance maps NounID differs, so resolve by CRC32(folder) first.
+                int folderKey = string.IsNullOrEmpty(m.MapFolderName) ? 0
+                    : unchecked((int)Crc32.Standard(Encoding.UTF8.GetBytes(m.MapFolderName)));
+                T2bEntry ne;
+                if ((folderKey != 0 && textByKey.TryGetValue(folderKey, out ne)) || textByKey.TryGetValue(m.NounID, out ne))
+                { m.NameEntry = ne; m.Name = ne.GetString(Schema.DescTextIndex); }
+                m.OriginalName = m.Name;
+                m.IsDirty = false;
+                Maps.Add(m);
+            }
+        }
+
+        /// <summary>Apply map edits and write map_config (+ system_text names) into the mod (only if changed).</summary>
+        public int SaveMaps()
+        {
+            if (MapConfigData == null ||
+                (!_mapStructureDirty && !Maps.Any(m => m.IsDirty || m.NameChanged)))
+                return 0;
+            int n = 0;
+            foreach (var m in Maps.Where(x => x.Entry != null))
+            {
+                n += SetInt(m.Entry, Schema.Map_IdIndex, m.MapId);
+                for (int i = 1; i <= 8; i++) n += SetInt(m.Entry, i, m.GetUnk(i));
+                n += SetText(m.Entry, Schema.Map_FolderIndex, m.MapFolderName);
+                n += SetInt(m.Entry, Schema.Map_ShowCardIndex, m.ShowMapCard);
+                n += SetInt(m.Entry, Schema.Map_NounIdIndex, m.NounID);
+            }
+            bool textDirty = _mapStructureDirty;
+            foreach (var m in Maps.Where(x => x.NameChanged))
+            {
+                if (m.NameEntry != null) { n += SetText(m.NameEntry, Schema.DescTextIndex, m.Name); textDirty = true; }
+                else if (!string.IsNullOrEmpty(m.Name))
+                {
+                    var de = MakeSystemText(m.NounID, m.Name);
+                    if (de != null) { m.NameEntry = de; textDirty = true; }
+                }
+            }
+
+            if (!IsUnderMod(MapConfigFile)) MapConfigFile = MirrorToMod(MapConfigFile);
+            T2bWriter.WriteFile(MapConfigData, MapConfigFile);
+            if (SystemTextData != null && textDirty)
+            {
+                if (!IsUnderMod(SystemTextFile)) SystemTextFile = MirrorToMod(SystemTextFile);
+                T2bWriter.WriteFile(SystemTextData, SystemTextFile);
+            }
+            foreach (var m in Maps) { m.IsDirty = false; m.OriginalName = m.Name; }
+            if (_mapStructureDirty && n == 0) n = 1;
+            _mapStructureDirty = false;
+            return n;
+        }
+
+        /// <summary>Clone a TEXT_INFO template into system_text with the given key + text (map display name).</summary>
+        private T2bEntry MakeSystemText(int key, string text)
+        {
+            var tpl = SystemTextData?.Records(Schema.DescRecord).FirstOrDefault();
+            if (tpl == null) return null;
+            var de = tpl.Clone();
+            SetIntForce(de, Schema.DescKeyIndex, key);
+            SetText(de, Schema.DescTextIndex, text ?? "");
+            InsertIntoGroup(SystemTextData, Schema.DescGroupBegin, Schema.DescGroupEnd, de);
+            return de;
+        }
+
+        /// <summary>
+        /// Add a new map entry in map_config (MapID/NounID = CRC32 of the folder name) plus its name in
+        /// system_text. Without this entry a custom map bugs even if its model files are present.
+        /// </summary>
+        public MapInfo AddMap(string folder, string name)
+        {
+            var tpl = MapConfigData?.Records(Schema.MapRecord).FirstOrDefault();
+            if (tpl == null) throw new InvalidOperationException("map_config non chargé.");
+            int id = unchecked((int)Crc32.Standard(Encoding.UTF8.GetBytes(folder ?? "")));
+
+            var rec = tpl.Clone();
+            SetIntForce(rec, Schema.Map_IdIndex, id);
+            SetText(rec, Schema.Map_FolderIndex, folder ?? "");
+            SetIntForce(rec, Schema.Map_ShowCardIndex, 1);
+            SetIntForce(rec, Schema.Map_NounIdIndex, id);
+            InsertIntoGroup(MapConfigData, Schema.MapGroupBegin, Schema.MapGroupEnd, rec);
+
+            T2bEntry nameEntry = string.IsNullOrEmpty(name) ? null : MakeSystemText(id, name);
+
+            var m = new MapInfo
+            {
+                Entry = rec, MapId = id, NounID = id, MapFolderName = folder, ShowMapCard = 1,
+                Name = name, NameEntry = nameEntry, OriginalName = null, IsDirty = true,
+            };
+            for (int i = 1; i <= 8; i++) m.InitUnk(i, rec.GetInt(i));
+            Maps.Add(m);
+            _mapStructureDirty = true;
+            return m;
+        }
+
+        /// <summary>Duplicate a map's config (all fields), keyed to a new folder name (CRC32 → new MapID/NounID).</summary>
+        public MapInfo DuplicateMap(MapInfo src, string newFolder)
+        {
+            if (src?.Entry == null) throw new InvalidOperationException("Aucune map à dupliquer.");
+            int id = unchecked((int)Crc32.Standard(Encoding.UTF8.GetBytes(newFolder ?? "")));
+            var rec = src.Entry.Clone();
+            SetIntForce(rec, Schema.Map_IdIndex, id);
+            SetText(rec, Schema.Map_FolderIndex, newFolder ?? "");
+            SetIntForce(rec, Schema.Map_NounIdIndex, id);
+            InsertIntoGroup(MapConfigData, Schema.MapGroupBegin, Schema.MapGroupEnd, rec);
+
+            T2bEntry nameEntry = string.IsNullOrEmpty(src.Name) ? null : MakeSystemText(id, src.Name);
+
+            var m = new MapInfo
+            {
+                Entry = rec, MapId = id, NounID = id, MapFolderName = newFolder,
+                ShowMapCard = src.ShowMapCard, Name = src.Name, NameEntry = nameEntry, OriginalName = null, IsDirty = true,
+            };
+            for (int i = 1; i <= 8; i++) m.InitUnk(i, src.GetUnk(i));
+            Maps.Add(m);
+            _mapStructureDirty = true;
+            return m;
+        }
+
+        /// <summary>Delete a map: removes its MAP_INFO record and its system_text name (if unshared).</summary>
+        public void RemoveMap(MapInfo m)
+        {
+            if (m?.Entry == null || MapConfigData == null) return;
+            RemoveEntry(MapConfigData, m.Entry, Schema.MapGroupBegin);
+            Maps.Remove(m);
+            if (SystemTextData != null && m.NameEntry != null && Maps.All(o => o.NounID != m.NounID))
+                RemoveEntry(SystemTextData, m.NameEntry, Schema.DescGroupBegin);
+            _mapStructureDirty = true;
         }
 
         /// <summary>Named skill options bucketed by SkillType, for the per-slot move dropdowns in the yo-kai editor.</summary>

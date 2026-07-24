@@ -77,6 +77,8 @@
     <Compile Include="Yokai\YokaiModels.cs" />
     <Compile Include="Yokai\ItemInfo.cs" />
     <Compile Include="Yokai\SkillInfo.cs" />
+    <Compile Include="Yokai\MapInfo.cs" />
+    <Compile Include="Yokai\EncounterModels.cs" />
     <Compile Include="Yokai\IntegrityIssue.cs" />
     <Compile Include="Npc\NpcModel.cs" />
     <Compile Include="Npc\NpcToml.cs" />
@@ -88,6 +90,8 @@
     <Compile Include="SkillEditorWindow.cs" />
     <Compile Include="IntegrityWindow.cs" />
     <Compile Include="NpcEditorWindow.cs" />
+    <Compile Include="MapEditorWindow.cs" />
+    <Compile Include="EncounterEditorWindow.cs" />
     <Compile Include="HomeWindow.cs" />
     <Compile Include="AddYokaiDialog.cs" />
     <Compile Include="AtlasPickerWindow.cs" />

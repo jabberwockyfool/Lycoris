@@ -97,6 +97,19 @@ namespace Lycoris.Yokai
         public int ItemNoun_TextIndex = 5;
         public int ItemText_TextIndex = 2;
 
+        // --- Maps (map_config + system_text names) ---
+        public string MapConfigFilePrefix = "map_config";
+        public string SystemTextFilePrefix = "system_text";  // holds map names as TEXT_INFO (key -> text[2])
+        public string MapRecord = "MAP_INFO";
+        public string MapGroupBegin = "MAP_BEGIN";
+        public string MapGroupEnd = "MAP_END";
+        // MAP_INFO layout (12 fields, validated): [0]MapID=CRC32(folder), [1..8]Unk, [9]MapFolderName(String),
+        // [10]ShowMapCard, [11]NounID=CRC32(folder) -> system_text TEXT_INFO.
+        public int Map_IdIndex = 0;
+        public int Map_FolderIndex = 9;
+        public int Map_ShowCardIndex = 10;
+        public int Map_NounIdIndex = 11;
+
         // chara_scale: CHARA_SCALE_INFO keyed by BaseHash at [0].
         public string ScaleRecord = "CHARA_SCALE_INFO";
         public string ScaleGroupBegin = "CHARA_SCALE_INFO_LIST_BEG";

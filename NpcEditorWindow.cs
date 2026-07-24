@@ -35,7 +35,12 @@ namespace Lycoris
         public NpcEditorWindow(Window owner, YokaiDatabase db)
         {
             _db = db;
-            _maps = MapList.Available(db?.ReferenceFolder, db?.ModFolder);
+            // Map dropdown = the maps from the map editor (map_config, with their system_text names + any you
+            // added). Falls back to scanning res/map folders if map_config isn't loaded.
+            _maps = db != null && db.Maps.Count > 0
+                ? db.Maps.OrderBy(m => m.MapFolderName, StringComparer.OrdinalIgnoreCase)
+                         .Select(m => new MapEntry(m.MapFolderName, m.Name)).ToList()
+                : MapList.Available(db?.ReferenceFolder, db?.ModFolder);
             Owner = owner;
             Title = "Lycoris — Éditeur de NPC (NPCMake)";
             Width = 780; Height = 620;
