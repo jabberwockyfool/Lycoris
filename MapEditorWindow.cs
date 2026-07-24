@@ -1,5 +1,7 @@
 using System;
 using System.ComponentModel;
+using System.IO;
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
@@ -210,24 +212,44 @@ namespace Lycoris
                 DarkMessage.Show("Cette map n'a pas de fichier de rencontres (_enc_) dans son .pck.", "Rencontres", MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
-            string outPck = _db.ModFolder != null
-                ? System.IO.Path.Combine(_db.ModFolder, "res", "map", m.MapFolderName, m.MapFolderName + ".pck")
-                : src;
+            // Write target: if the .pck was found in the mod, overwrite it in place; if it came from the
+            // reference, MirrorToMod copies it into the mod at the same relative path.
+            string outPck = _db.MirrorToMod(src) ?? src;
             new EncounterEditorWindow(this, _db, set, outPck, m.DisplayName) { Owner = this }.Show();
         }
 
-        /// <summary>Find the map's .pck — the mod first, then the reference extract.</summary>
+        /// <summary>
+        /// Find the map's .pck. Searches the MOD recursively first (custom maps can sit anywhere — res/map,
+        /// include/data/res/map, …), then the reference extract. Returns the mod copy when it exists so
+        /// encounters are read from (and written back to) the mod.
+        /// </summary>
         private string FindMapPck(string mapId)
         {
-            foreach (var root in new[] { _db?.ModFolder, _db?.ReferenceFolder })
+            string file = mapId + ".pck";
+            string mod = _db?.ModFolder;
+            if (!string.IsNullOrEmpty(mod) && Directory.Exists(mod))
             {
-                if (string.IsNullOrEmpty(root)) continue;
+                try
+                {
+                    var hit = Directory.EnumerateFiles(mod, file, SearchOption.AllDirectories).FirstOrDefault();
+                    if (hit != null) return hit;
+                }
+                catch { /* ignore unreadable dirs */ }
+            }
+            string reference = _db?.ReferenceFolder;
+            if (!string.IsNullOrEmpty(reference))
+            {
                 foreach (var cand in new[] {
-                    System.IO.Path.Combine(root, "res", "map", mapId, mapId + ".pck"),
-                    System.IO.Path.Combine(root, "data", "res", "map", mapId, mapId + ".pck"),
-                    System.IO.Path.Combine(root, mapId, mapId + ".pck"),
+                    Path.Combine(reference, "res", "map", mapId, file),
+                    Path.Combine(reference, "data", "res", "map", mapId, file),
                 })
-                    if (System.IO.File.Exists(cand)) return cand;
+                    if (File.Exists(cand)) return cand;
+                try
+                {
+                    var hit = Directory.EnumerateFiles(reference, file, SearchOption.AllDirectories).FirstOrDefault();
+                    if (hit != null) return hit;
+                }
+                catch { }
             }
             return null;
         }

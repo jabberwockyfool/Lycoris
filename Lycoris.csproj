@@ -85,6 +85,7 @@
     <Compile Include="Npc\MapList.cs" />
     <Compile Include="Npc\NpcXq.cs" />
     <Compile Include="Npc\NpcCompiler.cs" />
+    <Compile Include="Npc\ExistingNpc.cs" />
     <Compile Include="Yokai\YokaiDatabase.cs" />
     <Compile Include="ItemEditorWindow.cs" />
     <Compile Include="SkillEditorWindow.cs" />
