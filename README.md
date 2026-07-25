@@ -6,6 +6,8 @@ Currently available:
 - Skill Editor
 - Map Editor
 - NPC Editor
+- Event Editor
+- Battle Editor
 - Save Editor (to test your changes)
 
 ## Credits
