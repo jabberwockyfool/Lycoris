@@ -31,7 +31,9 @@ namespace Lycoris.Yokai
         public int EncountId;
         public int Index;
         public readonly int[] Offsets = new int[6];
-        public string Label => $"Battle {Index}  (0x{unchecked((uint)EncountId):X8})";
+        public string BattleScript;   // ENCOUNT_TABLE[7] — the battle-event .xq name (common_enc only; null on maps)
+        public string HashHex => $"0x{unchecked((uint)EncountId):X8}";
+        public string Label => string.IsNullOrEmpty(BattleScript) ? $"Battle {Index}  ({HashHex})" : $"{BattleScript}  ({HashHex})";
         public override string ToString() => Label;
     }
 
@@ -45,9 +47,12 @@ namespace Lycoris.Yokai
         public List<EncChara> Charas = new List<EncChara>();
     }
 
-    /// <summary>Read/edit/repack the wild-encounter file inside a map's .pck (ENCOUNT_TABLE + ENCOUNT_CHARA).</summary>
+    /// <summary>Read/edit the ENCOUNT_TABLE + ENCOUNT_CHARA data — from a map's .pck (wild encounters) or a
+    /// raw .cfg.bin (common_enc, the shared event/story battle config).</summary>
     public static class Encounters
     {
+        private const int BattleScriptField = 7;   // ENCOUNT_TABLE[7], common_enc only
+
         public static EncounterSet Load(string pckPath, YokaiDatabase db)
         {
             var pck = Xpck.Read(File.ReadAllBytes(pckPath));
@@ -58,7 +63,22 @@ namespace Lycoris.Yokai
 
             var t2b = T2bReader.Read(encFile.Data);
             var set = new EncounterSet { PckFiles = pck, EncFileName = encFile.Name, EncT2b = t2b };
+            ParseInto(set, db);
+            return set;
+        }
 
+        /// <summary>Load a raw encounter .cfg.bin (e.g. common_enc_0.01) — no pck wrapper.</summary>
+        public static EncounterSet LoadCfg(string cfgPath, YokaiDatabase db)
+        {
+            var t2b = T2bReader.ReadFile(cfgPath);
+            var set = new EncounterSet { PckFiles = null, EncFileName = null, EncT2b = t2b };
+            ParseInto(set, db);
+            return set;
+        }
+
+        private static void ParseInto(EncounterSet set, YokaiDatabase db)
+        {
+            var t2b = set.EncT2b;
             foreach (var e in t2b.Records("ENCOUNT_CHARA"))
             {
                 var c = new EncChara { Entry = e, ParamId = e.GetInt(0) ?? 0, Level = e.GetInt(1), IsDirty = false };
@@ -68,11 +88,10 @@ namespace Lycoris.Yokai
             int idx = 0;
             foreach (var e in t2b.Records("ENCOUNT_TABLE"))
             {
-                var t = new EncTable { Entry = e, EncountId = e.GetInt(0) ?? 0, Index = idx++ };
+                var t = new EncTable { Entry = e, EncountId = e.GetInt(0) ?? 0, Index = idx++, BattleScript = e.GetString(BattleScriptField) };
                 for (int i = 0; i < 6; i++) t.Offsets[i] = e.GetInt(1 + i) ?? -1;
                 set.Tables.Add(t);
             }
-            return set;
         }
 
         public static void Resolve(EncChara c, YokaiDatabase db)
@@ -100,18 +119,33 @@ namespace Lycoris.Yokai
         /// <summary>Write all edits back into the CfgBin, repack the .pck and save it to <paramref name="outPckPath"/>.</summary>
         public static void Save(EncounterSet set, string outPckPath)
         {
+            CommitEdits(set);
+            Xpck.AddOrReplace(set.PckFiles, set.EncFileName, T2bWriter.Write(set.EncT2b));
+            byte[] bytes = Xpck.Write(set.PckFiles);
+            Directory.CreateDirectory(Path.GetDirectoryName(outPckPath));
+            File.WriteAllBytes(outPckPath, bytes);
+        }
+
+        /// <summary>Write all edits back and save a raw encounter .cfg.bin (common_enc).</summary>
+        public static void SaveCfg(EncounterSet set, string outPath)
+        {
+            CommitEdits(set);
+            Directory.CreateDirectory(Path.GetDirectoryName(outPath));
+            T2bWriter.WriteFile(set.EncT2b, outPath);
+        }
+
+        private static void CommitEdits(EncounterSet set)
+        {
             foreach (var c in set.Charas)
             {
                 SetVal(c.Entry, 0, c.ParamId);
                 SetVal(c.Entry, 1, c.Level ?? 0);
             }
             foreach (var t in set.Tables)
+            {
                 for (int i = 0; i < 6; i++) SetVal(t.Entry, 1 + i, t.Offsets[i]);
-
-            Xpck.AddOrReplace(set.PckFiles, set.EncFileName, T2bWriter.Write(set.EncT2b));
-            byte[] bytes = Xpck.Write(set.PckFiles);
-            Directory.CreateDirectory(Path.GetDirectoryName(outPckPath));
-            File.WriteAllBytes(outPckPath, bytes);
+                if (t.BattleScript != null) SetStr(t.Entry, BattleScriptField, t.BattleScript);
+            }
         }
 
         private static void SetVal(T2bEntry e, int i, int v)
@@ -119,6 +153,13 @@ namespace Lycoris.Yokai
             if (i < 0 || i >= e.Values.Count) return;
             e.Values[i].Type = VT.Integer;
             e.Values[i].Value = v;
+        }
+
+        private static void SetStr(T2bEntry e, int i, string v)
+        {
+            if (i < 0 || i >= e.Values.Count) return;
+            e.Values[i].Type = VT.String;
+            e.Values[i].Value = v ?? "";
         }
 
         private static void InsertIntoGroup(T2bFile file, string begin, string end, T2bEntry entry)

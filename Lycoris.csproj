@@ -97,6 +97,7 @@
     <Compile Include="EncounterEditorWindow.cs" />
     <Compile Include="SaveEditorWindow.cs" />
     <Compile Include="EventEditorWindow.cs" />
+    <Compile Include="BattleEditorWindow.cs" />
     <Compile Include="HomeWindow.cs" />
     <Compile Include="AddYokaiDialog.cs" />
     <Compile Include="AtlasPickerWindow.cs" />

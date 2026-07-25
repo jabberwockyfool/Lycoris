@@ -207,6 +207,29 @@ namespace Lycoris.Yokai
 
         /// <summary>The XQ an NPC's OnTalk uses to trigger an event.</summary>
         public static string NpcRunSnippet(string eventName) => $"$local1 = RunEvent(\"{eventName}\");";
+
+        /// <summary>
+        /// A blank battle-event script (the .xq named in a battle's BattleScript field). Defines the standard
+        /// BattleEvent_* entry points the engine calls, with empty bodies you can fill in.
+        /// </summary>
+        public static string BuildBlankBattleSource()
+        {
+            return
+"BattleEventInit()\n{\n\t$local1 = log(\"BattleEventInit\");\n}\n\n" +
+"BattleEvent_Finalize()\n{\n\t$local1 = log(\"BattleEvent_Finalize\");\n}\n\n" +
+"BattleEvent_OnStartEvent()\n{\n}\n\n" +
+"BattleEvent_OnBattleEndEvent($param0, $param1, $param2)\n{\n}\n\n" +
+"BattleEvent_OnHit($param0, $param1, $param2, $param3, $param4)\n{\n}\n\n" +
+"BattleEvent_OnLastHit($param0, $param1, $param2, $param3, $param4, $param5)\n{\n}\n\n" +
+"BattleEvent_OnActStart($param0, $param1)\n{\n}\n\n" +
+"BattleEvent_OnActEnd($param0, $param1, $param2, $param3, $param4)\n{\n}\n\n" +
+"BattleEvent_OnTurnStart($param0, $param1)\n{\n}\n\n" +
+"BattleEvent_OnExecuteCommand($param0, $param1, $param2, $param3, $param4)\n{\n}\n\n" +
+"BattleEvent_OnCmdEnd($param0, $param1, $param2, $param3, $param4)\n{\n}\n\n" +
+"BattleEvent_OnSpSkillDemoStart($param0, $param1)\n{\n}\n\n" +
+"BattleEvent_OnSpSkillDemoEnd($param0, $param1)\n{\n}\n\n" +
+"BattleEvent_OnExtraObjectHit($param0, $param1)\n{\n}\n";
+        }
     }
 
     /// <summary>One spoken page: the text and the speaker model whose name shows in the box.</summary>
