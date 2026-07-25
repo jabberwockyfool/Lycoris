@@ -162,6 +162,87 @@ namespace Lycoris.Npc
             return written;
         }
 
+        private const int Preset_AppearIdx = 1;
+
+        /// <summary>
+        /// Remove an NPC from the map: its NPC_APPEAR (+ re-index every NPC_PRESET that pointed past it),
+        /// NPC_BASE, NPC_PRESET(s), chapter BASE_TALK_INFO, and its type-11 trigger. The .npcbin is left in
+        /// npc.pck (harmless when unreferenced). Deleting a story/event NPC can break events that spawn it.
+        /// </summary>
+        public static List<string> Delete(MapNpcs m, ExistingNpc npc, Func<string, string> mirror)
+        {
+            var written = new List<string>();
+            var set = m.NpcSet;
+            int npcId = npc.NpcId;
+
+            // index of this NPC's NPC_APPEAR (presets reference it by index).
+            var appears = set.Records("NPC_APPEAR").ToList();
+            int k = npc.AppearEntry != null ? appears.IndexOf(npc.AppearEntry) : -1;
+            if (k < 0) throw new InvalidOperationException("This NPC's placement was not found in npc_set.");
+
+            // remove the appear, then fix preset indices.
+            set.Entries.Remove(npc.AppearEntry);
+            Bump(set, "NPC_APPEAR_BEGIN", -1);
+
+            foreach (var pr in set.Records("NPC_PRESET").ToList())
+                if ((pr.GetInt(Preset_AppearIdx) ?? -1) == k) { set.Entries.Remove(pr); Bump(set, "NPC_PRESET_BEGIN", -1); }
+            foreach (var pr in set.Records("NPC_PRESET"))
+            {
+                int ai = pr.GetInt(Preset_AppearIdx) ?? -1;
+                if (ai > k) Set(pr, Preset_AppearIdx, ai - 1);
+            }
+
+            // remove the NPC_BASE (keyed by npcId).
+            var baseE = set.Records("NPC_BASE").FirstOrDefault(e => (e.GetInt(Base_NpcId) ?? 0) == npcId);
+            if (baseE != null && set.Entries.Remove(baseE)) Bump(set, "NPC_BASE_BEGIN", -1);
+
+            string setOut = mirror(m.NpcSetPath);
+            Directory.CreateDirectory(Path.GetDirectoryName(setOut));
+            T2bWriter.WriteFile(set, setOut); written.Add(setOut);
+
+            // chapter talk files.
+            foreach (var kv in m.Talk)
+            {
+                var (tf, tp) = kv.Value;
+                var hits = tf.Records("BASE_TALK_INFO").Where(e => (e.GetInt(Talk_NpcId) ?? 0) == npcId).ToList();
+                if (hits.Count == 0) continue;
+                foreach (var e in hits) tf.Entries.Remove(e);
+                Bump(tf, "BASE_TALK_INFO_BEGIN", -hits.Count);
+                string o = mirror(tp);
+                Directory.CreateDirectory(Path.GetDirectoryName(o));
+                if (!written.Contains(o)) { T2bWriter.WriteFile(tf, o); written.Add(o); }
+            }
+
+            // type-11 trigger in the map .pck (DATA_COUNT + flat DATA_ITEM list).
+            if (m.PckPath != null && File.Exists(m.PckPath))
+            {
+                try
+                {
+                    var pck = Xpck.Read(File.ReadAllBytes(m.PckPath));
+                    var trig = pck.FirstOrDefault(x => x.Name.IndexOf("_trigger", StringComparison.OrdinalIgnoreCase) >= 0 && x.Name.IndexOf("quest", StringComparison.OrdinalIgnoreCase) < 0);
+                    if (trig != null)
+                    {
+                        var tf = T2bReader.Read(trig.Data);
+                        var items = tf.Records("DATA_ITEM").Where(e => (e.GetInt(Trig_Type) ?? 0) == NpcTriggerType && (e.GetInt(Trig_NpcId) ?? 0) == npcId).ToList();
+                        if (items.Count > 0)
+                        {
+                            foreach (var e in items) tf.Entries.Remove(e);
+                            var count = tf.Entries.FirstOrDefault(x => x.Name == "DATA_COUNT");
+                            if (count != null && count.Values.Count > 0 && count.Values[0].Value is int c) count.Values[0].Value = c - items.Count;
+                            Xpck.AddOrReplace(pck, trig.Name, T2bWriter.Write(tf));
+                            string o = mirror(m.PckPath);
+                            Directory.CreateDirectory(Path.GetDirectoryName(o));
+                            File.WriteAllBytes(o, Xpck.Write(pck)); written.Add(o);
+                        }
+                    }
+                }
+                catch { /* pck unreadable — trigger left as-is */ }
+            }
+
+            m.Npcs.Remove(npc);
+            return written;
+        }
+
         private static void AddTalk(T2bFile talk, int npcId)
         {
             var tpl = talk.Records("BASE_TALK_INFO").FirstOrDefault();

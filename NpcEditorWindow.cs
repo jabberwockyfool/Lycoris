@@ -322,17 +322,22 @@ namespace Lycoris
                 return;
             }
 
-            // Locate the map's source files (mod first, then reference), else ask.
+            // Auto-merge target inside the loaded mod (mirrors res/map/<MapID>). Null if no mod loaded.
+            // Mod res lives at include/data/res (include = <mod>/include, or the mod folder if it is already it).
+            string incBase = string.IsNullOrEmpty(_db?.ModFolder) ? null
+                : (System.IO.Directory.Exists(System.IO.Path.Combine(_db.ModFolder, "include")) ? System.IO.Path.Combine(_db.ModFolder, "include") : _db.ModFolder);
+            string mergeMapDir = incBase == null ? null : System.IO.Path.Combine(incBase, "data", "res", "map", n.MapID);
+
+            // Base/complete map = the vanilla reference (fallback for anything not yet in the mod). The compiler
+            // reads each file from the mod copy (mergeMapDir) FIRST, so repeated compiles keep earlier NPCs.
             string mapFolder = FindMapDir(n.MapID);
+            if (mapFolder == null && mergeMapDir != null && System.IO.File.Exists(System.IO.Path.Combine(mergeMapDir, "npc.pck")))
+                mapFolder = mergeMapDir;
             if (mapFolder == null)
             {
                 mapFolder = FolderPicker.Pick($"Folder for map \"{n.MapID}\" (containing npc.pck, {n.MapID}.pck…)", Handle);
                 if (mapFolder == null) return;
             }
-
-            // Auto-merge target inside the loaded mod (mirrors res/map/<MapID>). Null if no mod loaded.
-            string mergeMapDir = string.IsNullOrEmpty(_db?.ModFolder)
-                ? null : System.IO.Path.Combine(_db.ModFolder, "res", "map", n.MapID);
             string outRoot = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "lycoris_npc_build");
 
             string plan = mergeMapDir != null
@@ -367,15 +372,17 @@ namespace Lycoris
             }
         }
 
-        /// <summary>Find the folder containing the map's npc.pck — the mod first, then the reference.</summary>
+        /// <summary>Find the complete base map (with npc.pck) — the reference first (it is complete), then the
+        /// mod. The mod's partial copy is used as the accumulation source separately (mergeMapDir).</summary>
         private string FindMapDir(string mapId)
         {
-            foreach (var root in new[] { _db?.ModFolder, _db?.ReferenceFolder })
+            foreach (var root in new[] { _db?.ReferenceFolder, _db?.ModFolder })
             {
                 if (string.IsNullOrEmpty(root)) continue;
                 foreach (var cand in new[] {
                     System.IO.Path.Combine(root, "res", "map", mapId),
                     System.IO.Path.Combine(root, "data", "res", "map", mapId),
+                    System.IO.Path.Combine(root, "include", "data", "res", "map", mapId),
                     System.IO.Path.Combine(root, mapId),
                 })
                     if (System.IO.File.Exists(System.IO.Path.Combine(cand, "npc.pck"))) return cand;
@@ -452,12 +459,15 @@ namespace Lycoris
         {
             var save = new Button { Content = "Save the mod", Padding = new Thickness(10, 4, 10, 4), Margin = new Thickness(10, 0, 0, 0) };
             save.Click += (s, e) => SaveExisting();
+            var del = new Button { Content = "Delete NPC", Padding = new Thickness(10, 4, 10, 4), Margin = new Thickness(6, 0, 0, 0) };
+            del.Click += (s, e) => DeleteExNpc();
             var toolbar = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(6) };
             toolbar.Children.Add(new TextBlock { Text = "Map ", VerticalAlignment = VerticalAlignment.Center, Foreground = Theme.FgMuted });
             _exMapCombo.ItemsSource = _db != null ? _db.Maps.OrderBy(m => m.MapFolderName, StringComparer.OrdinalIgnoreCase).ToList() : null;
             _exMapCombo.SelectionChanged += (s, e) => LoadExMap();
             toolbar.Children.Add(_exMapCombo);
             toolbar.Children.Add(save);
+            toolbar.Children.Add(del);
             DockPanel.SetDock(toolbar, Dock.Top);
 
             var left = new DockPanel { Width = 230, Margin = new Thickness(6) };
@@ -631,7 +641,7 @@ namespace Lycoris
             if (_exMap == null) return;
             try
             {
-                var written = ExistingNpcs.Save(_exMap, p => _db.MirrorToMod(p) ?? p);
+                var written = ExistingNpcs.Save(_exMap, ExMirror);
 
                 // OnTalk (XQ) edits -> repack the map .pck
                 var onTalkEdited = _exMap.Npcs.Where(n => n.OnTalkDirty && n.HasXqTalk).ToList();
@@ -647,7 +657,7 @@ namespace Lycoris
                             byte[] xqData = xqFile.Data;
                             foreach (var n in onTalkEdited) { xqData = NpcXq.ReplaceFunction(xqData, n.FuncId, n.OnTalk ?? "", out _); n.OnTalkDirty = false; }
                             Xpck.AddOrReplace(pck, xqFile.Name, xqData);
-                            string outPck = _db.MirrorToMod(_exMap.PckPath) ?? _exMap.PckPath;
+                            string outPck = ExMirror(_exMap.PckPath);
                             Directory.CreateDirectory(Path.GetDirectoryName(outPck));
                             File.WriteAllBytes(outPck, Xpck.Write(pck));
                             written.Add(outPck);
@@ -659,6 +669,45 @@ namespace Lycoris
                 if (written.Count > 0) DarkMessage.Show("NPCs saved to the mod:\n" + string.Join("\n", written.Select(Path.GetFileName)), "Save", MessageBoxButton.OK, MessageBoxImage.Information);
             }
             catch (Exception ex) { DarkMessage.Show(ex.Message, "Save NPC", MessageBoxButton.OK, MessageBoxImage.Error); }
+        }
+
+        private void DeleteExNpc()
+        {
+            if (_exMap == null) { DarkMessage.Show("Open a map first.", "Delete NPC"); return; }
+            var npc = _exList.SelectedItem as ExistingNpc;
+            if (npc == null) { DarkMessage.Show("Select an NPC to delete.", "Delete NPC"); return; }
+            if (DarkMessage.Show(
+                    $"Delete « {npc.DisplayName} » from {_exMap.MapId}?\n\n" +
+                    "This removes its placement, base, talk and trigger from your mod.\n" +
+                    "⚠ Deleting a story/event NPC can break events that spawn it — prefer deleting NPCs you added.",
+                    "Delete NPC", MessageBoxButton.OKCancel, MessageBoxImage.Warning) != MessageBoxResult.OK) return;
+            try
+            {
+                var written = ExistingNpcs.Delete(_exMap, npc, ExMirror);
+                _exList.ItemsSource = null;
+                _exList.ItemsSource = _exMap.Npcs;
+                _exFields.IsEnabled = false;
+                _status.Text = $"Deleted {npc.ModelName} — {written.Count} file(s) written to the mod.";
+                DarkMessage.Show("NPC deleted. Files written:\n" + string.Join("\n", written.Select(Path.GetFileName)), "Delete NPC", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            catch (Exception ex) { DarkMessage.Show(ex.Message, "Delete NPC", MessageBoxButton.OK, MessageBoxImage.Error); }
+        }
+
+        /// <summary>Mirror a map file into the mod at include/data/res/map/&lt;MapID&gt; (where NPC edits belong).</summary>
+        private string ExMirror(string srcPath)
+        {
+            string incBase = IncBase();
+            if (incBase == null || _exMap == null) return _db?.MirrorToMod(srcPath) ?? srcPath;
+            string dir = System.IO.Path.Combine(incBase, "data", "res", "map", _exMap.MapId);
+            System.IO.Directory.CreateDirectory(dir);
+            return System.IO.Path.Combine(dir, System.IO.Path.GetFileName(srcPath));
+        }
+
+        private string IncBase()
+        {
+            if (string.IsNullOrEmpty(_db?.ModFolder)) return null;
+            string inc = System.IO.Path.Combine(_db.ModFolder, "include");
+            return System.IO.Directory.Exists(inc) ? inc : _db.ModFolder;
         }
 
         private string FindMapDirWithSet(string mapId)

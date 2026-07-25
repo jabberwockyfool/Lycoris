@@ -27,6 +27,33 @@ namespace Lycoris.Npc
         }
 
         /// <summary>
+        /// Compile a full XQ32 script (source text using the compile-form namespace, e.g.
+        /// seq.prog_common_001.StartTalkEvent()) into .xq bytes. Used to build standalone event scripts.
+        /// </summary>
+        public static byte[] CompileScript(string source, out string log)
+        {
+            var sb = new StringBuilder();
+            string work = Path.Combine(Path.GetTempPath(), "lycoris_xq_" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(work);
+            try
+            {
+                string txt = Path.Combine(work, "gen.xq.txt");
+                File.WriteAllText(txt, source, new UTF8Encoding(false));
+                RunOrThrow($"-o c -t xq32 -f \"{txt}\"", work, sb);
+                string outXq = File.Exists(txt + ".xq") ? txt + ".xq"
+                    : Directory.GetFiles(work, "*.xq").FirstOrDefault();
+                if (outXq == null || !File.Exists(outXq))
+                    throw new InvalidOperationException("xtractquery did not produce a compiled .xq.");
+                log = sb.ToString();
+                return File.ReadAllBytes(outXq);
+            }
+            finally
+            {
+                try { Directory.Delete(work, true); } catch { /* best effort */ }
+            }
+        }
+
+        /// <summary>
         /// Append <paramref name="onTalk"/> as a new RunCmd_Map function to the given XQ32 bytes and return
         /// the recompiled bytes. <paramref name="funcId"/> is the id of the new function (to link in the trigger).
         /// </summary>

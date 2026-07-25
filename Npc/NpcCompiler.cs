@@ -39,12 +39,14 @@ namespace Lycoris.Npc
             if (mapDir == null)
                 throw new InvalidOperationException($"Map folder not found for \"{npc.MapID}\" (npc.pck missing).");
 
-            string npcPckPath = Path.Combine(mapDir, "npc.pck");
-            string mapPckPath = Path.Combine(mapDir, npc.MapID + ".pck");
-            string npcSetPath = FindByPrefix(mapDir, npc.MapID + "_npc_set");
-            string talkPath = FindByPrefix(mapDir, npc.MapID + "_npc_base_talk_" + npc.ChapterCode);
+            // Read each file from the mod's accumulated copy (mergeMapDir) first, so repeated compiles build on
+            // top of previously-added NPCs; fall back to the base/vanilla map for anything not yet in the mod.
+            string npcPckPath = PickFile(mergeMapDir, mapDir, "npc.pck");
+            string mapPckPath = PickFile(mergeMapDir, mapDir, npc.MapID + ".pck");
+            string npcSetPath = PickByPrefix(mergeMapDir, mapDir, npc.MapID + "_npc_set");
+            string talkPath = PickByPrefix(mergeMapDir, mapDir, npc.MapID + "_npc_base_talk_" + npc.ChapterCode);
             foreach (var (p, label) in new[] { (npcPckPath, "npc.pck"), (mapPckPath, npc.MapID + ".pck") })
-                if (!File.Exists(p)) throw new InvalidOperationException($"Required file missing: {label}");
+                if (p == null || !File.Exists(p)) throw new InvalidOperationException($"Required file missing: {label}");
             if (npcSetPath == null) throw new InvalidOperationException($"Required file missing: {npc.MapID}_npc_set*");
             if (talkPath == null) throw new InvalidOperationException($"Required file missing: {npc.MapID}_npc_base_talk_{npc.ChapterCode}*");
 
@@ -173,12 +175,16 @@ namespace Lycoris.Npc
         {
             var pt = npcbin.Entries.FirstOrDefault(e => e.Name == "POINT")
                      ?? throw new InvalidOperationException("POINT entry missing from the template .npcbin.");
-            // POINT = [X, Y, Z, rotation], types preserved from the template ([Float, Int, Float, Int]).
-            double[] vals = { npc.NpcX, npc.NpcY, npc.NpcZ, npc.NpcRotation };
+            // In the game the POINT record is [X, height, Z, rotation] (field 1 is the vertical/height, a small
+            // value). NPCMake maps the TOML as X, Z, Y (the Y/Z are swapped); Lycoris labels NpcZ as the height
+            // ("hauteur"), so NpcZ -> POINT[1] (height) and NpcY -> POINT[2] (horizontal Z).
+            // Each value keeps CfgBin's convention: whole numbers as Integer, fractional as FloatingPoint.
+            double[] vals = { npc.NpcX, npc.NpcZ, npc.NpcY, npc.NpcRotation };
             for (int i = 0; i < 4 && i < pt.Values.Count; i++)
             {
-                if (pt.Values[i].Type == VT.FloatingPoint) pt.Values[i].Value = (float)vals[i];
-                else { pt.Values[i].Type = VT.Integer; pt.Values[i].Value = (int)Math.Round(vals[i]); }
+                double v = vals[i];
+                if (Math.Abs(v - Math.Round(v)) < 1e-4) { pt.Values[i].Type = VT.Integer; pt.Values[i].Value = (int)Math.Round(v); }
+                else { pt.Values[i].Type = VT.FloatingPoint; pt.Values[i].Value = (float)v; }
             }
         }
 
@@ -226,9 +232,26 @@ namespace Lycoris.Npc
         }
 
         private static string FindByPrefix(string dir, string prefix) =>
-            Directory.EnumerateFiles(dir, prefix + "*")
-                .OrderByDescending(Path.GetFileName, StringComparer.OrdinalIgnoreCase)
-                .FirstOrDefault();
+            dir != null && Directory.Exists(dir)
+                ? Directory.EnumerateFiles(dir, prefix + "*")
+                    .OrderByDescending(Path.GetFileName, StringComparer.OrdinalIgnoreCase)
+                    .FirstOrDefault()
+                : null;
+
+        /// <summary>Pick a file from the mod copy first (so compiles accumulate), else the base map.</summary>
+        private static string PickFile(string modDir, string baseDir, string name)
+        {
+            if (!string.IsNullOrEmpty(modDir))
+            {
+                string p = Path.Combine(modDir, name);
+                if (File.Exists(p)) return p;
+            }
+            string b = baseDir != null ? Path.Combine(baseDir, name) : null;
+            return b != null && File.Exists(b) ? b : null;
+        }
+
+        private static string PickByPrefix(string modDir, string baseDir, string prefix) =>
+            FindByPrefix(modDir, prefix) ?? FindByPrefix(baseDir, prefix);
 
         private static XpckFile LooseNpcbinTemplate(string mapDir)
         {
