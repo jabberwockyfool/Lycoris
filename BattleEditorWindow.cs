@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -43,15 +44,19 @@ namespace Lycoris
             Width = 760; Height = 580;
             WindowStartupLocation = WindowStartupLocation.CenterOwner;
 
-            var save = new Button { Content = "Save mod", Padding = new Thickness(10, 4, 10, 4) };
-            save.Click += (s, e) => Save();
             var toolbar = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(6) };
-            toolbar.Children.Add(save);
+            toolbar.Children.Add(Btn("Save mod", Save, 0));
             DockPanel.SetDock(toolbar, Dock.Top);
 
-            var left = new DockPanel { Width = 240, Margin = new Thickness(6) };
+            var left = new DockPanel { Width = 250, Margin = new Thickness(6) };
+            var listBtns = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 4, 0, 0) };
+            listBtns.Children.Add(Btn("+ Create", CreateBattle, 0));
+            listBtns.Children.Add(Btn("Duplicate", DuplicateBattle));
+            listBtns.Children.Add(Btn("Delete", DeleteBattle));
+            DockPanel.SetDock(listBtns, Dock.Bottom);
             _list.DisplayMemberPath = "Label";
             _list.SelectionChanged += (s, e) => ShowTable(_list.SelectedItem as EncTable);
+            left.Children.Add(listBtns);
             left.Children.Add(_list);
             DockPanel.SetDock(left, Dock.Left);
 
@@ -76,6 +81,13 @@ namespace Lycoris
             LoadConfig();
         }
 
+        private Button Btn(string text, Action onClick, double leftMargin = 6)
+        {
+            var b = new Button { Content = text, Padding = new Thickness(9, 4, 9, 4), Margin = new Thickness(leftMargin, 0, 0, 0) };
+            b.Click += (s, e) => onClick();
+            return b;
+        }
+
         private string IncBase()
         {
             if (string.IsNullOrEmpty(_db?.ModFolder)) return null;
@@ -83,16 +95,36 @@ namespace Lycoris
             return Directory.Exists(inc) ? inc : _db.ModFolder;
         }
 
+        // Where common_enc lives in the mod (relative to the include base).
+        private const string ModRelDir = "data/res/battle";
+
+        // search a base folder for common_enc across the paths it might live at.
+        private static string FindIn(string root, string name)
+        {
+            if (string.IsNullOrEmpty(root)) return null;
+            foreach (var cand in new[] {
+                Path.Combine(root, "data", "res", "battle", name),
+                Path.Combine(root, "res", "battle", name),
+                Path.Combine(root, "data", "res", "sys", name),
+                Path.Combine(root, "res", "sys", name),
+                Path.Combine(root, "data", "res", name),
+                Path.Combine(root, name),
+            })
+                if (File.Exists(cand)) return cand;
+            return null;
+        }
+
         private void LoadConfig()
         {
             const string name = "common_enc_0.01.cfg.bin";
             string incBase = IncBase();
-            string modCfg = incBase != null ? Path.Combine(incBase, "data", "res", "sys", name) : null;
-            string refCfg = FindReference(name);
-            string loadPath = (modCfg != null && File.Exists(modCfg)) ? modCfg
-                : (refCfg != null && File.Exists(refCfg)) ? refCfg : null;
+            // prefer the mod's own common_enc (include-aware), else the reference.
+            string modCfg = FindIn(incBase, name) ?? FindIn(_db?.ModFolder, name);
+            string refCfg = FindIn(_db?.ReferenceFolder, name);
+            string loadPath = modCfg ?? refCfg;
             if (loadPath == null) { _status.Text = $"Could not find {name} in the mod or reference."; return; }
-            _savePath = modCfg ?? loadPath;
+
+            _savePath = incBase != null ? Path.Combine(incBase, "data", "res", "sys", name) : loadPath;
             _xqDir = incBase != null ? Path.Combine(incBase, "seq", "battle", "encount") : null;
 
             try { _set = Encounters.LoadCfg(loadPath, _db); }
@@ -100,17 +132,9 @@ namespace Lycoris
 
             _list.ItemsSource = _set.Tables;
             if (_set.Tables.Count > 0) _list.SelectedIndex = 0;
-            _status.Text = $"{_set.Tables.Count} battles, {_set.Charas.Count} yo-kai — {Path.GetFileName(loadPath)}." +
+            _status.Text = $"{_set.Tables.Count} battles, {_set.Charas.Count} yo-kai — loaded from " +
+                           (modCfg != null ? "the mod" : "the reference") + $" ({Path.GetFileName(loadPath)})." +
                            (incBase == null ? "  Open a mod to save." : "");
-        }
-
-        private string FindReference(string name)
-        {
-            string root = _db?.ReferenceFolder;
-            if (string.IsNullOrEmpty(root)) return null;
-            foreach (var cand in new[] { Path.Combine(root, name), Path.Combine(root, "data", "res", "sys", name), Path.Combine(root, "res", "sys", name) })
-                if (File.Exists(cand)) return cand;
-            return null;
         }
 
         private FrameworkElement BuildSlot(int i)
@@ -213,6 +237,52 @@ namespace Lycoris
             Encounters.Resolve(c, _db);
             ShowTable(_table);
             _status.Text = $"Slot {i + 1} → {dlg.Picked.DisplayName}. Save to apply.";
+        }
+
+        private void CreateBattle()
+        {
+            if (_set == null) return;
+            string name = TextPrompt.Ask(this, "Create battle", "Battle name (sets the id via CRC32; also the BattleScript):", "btl_custom0");
+            if (name == null) return;
+            name = name.Trim();
+            if (name.Length == 0) { DarkMessage.Show("Enter a name.", "Create battle"); return; }
+            int id = EventSet.NameHash(name);
+            if (_set.Tables.Any(t => t.EncountId == id)) { DarkMessage.Show("A battle with that id already exists.", "Create battle"); return; }
+            var tbl = Encounters.AddTable(_set, id, name);
+            _list.Items.Refresh();
+            _list.SelectedItem = tbl;
+            _status.Text = $"Created {name} (0x{unchecked((uint)id):X8}). Add yo-kai, then Save.";
+        }
+
+        private void DuplicateBattle()
+        {
+            if (_set == null) return;
+            var src = _list.SelectedItem as EncTable;
+            if (src == null) { DarkMessage.Show("Select a battle to duplicate.", "Duplicate"); return; }
+            string name = TextPrompt.Ask(this, "Duplicate battle", "Name for the copy:", (string.IsNullOrEmpty(src.BattleScript) ? "btl_copy" : src.BattleScript) + "0");
+            if (name == null) return;
+            name = name.Trim();
+            if (name.Length == 0) return;
+            int id = EventSet.NameHash(name);
+            if (_set.Tables.Any(t => t.EncountId == id)) { DarkMessage.Show("A battle with that id already exists.", "Duplicate"); return; }
+            var tbl = Encounters.DuplicateTable(_set, src, id, name, _db);
+            _list.Items.Refresh();
+            _list.SelectedItem = tbl;
+            _status.Text = $"Duplicated to {name} (its yo-kai were copied). Save to apply.";
+        }
+
+        private void DeleteBattle()
+        {
+            if (_set == null) return;
+            var t = _list.SelectedItem as EncTable;
+            if (t == null) { DarkMessage.Show("Select a battle to delete.", "Delete"); return; }
+            if (DarkMessage.Show($"Delete battle « {t.Label} »?\n(Its .xq battle script, if any, is not touched.)",
+                "Delete battle", MessageBoxButton.OKCancel, MessageBoxImage.Warning) != MessageBoxResult.OK) return;
+            _table = null;
+            Encounters.RemoveTable(_set, t);
+            _list.Items.Refresh();
+            if (_set.Tables.Count > 0) _list.SelectedIndex = 0; else ShowTable(null);
+            _status.Text = "Battle removed. Save to apply.";
         }
 
         private void Save()

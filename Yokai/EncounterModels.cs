@@ -101,6 +101,59 @@ namespace Lycoris.Yokai
             c.IconFile = y?.IconFile;
         }
 
+        /// <summary>Add a new empty battle (ENCOUNT_TABLE) with the given id/script, all 6 slots empty.</summary>
+        public static EncTable AddTable(EncounterSet set, int encountId, string battleScript)
+        {
+            var tpl = set.EncT2b.Records("ENCOUNT_TABLE").FirstOrDefault();
+            if (tpl == null) return null;
+            var e = tpl.Clone();
+            SetVal(e, 0, encountId);
+            for (int i = 0; i < 6; i++) SetVal(e, 1 + i, -1);
+            SetStr(e, 7, battleScript ?? "");
+            InsertIntoGroup(set.EncT2b, "ENCOUNT_TABLE_BEGIN", "ENCOUNT_TABLE_END", e);
+            var t = new EncTable { Entry = e, EncountId = encountId, BattleScript = battleScript ?? "", Index = set.Tables.Count };
+            for (int i = 0; i < 6; i++) t.Offsets[i] = -1;
+            set.Tables.Add(t);
+            return t;
+        }
+
+        /// <summary>Duplicate a battle, cloning its yo-kai (ENCOUNT_CHARA) so the copy is independent.</summary>
+        public static EncTable DuplicateTable(EncounterSet set, EncTable src, int newEncountId, string battleScript, YokaiDatabase db)
+        {
+            var e = src.Entry.Clone();                    // keeps MusicID/BattleRuleID/unks
+            SetVal(e, 0, newEncountId);
+            SetStr(e, 7, battleScript ?? src.BattleScript ?? "");
+            var t = new EncTable { Entry = e, EncountId = newEncountId, BattleScript = battleScript ?? src.BattleScript ?? "", Index = set.Tables.Count };
+            for (int i = 0; i < 6; i++)
+            {
+                int off = src.Offsets[i];
+                if (off >= 0 && off < set.Charas.Count)
+                {
+                    var sc = set.Charas[off];
+                    AddChara(set, sc.ParamId, sc.Level ?? 1, db);
+                    t.Offsets[i] = set.Charas.Count - 1;
+                }
+                else t.Offsets[i] = -1;
+                SetVal(e, 1 + i, t.Offsets[i]);
+            }
+            InsertIntoGroup(set.EncT2b, "ENCOUNT_TABLE_BEGIN", "ENCOUNT_TABLE_END", e);
+            set.Tables.Add(t);
+            return t;
+        }
+
+        /// <summary>Remove a battle (ENCOUNT_TABLE). Its yo-kai stay in the shared pool (harmless if unused).</summary>
+        public static void RemoveTable(EncounterSet set, EncTable t)
+        {
+            if (t?.Entry == null) return;
+            if (set.EncT2b.Entries.Remove(t.Entry))
+            {
+                var b = set.EncT2b.Entries.FirstOrDefault(x => x.Name == "ENCOUNT_TABLE_BEGIN");
+                if (b != null && b.Values.Count > 0 && b.Values[0].Value is int c) b.Values[0].Value = c - 1;
+            }
+            set.Tables.Remove(t);
+            for (int i = 0; i < set.Tables.Count; i++) set.Tables[i].Index = i;
+        }
+
         /// <summary>Append a new ENCOUNT_CHARA and return it; its offset is the new last index in Charas.</summary>
         public static EncChara AddChara(EncounterSet set, int paramId, int level, YokaiDatabase db)
         {
