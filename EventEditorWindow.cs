@@ -336,7 +336,7 @@ namespace Lycoris
         private readonly TextBox _name = new TextBox { Width = 200 };
         private readonly TextBlock _hashLabel = new TextBlock { Foreground = Theme.FgMuted, VerticalAlignment = VerticalAlignment.Center };
         private readonly TextBox _bustups = NewMulti(96);
-        private readonly TextBox _battle = new TextBox { Width = 300, Text = "enc_day_" };
+        private readonly ComboBox _battle = new ComboBox { Width = 300, IsEditable = true };
         private readonly TextBox _flag = new TextBox { Width = 130 };
         private readonly CheckBox _genDlg = new CheckBox { Content = "Also generate dialogue (text + name box)", IsChecked = true, Margin = new Thickness(0, 10, 0, 4) };
         private readonly TextBox _speaker = new TextBox { Width = 160, Text = "c001000" };
@@ -375,8 +375,10 @@ namespace Lycoris
             p.Children.Add(busRow);
             p.Children.Add(Hint("Character/yo-kai models shown during the event (add the enemy's model, e.g. y159900_01)."));
 
+            _battle.ItemsSource = CommonEnc.BattleScriptNames(_db);
+            _battle.Text = "enc_day_";
             p.Children.Add(Row("Battle encounter id", _battle));
-            p.Children.Add(Hint("load_battle_ev target, e.g. enc_day_y159900_01."));
+            p.Children.Add(Hint("Pick a battle from the Battle editor (common_enc), or type a custom load_battle_ev id (e.g. enc_day_y159900_01)."));
             p.Children.Add(Row("Daily flag (auto)", _flag));
 
             p.Children.Add(_genDlg);

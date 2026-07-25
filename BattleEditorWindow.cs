@@ -88,44 +88,12 @@ namespace Lycoris
             return b;
         }
 
-        private string IncBase()
-        {
-            if (string.IsNullOrEmpty(_db?.ModFolder)) return null;
-            string inc = Path.Combine(_db.ModFolder, "include");
-            return Directory.Exists(inc) ? inc : _db.ModFolder;
-        }
-
-        // Where common_enc lives in the mod (relative to the include base).
-        private const string ModRelDir = "data/res/battle";
-
-        // search a base folder for common_enc across the paths it might live at.
-        private static string FindIn(string root, string name)
-        {
-            if (string.IsNullOrEmpty(root)) return null;
-            foreach (var cand in new[] {
-                Path.Combine(root, "data", "res", "battle", name),
-                Path.Combine(root, "res", "battle", name),
-                Path.Combine(root, "data", "res", "sys", name),
-                Path.Combine(root, "res", "sys", name),
-                Path.Combine(root, "data", "res", name),
-                Path.Combine(root, name),
-            })
-                if (File.Exists(cand)) return cand;
-            return null;
-        }
-
         private void LoadConfig()
         {
-            const string name = "common_enc_0.01.cfg.bin";
-            string incBase = IncBase();
-            // prefer the mod's own common_enc (include-aware), else the reference.
-            string modCfg = FindIn(incBase, name) ?? FindIn(_db?.ModFolder, name);
-            string refCfg = FindIn(_db?.ReferenceFolder, name);
-            string loadPath = modCfg ?? refCfg;
-            if (loadPath == null) { _status.Text = $"Could not find {name} in the mod or reference."; return; }
-
-            _savePath = incBase != null ? Path.Combine(incBase, "data", "res", "battle", name) : loadPath;
-            _xqDir = incBase != null ? Path.Combine(incBase, "seq", "battle", "encount") : null;
+            string loadPath = CommonEnc.FindLoadPath(_db, out bool fromMod);
+            if (loadPath == null) { _status.Text = $"Could not find {CommonEnc.FileName} in the mod or reference."; return; }
+            _savePath = CommonEnc.ModSavePath(_db) ?? loadPath;
+            _xqDir = CommonEnc.BattleXqDir(_db);
 
             try { _set = Encounters.LoadCfg(loadPath, _db); }
             catch (Exception ex) { _status.Text = "Could not read common_enc: " + ex.Message; return; }
@@ -133,8 +101,8 @@ namespace Lycoris
             _list.ItemsSource = _set.Tables;
             if (_set.Tables.Count > 0) _list.SelectedIndex = 0;
             _status.Text = $"{_set.Tables.Count} battles, {_set.Charas.Count} yo-kai — loaded from " +
-                           (modCfg != null ? "the mod" : "the reference") + $" ({Path.GetFileName(loadPath)})." +
-                           (incBase == null ? "  Open a mod to save." : "");
+                           (fromMod ? "the mod" : "the reference") + $" ({Path.GetFileName(loadPath)})." +
+                           (CommonEnc.ModSavePath(_db) == null ? "  Open a mod to save." : "");
         }
 
         private FrameworkElement BuildSlot(int i)

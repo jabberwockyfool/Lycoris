@@ -47,6 +47,72 @@ namespace Lycoris.Yokai
         public List<EncChara> Charas = new List<EncChara>();
     }
 
+    /// <summary>Locating common_enc in the mod / reference, and listing its battles (shared by the Battle editor
+    /// and the Daily Fight maker). In the mod it lives at include/data/res/battle.</summary>
+    public static class CommonEnc
+    {
+        public const string FileName = "common_enc_0.01.cfg.bin";
+
+        public static string IncBase(YokaiDatabase db)
+        {
+            if (db == null || string.IsNullOrEmpty(db.ModFolder)) return null;
+            string inc = Path.Combine(db.ModFolder, "include");
+            return Directory.Exists(inc) ? inc : db.ModFolder;
+        }
+
+        private static string FindIn(string root)
+        {
+            if (string.IsNullOrEmpty(root)) return null;
+            foreach (var cand in new[] {
+                Path.Combine(root, "data", "res", "battle", FileName),
+                Path.Combine(root, "res", "battle", FileName),
+                Path.Combine(root, "data", "res", "sys", FileName),
+                Path.Combine(root, "res", "sys", FileName),
+                Path.Combine(root, "data", "res", FileName),
+                Path.Combine(root, FileName),
+            })
+                if (File.Exists(cand)) return cand;
+            return null;
+        }
+
+        /// <summary>Save path in the mod (include/data/res/battle), or null if no mod is loaded.</summary>
+        public static string ModSavePath(YokaiDatabase db)
+        {
+            string inc = IncBase(db);
+            return inc == null ? null : Path.Combine(inc, "data", "res", "battle", FileName);
+        }
+
+        /// <summary>Where a battle's .xq script goes: include/seq/battle/encount.</summary>
+        public static string BattleXqDir(YokaiDatabase db)
+        {
+            string inc = IncBase(db);
+            return inc == null ? null : Path.Combine(inc, "seq", "battle", "encount");
+        }
+
+        /// <summary>Locate common_enc, the mod's copy first (include-aware), else the reference.</summary>
+        public static string FindLoadPath(YokaiDatabase db, out bool fromMod)
+        {
+            string mod = FindIn(IncBase(db)) ?? FindIn(db?.ModFolder);
+            fromMod = mod != null;
+            return mod ?? FindIn(db?.ReferenceFolder);
+        }
+
+        /// <summary>All battles' BattleScript names (for pickers) — deduped, sorted. Empty if none/unavailable.</summary>
+        public static List<string> BattleScriptNames(YokaiDatabase db)
+        {
+            try
+            {
+                string p = FindLoadPath(db, out _);
+                if (p == null) return new List<string>();
+                var set = Encounters.LoadCfg(p, db);
+                return set.Tables.Select(t => t.BattleScript)
+                    .Where(s => !string.IsNullOrEmpty(s))
+                    .Distinct().OrderBy(s => s, System.StringComparer.OrdinalIgnoreCase).ToList();
+            }
+            catch { return new List<string>(); }
+        }
+    }
+
     /// <summary>Read/edit the ENCOUNT_TABLE + ENCOUNT_CHARA data — from a map's .pck (wild encounters) or a
     /// raw .cfg.bin (common_enc, the shared event/story battle config).</summary>
     public static class Encounters
