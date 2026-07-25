@@ -124,7 +124,7 @@ namespace Lycoris
             string loadPath = modCfg ?? refCfg;
             if (loadPath == null) { _status.Text = $"Could not find {name} in the mod or reference."; return; }
 
-            _savePath = incBase != null ? Path.Combine(incBase, "data", "res", "sys", name) : loadPath;
+            _savePath = incBase != null ? Path.Combine(incBase, "data", "res", "battle", name) : loadPath;
             _xqDir = incBase != null ? Path.Combine(incBase, "seq", "battle", "encount") : null;
 
             try { _set = Encounters.LoadCfg(loadPath, _db); }
