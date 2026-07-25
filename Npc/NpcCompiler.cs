@@ -80,9 +80,10 @@ namespace Lycoris.Npc
             AddToGroup(talk, "BASE_TALK_INFO_BEGIN", "BASE_TALK_INFO_END", talkE);
 
             // --- .npcbin from a vanilla template + inject into npc.pck ---
+            // Clone a proper placed NPC (npc_*), NOT an ambient object (ani_*/car_*/mob_*/…) — those have a
+            // different ACT_TYPE/BASE_STATE/SET_FLAG structure and make the NPC spawn/behave wrongly.
             var npcPck = Xpck.Read(File.ReadAllBytes(npcPckPath));
-            var template = npcPck.FirstOrDefault(f => f.Name.EndsWith(".npcbin", StringComparison.OrdinalIgnoreCase))
-                           ?? LooseNpcbinTemplate(mapDir);
+            var template = PickNpcbinTemplate(npcPck) ?? LooseNpcbinTemplate(mapDir);
             if (template == null) throw new InvalidOperationException("No template .npcbin found (npc.pck empty).");
             var npcbin = T2bReader.Read(template.Data);
             SetPoint(npcbin, npc);
@@ -253,9 +254,30 @@ namespace Lycoris.Npc
         private static string PickByPrefix(string modDir, string baseDir, string prefix) =>
             FindByPrefix(modDir, prefix) ?? FindByPrefix(baseDir, prefix);
 
+        /// <summary>Choose a proper placed-NPC template (npc_* with an ACT_TYPE group), not an ambient object.</summary>
+        private static XpckFile PickNpcbinTemplate(List<XpckFile> pck)
+        {
+            var bins = pck.Where(f => f.Name.EndsWith(".npcbin", StringComparison.OrdinalIgnoreCase)).ToList();
+            if (bins.Count == 0) return null;
+            // 1) npc_* that is a real talkable NPC (has ACT_TYPE).
+            foreach (var b in bins.Where(f => f.Name.StartsWith("npc_", StringComparison.OrdinalIgnoreCase)))
+                if (HasActType(b)) return b;
+            // 2) any npcbin with ACT_TYPE.
+            foreach (var b in bins)
+                if (HasActType(b)) return b;
+            // 3) else any npc_*, else the first.
+            return bins.FirstOrDefault(f => f.Name.StartsWith("npc_", StringComparison.OrdinalIgnoreCase)) ?? bins[0];
+        }
+
+        private static bool HasActType(XpckFile b)
+        {
+            try { return T2bReader.Read(b.Data).Records("ACT_TYPE").Any(); } catch { return false; }
+        }
+
         private static XpckFile LooseNpcbinTemplate(string mapDir)
         {
-            var path = Directory.EnumerateFiles(mapDir, "*.npcbin").FirstOrDefault();
+            var path = Directory.EnumerateFiles(mapDir, "npc_*.npcbin").FirstOrDefault()
+                       ?? Directory.EnumerateFiles(mapDir, "*.npcbin").FirstOrDefault();
             return path == null ? null : new XpckFile(Path.GetFileName(path), File.ReadAllBytes(path));
         }
 

@@ -166,16 +166,35 @@ namespace Lycoris.Yokai
 
         private void AddIconDirs(string root)
         {
+            AddIconKind(root, "face_icon", _faceIconDirs);
+            AddIconKind(root, "medal_icon", _medalIconDirs);
+            AddIconKind(root, "item_icon", _itemIconDirs);
+        }
+
+        // Adds each <name> folder AND its language subfolders — the mod keeps face_icon.xi (and the icons)
+        // under a language subfolder like face_icon/en, so we must search there too. Subfolders that actually
+        // contain .xi files (and "en") are added first so they win as the atlas / write target.
+        private static void AddIconKind(string root, string name, List<string> list)
+        {
             try
             {
-                foreach (var d in Directory.EnumerateDirectories(root, "face_icon", SearchOption.AllDirectories))
-                    if (!_faceIconDirs.Contains(d)) _faceIconDirs.Add(d);
-                foreach (var d in Directory.EnumerateDirectories(root, "medal_icon", SearchOption.AllDirectories))
-                    if (!_medalIconDirs.Contains(d)) _medalIconDirs.Add(d);
-                foreach (var d in Directory.EnumerateDirectories(root, "item_icon", SearchOption.AllDirectories))
-                    if (!_itemIconDirs.Contains(d)) _itemIconDirs.Add(d);
+                foreach (var d in Directory.EnumerateDirectories(root, name, SearchOption.AllDirectories))
+                {
+                    List<string> subs;
+                    try { subs = Directory.EnumerateDirectories(d).ToList(); } catch { subs = new List<string>(); }
+                    subs = subs.OrderByDescending(HasXi)
+                               .ThenByDescending(x => Path.GetFileName(x).Equals("en", StringComparison.OrdinalIgnoreCase))
+                               .ToList();
+                    foreach (var sub in subs) if (!list.Contains(sub)) list.Add(sub);
+                    if (!list.Contains(d)) list.Add(d);
+                }
             }
             catch { /* ignore */ }
+        }
+
+        private static bool HasXi(string dir)
+        {
+            try { return Directory.EnumerateFiles(dir, "*.xi").Any(); } catch { return false; }
         }
 
         /// <summary>Compute the icon base name and locate its .xi across the face_icon / medal_icon folders.</summary>
@@ -244,7 +263,39 @@ namespace Lycoris.Yokai
         }
 
         /// <summary>The first face_icon folder inside the mod (write target for replaced icons), or null.</summary>
-        public string ModFaceIconDir => _faceIconDirs.Count > 0 ? _faceIconDirs[0] : null;
+        public string ModFaceIconDir => _faceIconDirs.FirstOrDefault(IsUnderMod);
+
+        public struct BaseIdReplaceResult { public int Param, Base, Scale; public int Total => Param + Base + Scale; }
+
+        /// <summary>
+        /// Replace a charabase ID everywhere it appears — charaparam refs (CHARA_PARAM_INFO), the charabase
+        /// record (CHARA_BASE_YOKAI_INFO) and charascale keys (CHARA_SCALE_INFO) — with <paramref name="newId"/>,
+        /// and persist the affected files into the mod. Returns how many records changed per file.
+        /// </summary>
+        public BaseIdReplaceResult ReplaceBaseHash(int oldId, int newId)
+        {
+            var r = new BaseIdReplaceResult();
+            if (oldId == newId) return r;
+
+            if (ParamData != null)
+                foreach (var e in ParamData.Records(Schema.ParamRecord))
+                    if ((e.GetInt(Schema.Param_BaseHashIndex) ?? 0) == oldId) { SetIntForce(e, Schema.Param_BaseHashIndex, newId); r.Param++; }
+            if (BaseData != null)
+                foreach (var e in BaseData.Records(Schema.BaseYokaiRecord))
+                    if ((e.GetInt(Schema.Base_BaseHashIndex) ?? 0) == oldId) { SetIntForce(e, Schema.Base_BaseHashIndex, newId); r.Base++; }
+            if (ScaleData != null)
+                foreach (var e in ScaleData.Records(Schema.ScaleRecord))
+                    if ((e.GetInt(Schema.Scale_BaseHashIndex) ?? 0) == oldId) { SetIntForce(e, Schema.Scale_BaseHashIndex, newId); r.Scale++; }
+
+            foreach (var y in Yokai) if (y.BaseHash == oldId) y.BaseHash = newId;
+
+            if (r.Param > 0) { ParamFile = MirrorIfNeeded(ParamFile); T2bWriter.WriteFile(ParamData, ParamFile); }
+            if (r.Base > 0 && BaseData != null) { BaseFile = MirrorIfNeeded(BaseFile); T2bWriter.WriteFile(BaseData, BaseFile); }
+            if (r.Scale > 0 && ScaleData != null) { ScaleFile = MirrorIfNeeded(ScaleFile); T2bWriter.WriteFile(ScaleData, ScaleFile); }
+            return r;
+        }
+
+        private string MirrorIfNeeded(string path) => IsUnderMod(path) ? path : (MirrorToMod(path) ?? path);
 
         /// <summary>True if a resolved file lives inside the opened mod folder (so it may be written).</summary>
         private bool IsUnderMod(string path) =>

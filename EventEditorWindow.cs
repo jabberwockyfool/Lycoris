@@ -38,6 +38,11 @@ namespace Lycoris
         private EventEntry _sel;
         private bool _suppress;
 
+        private readonly TextBox _scriptBox = new TextBox { AcceptsReturn = true, AcceptsTab = true, FontFamily = new FontFamily("Consolas"), FontSize = 12, TextWrapping = TextWrapping.NoWrap, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Auto };
+        private readonly TextBlock _scriptHeader = new TextBlock { Foreground = Theme.FgMuted, Margin = new Thickness(0, 0, 0, 6), TextWrapping = TextWrapping.Wrap };
+        private readonly TextBlock _scriptStatus = new TextBlock { Foreground = Theme.FgMuted, Margin = new Thickness(0, 4, 0, 0), TextWrapping = TextWrapping.Wrap };
+        private string _scriptLoadedName;
+
         // Mod romfs base = <mod>/include (or the mod folder itself if it is already the include folder).
         // Under it: seq/ (event scripts) and data/ (res, txt) are siblings.
         internal string IncludeBase
@@ -93,7 +98,10 @@ namespace Lycoris
             root.Children.Add(toolbar);
             root.Children.Add(_status);
             root.Children.Add(left);
-            root.Children.Add(new ScrollViewer { Content = _fields, VerticalScrollBarVisibility = ScrollBarVisibility.Auto });
+            var tabs = new TabControl { Margin = new Thickness(4) };
+            tabs.Items.Add(new TabItem { Header = "Config", Content = new ScrollViewer { Content = _fields, VerticalScrollBarVisibility = ScrollBarVisibility.Auto } });
+            tabs.Items.Add(new TabItem { Header = "Script (XQ)", Content = BuildScriptTab() });
+            root.Children.Add(tabs);
             Content = root;
 
             Closing += (s, e) => { CommitFields(); };
@@ -206,6 +214,81 @@ namespace Lycoris
                 _fields.IsEnabled = true;
             }
             _suppress = false;
+
+            // reset the script tab for the newly selected event.
+            _scriptBox.Clear();
+            _scriptLoadedName = null;
+            _scriptHeader.Text = ev == null ? "Select an event."
+                : ev.Name == null ? $"« {ev.Label} » has no known name — its .xq can't be located."
+                : $"Event « {ev.Name} » — click « Load script » to decompile {ev.Name}.xq, edit, then « Compile & save ».";
+        }
+
+        // ---------------------------------------------------------------- script (XQ) tab
+
+        private FrameworkElement BuildScriptTab()
+        {
+            var panel = new DockPanel { Margin = new Thickness(8) };
+            var bar = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 6) };
+            bar.Children.Add(ToolButton("Load script", LoadScript, 0));
+            bar.Children.Add(ToolButton("Compile & save script", SaveScript));
+            DockPanel.SetDock(bar, Dock.Top);
+            DockPanel.SetDock(_scriptHeader, Dock.Top);
+            DockPanel.SetDock(_scriptStatus, Dock.Bottom);
+            _scriptHeader.Text = "Select an event, then « Load script ».";
+            panel.Children.Add(bar);
+            panel.Children.Add(_scriptHeader);
+            panel.Children.Add(_scriptStatus);
+            panel.Children.Add(_scriptBox);   // fills the rest
+            return panel;
+        }
+
+        private string FindEventXq(string name)
+        {
+            foreach (var dir in new[] {
+                IncludeBase != null ? Path.Combine(IncludeBase, "seq", "event") : null,
+                _db?.ReferenceFolder != null ? Path.Combine(_db.ReferenceFolder, "seq", "event") : null })
+            {
+                if (string.IsNullOrEmpty(dir)) continue;
+                string p = Path.Combine(dir, name + ".xq");
+                if (File.Exists(p)) return p;
+            }
+            return null;
+        }
+
+        private void LoadScript()
+        {
+            var ev = _list.SelectedItem as EventEntry;
+            if (ev == null) { DarkMessage.Show("Select an event first.", "Load script"); return; }
+            if (ev.Name == null) { DarkMessage.Show("This event has no known name (only a hash), so its .xq can't be located.", "Load script"); return; }
+            string path = FindEventXq(ev.Name);
+            if (path == null) { DarkMessage.Show($"No {ev.Name}.xq found in the mod or reference (seq/event).", "Load script"); return; }
+            if (!NpcXq.IsAvailable()) { DarkMessage.Show("xtractquery was not found on PATH — required to decompile the script.", "xtractquery missing", MessageBoxButton.OK, MessageBoxImage.Warning); return; }
+            try
+            {
+                string src = NpcXq.Decompile(File.ReadAllBytes(path), out _);
+                _scriptBox.Text = EventSet.ToCompilable(src);
+                _scriptLoadedName = ev.Name;
+                bool fromMod = IncludeBase != null && path.StartsWith(IncludeBase, StringComparison.OrdinalIgnoreCase);
+                _scriptStatus.Text = $"Loaded {ev.Name}.xq from {(fromMod ? "the mod" : "the reference")}. Edit, then « Compile & save ».";
+            }
+            catch (Exception ex) { DarkMessage.Show(ex.Message, "Load script", MessageBoxButton.OK, MessageBoxImage.Error); }
+        }
+
+        private void SaveScript()
+        {
+            if (string.IsNullOrEmpty(_scriptLoadedName)) { DarkMessage.Show("Load a script first (select an event → Load script).", "Save script"); return; }
+            if (IncludeBase == null) { DarkMessage.Show("Open a mod folder first — the script is written into the mod.", "Save script"); return; }
+            if (!NpcXq.IsAvailable()) { DarkMessage.Show("xtractquery was not found on PATH — required to compile the script.", "xtractquery missing", MessageBoxButton.OK, MessageBoxImage.Warning); return; }
+            try
+            {
+                byte[] xq = NpcXq.CompileScript(_scriptBox.Text, out _);
+                string outPath = Path.Combine(IncludeBase, "seq", "event", _scriptLoadedName + ".xq");
+                Directory.CreateDirectory(Path.GetDirectoryName(outPath));
+                File.WriteAllBytes(outPath, xq);
+                _scriptStatus.Text = $"Compiled & saved {_scriptLoadedName}.xq ({xq.Length} bytes).";
+                DarkMessage.Show($"Script compiled and saved to the mod:\n{outPath}", "Saved", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            catch (Exception ex) { DarkMessage.Show(ex.Message, "Compile failed", MessageBoxButton.OK, MessageBoxImage.Error); }
         }
 
         private void CommitFields()
@@ -370,15 +453,16 @@ namespace Lycoris
 
             var busRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 6, 0, 2) };
             busRow.Children.Add(TopLabel("Bustups (one/line)"));
-            _bustups.Text = "c001000\r\nc003000\r\ny001000\r\ny597000\r\n";
+            _bustups.Text = "";
             busRow.Children.Add(_bustups);
             p.Children.Add(busRow);
-            p.Children.Add(Hint("Character/yo-kai models shown during the event (add the enemy's model, e.g. y159900_01)."));
+            p.Children.Add(Hint("One model per line — exactly the characters/yo-kai shown during the event (include the enemy's model). Nothing is added for you. Common: c001000 (hero), c003000 (friend), y001000, y597000."));
 
-            _battle.ItemsSource = CommonEnc.BattleScriptNames(_db);
+            _battle.ItemsSource = CommonEnc.AllBattles(_db);
+            _battle.DisplayMemberPath = "Label";
             _battle.Text = "enc_day_";
             p.Children.Add(Row("Battle encounter id", _battle));
-            p.Children.Add(Hint("Pick a battle from the Battle editor (common_enc), or type a custom load_battle_ev id (e.g. enc_day_y159900_01)."));
+            p.Children.Add(Hint("Pick any battle from the Battle editor (common_enc) — referenced by its EncountID — or type a custom load_battle_ev id (e.g. enc_day_y159900_01)."));
             p.Children.Add(Row("Daily flag (auto)", _flag));
 
             p.Children.Add(_genDlg);
@@ -418,6 +502,27 @@ namespace Lycoris
             if (string.IsNullOrWhiteSpace(_flag.Text) || (_flag.Tag as string) == _flag.Text) { _flag.Text = $"0x{h:X8}"; _flag.Tag = _flag.Text; }
         }
 
+        /// <summary>The load_battle_ev(...) argument: a hash literal (0x..h) for a picked/known battle, else a
+        /// quoted string for a free-text custom id. Null if nothing entered.</summary>
+        private string BattleExpr()
+        {
+            if (_battle.SelectedItem is EncTable t) return t.HashHex + "h";
+            string txt = (_battle.Text ?? "").Trim();
+            if (txt.Length == 0) return null;
+            // a label like "btl_x632_00  (0x59653864)" left in the box → take the hash.
+            int lp = txt.LastIndexOf("(0x", StringComparison.OrdinalIgnoreCase);
+            if (lp >= 0) { int rp = txt.IndexOf(')', lp); if (rp > lp && TryHex(txt.Substring(lp + 1, rp - lp - 1), out uint idb)) return $"0x{idb:X8}h"; }
+            if (TryHex(txt, out uint id)) return $"0x{id:X8}h";
+            return "\"" + txt + "\"";
+        }
+
+        private static bool TryHex(string s, out uint v)
+        {
+            v = 0; s = (s ?? "").Trim().TrimEnd('h', 'H');
+            if (s.StartsWith("0x") || s.StartsWith("0X")) s = s.Substring(2);
+            return uint.TryParse(s, System.Globalization.NumberStyles.HexNumber, System.Globalization.CultureInfo.InvariantCulture, out v);
+        }
+
         private void Generate()
         {
             var es = _host.Events;
@@ -431,13 +536,13 @@ namespace Lycoris
 
             uint flag = EventGen.ParseHex(_flag.Text, unchecked((uint)hash));
             var bustups = _bustups.Text.Replace("\r", "").Split('\n').Select(x => x.Trim()).Where(x => x.Length > 0).ToList();
-            string battle = _battle.Text?.Trim() ?? "";
+            string battleExpr = BattleExpr();
             if (bustups.Count == 0) { DarkMessage.Show("Add at least one bustup model.", "Generate"); return; }
-            if (battle.Length == 0) { DarkMessage.Show("Enter the battle encounter id.", "Generate"); return; }
+            if (battleExpr == null) { DarkMessage.Show("Choose a battle or enter a battle id.", "Generate"); return; }
 
             try
             {
-                string source = EventSet.BuildDailyFightSource(name, bustups, battle, flag);
+                string source = EventSet.BuildDailyFightSource(name, bustups, battleExpr, flag);
                 byte[] xq = NpcXq.CompileScript(source, out _);
                 string xqPath = Path.Combine(incBase, "seq", "event", name + ".xq");
                 Directory.CreateDirectory(Path.GetDirectoryName(xqPath));

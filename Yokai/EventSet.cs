@@ -150,7 +150,7 @@ namespace Lycoris.Yokai
         /// bustups, intro/accept/decline dialogue (evName_010/_020/_030), an autosave prompt, a per-fight
         /// flag, and load_battle_ev(battleId). Compile with NpcXq.CompileScript.
         /// </summary>
-        public static string BuildDailyFightSource(string eventName, IEnumerable<string> bustups, string battleId, uint flag)
+        public static string BuildDailyFightSource(string eventName, IEnumerable<string> bustups, string battleExpr, uint flag)
         {
             var sb = new StringBuilder();
             void C(string line) => sb.Append('\t').Append(line).Append('\n');
@@ -170,7 +170,7 @@ namespace Lycoris.Yokai
             C($"$local1 = sub14025(0x{flag:X8}h, 1);");
             C("$local1 = seq.prog_menu_00501.SaveWindowOnly(1, 1);");
             C("$local1 = seq.prog_common_001.RunEvEncountEffectType(1);");
-            C($"$local1 = load_battle_ev(\"{battleId}\");");
+            C($"$local1 = load_battle_ev({battleExpr});");
             sb.Append("\"@000@\":\n");
             C("$local1 = $object0 == 1;");
             C("if not $local1 goto \"@001@\"h;");
@@ -207,6 +207,22 @@ namespace Lycoris.Yokai
 
         /// <summary>The XQ an NPC's OnTalk uses to trigger an event.</summary>
         public static string NpcRunSnippet(string eventName) => $"$local1 = RunEvent(\"{eventName}\");";
+
+        /// <summary>
+        /// Convert xtractquery's DECOMPILED namespaces (YW3.prog_common_0.07.10.…, which won't recompile
+        /// because of the dotted version) into the COMPILE form (seq.prog_common_001.…) so the source can be
+        /// edited and recompiled. Verified to round-trip real events byte-for-byte.
+        /// </summary>
+        public static string ToCompilable(string decompiled)
+        {
+            if (string.IsNullOrEmpty(decompiled)) return decompiled ?? "";
+            string s = decompiled
+                .Replace("YW3.prog_common_0.07.10", "seq.prog_common_001")
+                .Replace("YW3.prog_menu_00501", "seq.prog_menu_00501");
+            // best-effort for any other decompiled namespace (e.g. map scripts): swap the YW3. prefix.
+            s = System.Text.RegularExpressions.Regex.Replace(s, @"\bYW3\.", "seq.");
+            return s;
+        }
 
         /// <summary>
         /// A blank battle-event script (the .xq named in a battle's BattleScript field). Defines the standard

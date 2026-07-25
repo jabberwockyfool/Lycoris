@@ -94,6 +94,25 @@ namespace Lycoris.Npc
             }
         }
 
+        /// <summary>Decompile an XQ32 script to its full source text (xtractquery -o e).</summary>
+        public static string Decompile(byte[] xq, out string log)
+        {
+            var sb = new StringBuilder();
+            string work = Path.Combine(Path.GetTempPath(), "lycoris_xq_" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(work);
+            try
+            {
+                string inXq = Path.Combine(work, "in.xq");
+                File.WriteAllBytes(inXq, xq);
+                RunOrThrow($"-o e -f \"{inXq}\"", work, sb);
+                string txt = File.Exists(inXq + ".txt") ? inXq + ".txt" : Directory.GetFiles(work, "*.txt").FirstOrDefault();
+                if (txt == null) throw new InvalidOperationException("xtractquery did not produce a decompiled file (.txt).");
+                log = sb.ToString();
+                return File.ReadAllText(txt);
+            }
+            finally { try { Directory.Delete(work, true); } catch { } }
+        }
+
         /// <summary>Decompile the XQ and return the body of RunCmd_Map{funcId} (the NPC's OnTalk), or "" if absent.</summary>
         public static string ExtractFunction(byte[] xq, int funcId)
         {

@@ -349,6 +349,29 @@ namespace Lycoris
             catch (Exception ex) { DarkMessage.Show(ex.Message, "Atlas", MessageBoxButton.OK, MessageBoxImage.Error); }
         }
 
+        private void ChangeBaseId_Click(object sender, RoutedEventArgs e)
+        {
+            var y = Selector.SelectedItem as YokaiInfo;
+            if (y == null) return;
+            if (_db.ModFolder == null) { DarkMessage.Show("Open a mod folder first — the change is written into the mod.", "Change base ID"); return; }
+
+            var dlg = new ChangeBaseIdDialog(this, y.BaseHash) { Owner = this };
+            if (dlg.ShowDialog() != true) return;
+
+            var r = _db.ReplaceBaseHash(dlg.OldId, dlg.NewId);
+            if (r.Total == 0)
+            {
+                DarkMessage.Show($"No records reference 0x{unchecked((uint)dlg.OldId):X8}.", "Change base ID");
+                return;
+            }
+            Selector.Items.Refresh();
+            StatusText.Text = $"Base ID 0x{unchecked((uint)dlg.OldId):X8} → 0x{unchecked((uint)dlg.NewId):X8}  ({r.Param} param, {r.Base} base, {r.Scale} scale).";
+            DarkMessage.Show(
+                $"Replaced base ID 0x{unchecked((uint)dlg.OldId):X8} with 0x{unchecked((uint)dlg.NewId):X8}.\n\n" +
+                $"charaparam: {r.Param}\ncharabase: {r.Base}\ncharascale: {r.Scale}\n\nSaved to the mod.",
+                "Change base ID", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+
         private void ReplaceMedalIcon_Click(object sender, RoutedEventArgs e)
         {
             var y = Selector.SelectedItem as YokaiInfo;

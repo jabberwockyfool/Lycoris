@@ -27,6 +27,8 @@ namespace Lycoris
         private readonly TextBlock _status = new TextBlock { Foreground = Theme.FgMuted, Margin = new Thickness(4) };
         private readonly TextBox _script = new TextBox { Width = 240 };
         private readonly CheckBox _makeScript = new CheckBox { Content = "Make a battle script (generate its .xq on save)", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 0, 0) };
+        private readonly TextBox _rule = new TextBox { Width = 130, FontFamily = new FontFamily("Consolas") };
+        private readonly TextBox _music = new TextBox { Width = 130, FontFamily = new FontFamily("Consolas") };
 
         private readonly CheckBox[] _tog = new CheckBox[6];
         private readonly Image[] _icon = new Image[6];
@@ -67,6 +69,16 @@ namespace Lycoris
             scriptRow.Children.Add(_script);
             scriptRow.Children.Add(_makeScript);
             right.Children.Add(scriptRow);
+
+            var idRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 10) };
+            idRow.Children.Add(new TextBlock { Text = "BattleRuleID ", VerticalAlignment = VerticalAlignment.Center, Foreground = Theme.FgMuted });
+            _rule.LostFocus += (s, e) => RuleChanged();
+            idRow.Children.Add(_rule);
+            idRow.Children.Add(new TextBlock { Text = "   MusicID ", VerticalAlignment = VerticalAlignment.Center, Foreground = Theme.FgMuted });
+            _music.LostFocus += (s, e) => MusicChanged();
+            idRow.Children.Add(_music);
+            right.Children.Add(idRow);
+
             right.Children.Add(new TextBlock { Text = "Yo-kai for this battle (6 slots):", Foreground = Theme.FgMuted, Margin = new Thickness(0, 0, 0, 6) });
             for (int i = 0; i < 6; i++) right.Children.Add(BuildSlot(i));
 
@@ -142,6 +154,10 @@ namespace Lycoris
             _suppress = true;
             _script.Text = t?.BattleScript ?? "";
             _script.IsEnabled = t != null;
+            _rule.Text = t != null ? $"0x{unchecked((uint)t.BattleRuleId):X8}" : "";
+            _rule.IsEnabled = t != null;
+            _music.Text = t != null ? $"0x{unchecked((uint)t.MusicId):X8}" : "";
+            _music.IsEnabled = t != null;
             for (int i = 0; i < 6; i++)
             {
                 int off = t?.Offsets[i] ?? -1;
@@ -166,6 +182,27 @@ namespace Lycoris
             if (_suppress || _table == null) return;
             _table.BattleScript = _script.Text?.Trim() ?? "";
             _list.Items.Refresh();
+        }
+
+        private void RuleChanged()
+        {
+            if (_suppress || _table == null) return;
+            if (TryHex(_rule.Text, out uint v)) { _table.BattleRuleId = unchecked((int)v); _status.Text = "Modified — remember to \"Save mod\"."; }
+            else _rule.Text = $"0x{unchecked((uint)_table.BattleRuleId):X8}";
+        }
+
+        private void MusicChanged()
+        {
+            if (_suppress || _table == null) return;
+            if (TryHex(_music.Text, out uint v)) { _table.MusicId = unchecked((int)v); _status.Text = "Modified — remember to \"Save mod\"."; }
+            else _music.Text = $"0x{unchecked((uint)_table.MusicId):X8}";
+        }
+
+        private static bool TryHex(string s, out uint v)
+        {
+            v = 0; s = (s ?? "").Trim();
+            if (s.StartsWith("0x") || s.StartsWith("0X")) s = s.Substring(2);
+            return uint.TryParse(s, System.Globalization.NumberStyles.HexNumber, System.Globalization.CultureInfo.InvariantCulture, out v);
         }
 
         private void SlotEnabled(int i, bool on)

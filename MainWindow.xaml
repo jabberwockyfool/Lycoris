@@ -350,6 +350,9 @@
                                         <TextBlock Text="medal_icon" Foreground="{StaticResource FgMutedBrush}" FontSize="10"/>
                                         <Button Content="Replace (PNG)" FontSize="10" Padding="4,1" Click="ReplaceMedalIcon_Click"/>
                                     </StackPanel>
+                                    <Button Content="Change base ID (all instances)…" Padding="8,3" Margin="16,0,0,0"
+                                            VerticalAlignment="Center" Click="ChangeBaseId_Click"
+                                            ToolTip="Replace this charabase ID across charaparam, charabase and charascale"/>
                                 </StackPanel>
 
                                 <GroupBox Header="Status">

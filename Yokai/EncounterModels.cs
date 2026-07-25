@@ -32,6 +32,8 @@ namespace Lycoris.Yokai
         public int Index;
         public readonly int[] Offsets = new int[6];
         public string BattleScript;   // ENCOUNT_TABLE[7] — the battle-event .xq name (common_enc only; null on maps)
+        public int MusicId;           // ENCOUNT_TABLE[8]
+        public int BattleRuleId;      // ENCOUNT_TABLE[22]
         public string HashHex => $"0x{unchecked((uint)EncountId):X8}";
         public string Label => string.IsNullOrEmpty(BattleScript) ? $"Battle {Index}  ({HashHex})" : $"{BattleScript}  ({HashHex})";
         public override string ToString() => Label;
@@ -97,19 +99,17 @@ namespace Lycoris.Yokai
             return mod ?? FindIn(db?.ReferenceFolder);
         }
 
-        /// <summary>All battles' BattleScript names (for pickers) — deduped, sorted. Empty if none/unavailable.</summary>
-        public static List<string> BattleScriptNames(YokaiDatabase db)
+        /// <summary>Every battle (ENCOUNT_TABLE) for pickers — all EncountIDs, labelled by BattleScript when set.
+        /// load_battle_ev can reference any of them by EncountID, so scriptless battles are included too.</summary>
+        public static List<EncTable> AllBattles(YokaiDatabase db)
         {
             try
             {
                 string p = FindLoadPath(db, out _);
-                if (p == null) return new List<string>();
-                var set = Encounters.LoadCfg(p, db);
-                return set.Tables.Select(t => t.BattleScript)
-                    .Where(s => !string.IsNullOrEmpty(s))
-                    .Distinct().OrderBy(s => s, System.StringComparer.OrdinalIgnoreCase).ToList();
+                if (p == null) return new List<EncTable>();
+                return Encounters.LoadCfg(p, db).Tables;
             }
-            catch { return new List<string>(); }
+            catch { return new List<EncTable>(); }
         }
     }
 
@@ -117,7 +117,9 @@ namespace Lycoris.Yokai
     /// raw .cfg.bin (common_enc, the shared event/story battle config).</summary>
     public static class Encounters
     {
-        private const int BattleScriptField = 7;   // ENCOUNT_TABLE[7], common_enc only
+        private const int BattleScriptField = 7;    // ENCOUNT_TABLE[7], common_enc only
+        private const int MusicIdField = 8;          // ENCOUNT_TABLE[8]
+        private const int BattleRuleIdField = 22;    // ENCOUNT_TABLE[22]
 
         public static EncounterSet Load(string pckPath, YokaiDatabase db)
         {
@@ -154,7 +156,7 @@ namespace Lycoris.Yokai
             int idx = 0;
             foreach (var e in t2b.Records("ENCOUNT_TABLE"))
             {
-                var t = new EncTable { Entry = e, EncountId = e.GetInt(0) ?? 0, Index = idx++, BattleScript = e.GetString(BattleScriptField) };
+                var t = new EncTable { Entry = e, EncountId = e.GetInt(0) ?? 0, Index = idx++, BattleScript = e.GetString(BattleScriptField), MusicId = e.GetInt(MusicIdField) ?? 0, BattleRuleId = e.GetInt(BattleRuleIdField) ?? 0 };
                 for (int i = 0; i < 6; i++) t.Offsets[i] = e.GetInt(1 + i) ?? -1;
                 set.Tables.Add(t);
             }
@@ -264,6 +266,8 @@ namespace Lycoris.Yokai
             {
                 for (int i = 0; i < 6; i++) SetVal(t.Entry, 1 + i, t.Offsets[i]);
                 if (t.BattleScript != null) SetStr(t.Entry, BattleScriptField, t.BattleScript);
+                SetVal(t.Entry, MusicIdField, t.MusicId);
+                SetVal(t.Entry, BattleRuleIdField, t.BattleRuleId);
             }
         }
 
