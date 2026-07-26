@@ -81,6 +81,7 @@
     <Compile Include="Yokai\MapInfo.cs" />
     <Compile Include="Yokai\EncounterModels.cs" />
     <Compile Include="Yokai\EventSet.cs" />
+    <Compile Include="Yokai\DialogueSet.cs" />
     <Compile Include="Yokai\IntegrityIssue.cs" />
     <Compile Include="Npc\NpcModel.cs" />
     <Compile Include="Npc\NpcToml.cs" />
@@ -98,6 +99,7 @@
     <Compile Include="SaveEditorWindow.cs" />
     <Compile Include="EventEditorWindow.cs" />
     <Compile Include="BattleEditorWindow.cs" />
+    <Compile Include="DialogueEditorWindow.cs" />
     <Compile Include="HomeWindow.cs" />
     <Compile Include="AddYokaiDialog.cs" />
     <Compile Include="AtlasPickerWindow.cs" />
