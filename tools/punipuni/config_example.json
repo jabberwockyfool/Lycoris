@@ -1,0 +1,32 @@
+{
+  "_comment": "Per model. A group can be EITHER a list of clips (produces loose .mtn2 + .mtninf) OR an object {donor, fallback, clips} (produces a ready _pXX.xc). 'slot' accepts a role key (see `ykport.py slots`) or raw bytes like '58 DF 5B 84'. With a donor, the combined animation is auto-named like the donor's mtn2 (e.g. out_00) and every donor slot you DON'T map is repointed to the 'fallback' clip's range so nothing plays out-of-range. Puni-Puni yo-kai have no walk/run.",
+  "model_id": "x192000",
+  "studio_eleven": null,
+  "clips_dir": "C:/path/to/exported/mtn2",
+  "output_dir": "out",
+  "gap": 1,
+  "groups": {
+    "p20": {
+      "donor": "C:/path/to/vanilla/y152000_p20.xc",
+      "fallback": "idle",
+      "clips": [
+        {"file": "BattleStart.mtn2", "slot": "battle_start", "name": "p20_21000s_sti", "speed": 0.5},
+        {"file": "Idle.mtn2",        "slot": "idle",         "name": "p20_21001d_stl", "speed": 0.5},
+        {"file": "Tired.mtn2",       "slot": "tired",        "name": "p20_24001d_trl", "speed": 0.5},
+        {"file": "Loaf.mtn2",        "slot": "loaf",         "name": "p20_24201s_lfl", "speed": 0.5},
+        {"file": "Attack.mtn2",      "slot": "attack",       "name": "p20_25000s_ati", "speed": 0.5},
+        {"file": "Damage.mtn2",      "slot": "damage",       "name": "p20_26500d_dmi", "speed": 0.5},
+        {"file": "Death.mtn2",       "slot": "death",        "name": "p20_27000d_dei", "speed": 0.5},
+        {"file": "Soultimate.mtn2",  "slot": "soultimate",   "name": "p20_29000s_spi", "speed": 0.5}
+      ]
+    },
+    "p10": {
+      "donor": "C:/path/to/vanilla/y152000_p10.xc",
+      "fallback": "idle",
+      "clips": [
+        {"file": "Idle.mtn2", "slot": "idle", "name": "p10_idle", "speed": 0.5},
+        {"file": "Talk.mtn2", "slot": "talk", "name": "p10_talk", "speed": 0.5}
+      ]
+    }
+  }
+}

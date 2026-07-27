@@ -1,0 +1,18 @@
+{
+  "model_id": "x192000",
+  "clips_dir": "C:/Users/pc/Downloads/YW3U/BOMB",
+  "output_dir": "C:/Users/pc/AppData/Local/Temp/claude/d--cc-Lycoris-Lycoris/fe10dd37-7e16-43d0-9dc9-56c1d477fa7e/scratchpad/ykport_out",
+  "gap": 1,
+  "groups": {
+    "p20": {
+      "donor": "D:/cc/Lycoris/Lycoris/cfg/y152000_p20.xc",
+      "fallback": "idle",
+      "clips": [
+        {"file": "Attack.mtn2",   "slot": "battle_start", "name": "p20_21000s_sti", "speed": 0.5},
+        {"file": "Malade.mtn2",   "slot": "idle",         "name": "p20_21001d_stl", "speed": 0.5},
+        {"file": "Charge.mtn2",   "slot": "attack",       "name": "p20_25000s_ati", "speed": 0.5},
+        {"file": "victoire.mtn2", "slot": "soultimate",   "name": "p20_29000s_spi", "speed": 0.5}
+      ]
+    }
+  }
+}

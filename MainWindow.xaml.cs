@@ -376,17 +376,17 @@ namespace Lycoris
         {
             var y = Selector.SelectedItem as YokaiInfo;
             if (y == null) return;
-            string baseName = y.IconBaseName ?? (y.FileNamePrefix.HasValue
-                ? IconNaming.GetFileModelText(y.FileNamePrefix.Value, y.FileNameNumber ?? 0, y.FileNameVariant ?? 0) : null);
-            string src = y.MedalIconFile ?? (_db.ModMedalIconDir != null && baseName != null
-                ? System.IO.Path.Combine(_db.ModMedalIconDir, baseName + ".xi") : null);
-            if (src == null) { DarkMessage.Show("No medal_icon folder available.", "medal_icon"); return; }
+            string baseName = y.IconBaseName ?? y.ModelName;
+            string dir = _db.ModMedalIconWriteDir;
+            if (baseName == null || dir == null)
+            { DarkMessage.Show("Set the yo-kai's Model first (medal_icon is named after it).", "medal_icon"); return; }
 
             var dlg = new Microsoft.Win32.OpenFileDialog { Filter = "PNG images|*.png", Title = "medal_icon — PNG (ideally 64×64)" };
             if (dlg.ShowDialog() != true) return;
             try
             {
-                string target = _db.MirrorToMod(src);
+                System.IO.Directory.CreateDirectory(dir);
+                string target = System.IO.Path.Combine(dir, baseName + ".xi");
                 System.IO.File.WriteAllBytes(target, Imgc.EncodeXi(PngToBgra(dlg.FileName, 64, 64), 64, 64));
                 y.MedalIconFile = target;
                 MedalIconImage.Source = LoadIconFile(target);
@@ -427,9 +427,9 @@ namespace Lycoris
         {
             var y = Selector.SelectedItem as YokaiInfo;
             if (y == null) return;
-            if (y.IconFile == null && _db.ModFaceIconDir == null)
+            if (_db.ModFaceIconWriteDir == null || (y.IconBaseName ?? y.ModelName) == null)
             {
-                DarkMessage.Show("No face_icon folder in the mod to write the icon to.", "Replace the icon");
+                DarkMessage.Show("Open a mod and set the yo-kai's Model first (the icon is named after it).", "Replace the icon");
                 return;
             }
             var dlg = new Microsoft.Win32.OpenFileDialog { Filter = "PNG images|*.png", Title = "Choose a PNG (ideally 64×64)" };
@@ -448,13 +448,13 @@ namespace Lycoris
 
         private void ReplaceIcon(YokaiInfo y, string pngPath)
         {
-            string name = y.IconBaseName ?? (y.FileNamePrefix.HasValue
-                ? IconNaming.GetFileModelText(y.FileNamePrefix.Value, y.FileNameNumber ?? 0, y.FileNameVariant ?? 0) : null);
-            string src = y.IconFile ?? (_db.ModFaceIconDir != null && name != null
-                ? System.IO.Path.Combine(_db.ModFaceIconDir, name + ".xi") : null);
-            if (src == null) throw new InvalidOperationException("Unable to determine this yo-kai's icon file.");
+            string name = y.IconBaseName ?? y.ModelName;
+            string dir = _db.ModFaceIconWriteDir;
+            if (name == null || dir == null)
+                throw new InvalidOperationException("Unable to determine this yo-kai's icon file — set its Model first.");
 
-            string target = _db.MirrorToMod(src);
+            System.IO.Directory.CreateDirectory(dir);
+            string target = System.IO.Path.Combine(dir, name + ".xi");
             System.IO.File.WriteAllBytes(target, Imgc.EncodeXi(PngToBgra(pngPath, 64, 64), 64, 64));
             y.IconFile = target;
         }
@@ -493,7 +493,7 @@ namespace Lycoris
             if (dlg.ShowDialog() != true) return;
             try
             {
-                var y = _db.AddYokai(dlg.YokaiName, dlg.Description, dlg.Tribe, dlg.Rank);
+                var y = _db.AddYokai(dlg.YokaiName, dlg.Description, dlg.Tribe, dlg.Rank, model: dlg.Model);
                 RebuildView();
                 Selector.SelectedItem = y;
                 StatusText.Text = $"Added: {y.Name} ({y.ParamIdHex}). Edit its fields then Save the mod.";
@@ -509,9 +509,15 @@ namespace Lycoris
             var src = Selector.SelectedItem as YokaiInfo;
             if (src == null) return;
             CommitEdits(); // flush pending edits on the source before cloning it
+
+            // Same dialog as Add, pre-filled with the source's values to edit before creating.
+            var dlg = new AddYokaiDialog(this, "Duplicate a Yo-kai",
+                (string.IsNullOrEmpty(src.Name) ? src.ParamIdHex : src.Name) + " (copy)",
+                src.Description, src.Tribe ?? 0, src.Rank ?? 0, src.ModelName ?? "");
+            if (dlg.ShowDialog() != true) return;
             try
             {
-                var y = _db.DuplicateYokai(src);
+                var y = _db.DuplicateYokai(src, dlg.YokaiName, dlg.Description, dlg.Tribe, dlg.Rank, dlg.Model);
                 RebuildView();
                 Selector.SelectedItem = y;
                 StatusText.Text = $"Duplicated: {y.Name} ({y.ParamIdHex}). Edit its fields then Save the mod.";

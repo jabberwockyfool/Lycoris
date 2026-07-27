@@ -265,6 +265,72 @@ namespace Lycoris.Yokai
         /// <summary>The first face_icon folder inside the mod (write target for replaced icons), or null.</summary>
         public string ModFaceIconDir => _faceIconDirs.FirstOrDefault(IsUnderMod);
 
+        /// <summary>The mod's romfs base: the "include" folder (…/mod/include) if present, else the mod root.</summary>
+        private string IncludeBase()
+        {
+            if (_modFolder == null) return null;
+            var parts = _modFolder.Replace('/', '\\').Split('\\');
+            int idx = Array.FindLastIndex(parts, p => p.Equals("include", StringComparison.OrdinalIgnoreCase));
+            if (idx >= 0) return string.Join("\\", parts.Take(idx + 1));
+            string inc = Path.Combine(_modFolder, "include");
+            return Directory.Exists(inc) ? inc : _modFolder;
+        }
+
+        // Canonical write folders for per-yo-kai icons — the bare face_icon / medal_icon
+        // (NOT a language subfolder). Prefers an existing such folder already in the mod,
+        // otherwise builds (mod)/include/data/menu/<name>.
+        private string IconWriteDir(string name, List<string> known)
+        {
+            if (_modFolder == null) return null;
+            string existing = known.FirstOrDefault(d =>
+                IsUnderMod(d) && Path.GetFileName(d).Equals(name, StringComparison.OrdinalIgnoreCase));
+            if (existing != null) return existing;
+            string incBase = IncludeBase();
+            return incBase == null ? null : Path.Combine(incBase, "data", "menu", name);
+        }
+
+        /// <summary>(mod)/include/data/menu/face_icon — where a yo-kai's face_icon .xi is written.</summary>
+        public string ModFaceIconWriteDir => IconWriteDir("face_icon", _faceIconDirs);
+        /// <summary>(mod)/include/data/menu/medal_icon — where a yo-kai's medal_icon .xi is written.</summary>
+        public string ModMedalIconWriteDir => IconWriteDir("medal_icon", _medalIconDirs);
+
+        /// <summary>Base ID a model name maps to (CRC32 of the model, e.g. "y152000"), or 0 if empty.</summary>
+        public static int ModelBaseId(string model) =>
+            string.IsNullOrEmpty(model) ? 0 : unchecked((int)Crc32.Standard(Encoding.UTF8.GetBytes(model)));
+
+        /// <summary>
+        /// Create blank 64×64 face_icon and medal_icon .xi files for a yo-kai's model, in the mod
+        /// (face_icon / medal_icon), so they can be replaced later. Existing files are left untouched.
+        /// Sets the yo-kai's IconBaseName / IconFile / MedalIconFile to the created paths.
+        /// </summary>
+        public void CreateBlankIcons(YokaiInfo y)
+        {
+            string model = y.ModelName;
+            if (string.IsNullOrEmpty(model)) return;
+            byte[] blank = new byte[64 * 64 * 4];                 // fully transparent BGRA
+            byte[] xi = Imgc.EncodeXi(blank, 64, 64);
+            y.IconBaseName = model;
+
+            string fdir = ModFaceIconWriteDir;
+            if (fdir != null)
+            {
+                Directory.CreateDirectory(fdir);
+                string p = Path.Combine(fdir, model + ".xi");
+                if (!File.Exists(p)) File.WriteAllBytes(p, xi);
+                y.IconFile = p;
+                if (!_faceIconDirs.Contains(fdir)) _faceIconDirs.Insert(0, fdir);
+            }
+            string mdir = ModMedalIconWriteDir;
+            if (mdir != null)
+            {
+                Directory.CreateDirectory(mdir);
+                string p = Path.Combine(mdir, model + ".xi");
+                if (!File.Exists(p)) File.WriteAllBytes(p, xi);
+                y.MedalIconFile = p;
+                if (!_medalIconDirs.Contains(mdir)) _medalIconDirs.Insert(0, mdir);
+            }
+        }
+
         public struct BaseIdReplaceResult { public int Param, Base, Scale; public int Total => Param + Base + Scale; }
 
         /// <summary>
@@ -1291,14 +1357,21 @@ namespace Lycoris.Yokai
         /// persisted on the next <see cref="SaveAll"/>. Returns the created <see cref="YokaiInfo"/>.
         /// </summary>
         public YokaiInfo AddYokai(string name, string description, int tribe = 0, int rank = 0,
-            YokaiInfo statsTemplate = null)
+            YokaiInfo statsTemplate = null, string model = null)
         {
             if (BaseData == null || TextData == null || DescData == null)
                 throw new InvalidOperationException(
                     "Adding a Yo-kai requires chara_base + chara_text + chara_desc_text to be loaded (full mod).");
 
+            int mp = 0, mn = 0, mv = 0;
+            bool hasModel = !string.IsNullOrEmpty(model) &&
+                            IconNaming.TryParse(model, out mp, out mn, out mv);
+
             string code = "lycoris_" + Sanitize(name);
-            int baseHash = UniqueHash(code + "_base", ExistingKeys(BaseData.Records(Schema.BaseYokaiRecord), Schema.Base_BaseHashIndex));
+            // BaseID = CRC32(model) when a model is given (the game's own convention); otherwise a
+            // fresh collision-free hash so the yo-kai is self-contained.
+            int baseHash = hasModel ? ModelBaseId(model)
+                : UniqueHash(code + "_base", ExistingKeys(BaseData.Records(Schema.BaseYokaiRecord), Schema.Base_BaseHashIndex));
             int paramHash = UniqueHash(code + "_param", ExistingKeys(ParamData.Records(Schema.ParamRecord), Schema.ParamHashIndex));
             int nameHash = UniqueHash(code + "_name", ExistingFirstKeys(TextData.Records(Schema.NounRecord)));
             int descHash = UniqueHash(code + "_desc", ExistingFirstKeys(DescData.Records(Schema.DescRecord)));
@@ -1316,6 +1389,12 @@ namespace Lycoris.Yokai
             SetIntForce(baseTpl, Schema.Base_DescriptionHashIndex, descHash);
             SetIntForce(baseTpl, Schema.Base_RankIndex, rank);
             SetIntForce(baseTpl, Schema.Base_TribeIndex, tribe);
+            if (hasModel)
+            {
+                SetIntForce(baseTpl, Schema.Base_FileNamePrefixIndex, mp);
+                SetIntForce(baseTpl, Schema.Base_FileNameNumberIndex, mn);
+                SetIntForce(baseTpl, Schema.Base_FileNameVariantIndex, mv);
+            }
             InsertIntoGroup(BaseData, Schema.BaseGroupBegin, Schema.BaseGroupEnd, baseTpl);
 
             // --- name record (NOUN_INFO) ---
@@ -1359,9 +1438,14 @@ namespace Lycoris.Yokai
                 SoultimateHash = paramTpl.GetInt(Schema.SoultimateHashIndex),
                 AbilityHash = paramTpl.GetInt(Schema.AbilityHashIndex),
             };
+            if (hasModel)
+            {
+                y.FileNamePrefix = mp; y.FileNameNumber = mn; y.FileNameVariant = mv;
+            }
             Yokai.Add(y);
             EnableBlasterT(y);   // new yo-kai get an editable Blaster-T + Drops entry
             EnableDrops(y);
+            if (hasModel) CreateBlankIcons(y);   // blank face_icon + medal_icon to replace later
             return y;
         }
 
@@ -1371,16 +1455,26 @@ namespace Lycoris.Yokai
         /// moves, tribe/rank, model, charabase flags, scale and evolution target are copied. Persisted on the
         /// next <see cref="SaveAll"/>. Returns the created <see cref="YokaiInfo"/>.
         /// </summary>
-        public YokaiInfo DuplicateYokai(YokaiInfo src)
+        public YokaiInfo DuplicateYokai(YokaiInfo src, string name = null, string description = null,
+            int? tribe = null, int? rank = null, string model = null)
         {
             if (src?.SourceEntry == null) throw new InvalidOperationException("No Yo-kai to duplicate.");
             if (BaseData == null || TextData == null || DescData == null)
                 throw new InvalidOperationException(
                     "Duplicating requires chara_base + chara_text + chara_desc_text to be loaded (full mod).");
 
-            string name = (string.IsNullOrEmpty(src.Name) ? src.ParamIdHex : src.Name) + " (copy)";
+            // Overrides come from the Add/Duplicate dialog; anything left null keeps the source's value.
+            name = string.IsNullOrEmpty(name)
+                ? (string.IsNullOrEmpty(src.Name) ? src.ParamIdHex : src.Name) + " (copy)" : name;
+            description = description ?? src.Description;
+            int rankV = rank ?? src.Rank ?? 0;
+            int tribeV = tribe ?? src.Tribe ?? 0;
+            int mp = 0, mn = 0, mv = 0;
+            bool hasModel = !string.IsNullOrEmpty(model) && IconNaming.TryParse(model, out mp, out mn, out mv);
+
             string code = "lycoris_" + Sanitize(name);
-            int baseHash = UniqueHash(code + "_base", ExistingKeys(BaseData.Records(Schema.BaseYokaiRecord), Schema.Base_BaseHashIndex));
+            int baseHash = hasModel ? ModelBaseId(model)
+                : UniqueHash(code + "_base", ExistingKeys(BaseData.Records(Schema.BaseYokaiRecord), Schema.Base_BaseHashIndex));
             int paramHash = UniqueHash(code + "_param", ExistingKeys(ParamData.Records(Schema.ParamRecord), Schema.ParamHashIndex));
             int nameHash = UniqueHash(code + "_name", ExistingFirstKeys(TextData.Records(Schema.NounRecord)));
             int descHash = UniqueHash(code + "_desc", ExistingFirstKeys(DescData.Records(Schema.DescRecord)));
@@ -1396,6 +1490,14 @@ namespace Lycoris.Yokai
             SetIntForce(baseTpl, Schema.Base_BaseHashIndex, baseHash);
             SetIntForce(baseTpl, Schema.Base_NameHashIndex, nameHash);
             SetIntForce(baseTpl, Schema.Base_DescriptionHashIndex, descHash);
+            SetIntForce(baseTpl, Schema.Base_RankIndex, rankV);
+            SetIntForce(baseTpl, Schema.Base_TribeIndex, tribeV);
+            if (hasModel)
+            {
+                SetIntForce(baseTpl, Schema.Base_FileNamePrefixIndex, mp);
+                SetIntForce(baseTpl, Schema.Base_FileNameNumberIndex, mn);
+                SetIntForce(baseTpl, Schema.Base_FileNameVariantIndex, mv);
+            }
             InsertIntoGroup(BaseData, Schema.BaseGroupBegin, Schema.BaseGroupEnd, baseTpl);
 
             // --- name + description (new independent entries) ---
@@ -1406,7 +1508,7 @@ namespace Lycoris.Yokai
 
             var descTpl = (src.DescEntry ?? DescData.Records(Schema.DescRecord).First()).Clone();
             SetIntForce(descTpl, Schema.DescKeyIndex, descHash);
-            SetText(descTpl, Schema.DescTextIndex, src.Description ?? "");
+            SetText(descTpl, Schema.DescTextIndex, description ?? "");
             InsertIntoGroup(DescData, Schema.DescGroupBegin, Schema.DescGroupEnd, descTpl);
 
             // --- scale (keyed by BaseHash → clone with the new base hash) ---
@@ -1443,10 +1545,14 @@ namespace Lycoris.Yokai
                 SourceEntry = paramTpl, BaseEntry = baseTpl, NameEntry = nounTpl, DescEntry = descTpl,
                 ScaleEntry = scaleTpl, HackslashEntry = hsTpl, BattleEntry = btTpl,
                 ParamHash = paramHash, BaseHash = baseHash, NameHash = nameHash, DescriptionHash = descHash,
-                Name = name, Description = src.Description,
-                // model / icons
-                FileNamePrefix = src.FileNamePrefix, FileNameNumber = src.FileNameNumber, FileNameVariant = src.FileNameVariant,
-                IconBaseName = src.IconBaseName, IconFile = src.IconFile, MedalIconFile = src.MedalIconFile,
+                Name = name, Description = description,
+                // model / icons (overridden below if a new model was given)
+                FileNamePrefix = hasModel ? mp : src.FileNamePrefix,
+                FileNameNumber = hasModel ? mn : src.FileNameNumber,
+                FileNameVariant = hasModel ? mv : src.FileNameVariant,
+                IconBaseName = hasModel ? null : src.IconBaseName,
+                IconFile = hasModel ? null : src.IconFile,
+                MedalIconFile = hasModel ? null : src.MedalIconFile,
                 // param stats
                 Show = src.Show, Medal = src.Medal, Resistance = src.Resistance, Weakness = src.Weakness,
                 MinHp = src.MinHp, MaxHp = src.MaxHp, MinStrength = src.MinStrength, MaxStrength = src.MaxStrength,
@@ -1459,7 +1565,7 @@ namespace Lycoris.Yokai
                 AttackName = src.AttackName, TechniqueName = src.TechniqueName, InspiritName = src.InspiritName,
                 GuardName = src.GuardName, SoultimateName = src.SoultimateName, AbilityName = src.AbilityName,
                 // base / charabase
-                Rank = src.Rank, Tribe = src.Tribe,
+                Rank = rankV, Tribe = tribeV,
                 MedalPosX = src.MedalPosX, MedalPosY = src.MedalPosY, FavoriteFood = src.FavoriteFood, HatedFood = src.HatedFood,
                 Role = src.Role, IsRare = src.IsRare, IsLegend = src.IsLegend, IsPionner = src.IsPionner,
                 IsCommandant = src.IsCommandant, IsClassic = src.IsClassic, IsMerican = src.IsMerican,
@@ -1482,6 +1588,7 @@ namespace Lycoris.Yokai
             foreach (var kv in y.BaseFieldValues(Schema)) y.BaseOriginal[kv.Key] = kv.Value;
 
             Yokai.Add(y);
+            if (hasModel) CreateBlankIcons(y);   // fresh blank icons for the new model
             return y;
         }
 
