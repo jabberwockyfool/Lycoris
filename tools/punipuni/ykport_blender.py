@@ -22,6 +22,7 @@ a known canonical suffix are recognised (see slots.PUNIPUNI_NAMES / role keys).
 import os
 import sys
 import io
+import zlib
 
 import bpy
 
@@ -135,6 +136,98 @@ def export_action_to_manager(se, armature, action):
     return mgr
 
 
+def export_actions_combined(se, armature, ordered, anim_name, gap, speed, bake=False):
+    """
+    Sample every action's poses directly into ONE AnimationManager and Save once —
+    no per-clip export→parse→re-Save round-trip (which was distorting the anim).
+    This mirrors studio_eleven's own fileio_write_xmtn exactly, but accumulates all
+    actions end-to-end (each clip normalised to start at 0, then shifted by offset).
+
+    ordered: list of (action, slot_hex). Returns a ykport.CombineResult.
+    """
+    AM = se.animation_manager
+    scene = bpy.context.scene
+    armature.data.pose_position = "POSE"
+    bpy.context.view_layer.objects.active = armature
+    bpy.ops.object.mode_set(mode="POSE")
+
+    tracks = {
+        "location": AM.Track("BoneLocation", 0, []),
+        "rotation": AM.Track("BoneRotation", 1, []),
+        "scale": AM.Track("BoneScale", 2, []),
+    }
+    bone_names = {b.name for b in armature.pose.bones}
+    transformations = ["location", "rotation", "scale"]
+
+    offset = 0
+    splits = []
+    for action, slot_hex in ordered:
+        if armature.animation_data is None:
+            armature.animation_data_create()
+        armature.animation_data.action = action
+
+        # which bones/transforms are keyed on which frames (like fileio_write_xmtn)
+        keyframes = {}
+        for fcurve in action.fcurves:
+            dp = fcurve.data_path
+            bone = dp.split('"')[1] if '"' in dp else None
+            if not bone or bone not in bone_names:
+                continue
+            tt = next((t for t in transformations if t in dp), None)
+            if not tt:
+                continue
+            for kf in sorted(fcurve.keyframe_points, key=lambda k: k.co.x):
+                keyframes.setdefault(int(kf.co.x), {}).setdefault(bone, set()).add(tt)
+        if not keyframes:
+            continue
+
+        amin, amax = min(keyframes), max(keyframes)
+        for fr in sorted(keyframes):
+            scene.frame_set(fr)
+            key = fr - amin + offset
+            for bone, tts in keyframes[fr].items():
+                pb = armature.pose.bones.get(bone)
+                if not pb or not pb.bone.use_deform:
+                    continue
+                par = pb.parent
+                while par and not par.bone.use_deform:
+                    par = par.parent
+                if par:
+                    # object transform cancels between parent and child -> unaffected
+                    pm = par.matrix.inverted() @ pb.matrix
+                elif bake:
+                    # root deform bone: fold the FULL object transform (the 90° import
+                    # rotation + any scale) into the animation, so it matches a model
+                    # whose skeleton was exported with those transforms APPLIED.
+                    pm = armature.matrix_world @ pb.matrix
+                else:
+                    pm = pb.matrix
+                crc = zlib.crc32(bone.encode())
+                for tt in tts:
+                    tr = tracks[tt]
+                    if not tr.NodeExists(crc):
+                        tr.Nodes.append(AM.Node(crc, True, []))
+                    node = tr.GetNodeByName(crc)
+                    if tt == "location":
+                        node.add_frame(key, AM.BoneLocation(*map(float, pm.to_translation())))
+                    elif tt == "rotation":
+                        rot = AM.BoneRotation(*map(float, pm.to_euler()))
+                        rot.ToQuaternion()
+                        node.add_frame(key, rot)
+                    elif tt == "scale":
+                        node.add_frame(key, AM.BoneLocation(*map(float, pm.to_scale())))
+
+        start, end = offset, offset + (amax - amin)
+        splits.append({"slot": slot_hex, "name": action.name, "speed": speed,
+                       "start": start, "end": end})
+        offset = end + gap
+
+    frame_count = max(0, offset - gap)
+    anim = AM.AnimationManager(Format="XMTN", Version="V2", AnimationName=anim_name,
+                               FrameCount=frame_count, Tracks=list(tracks.values()))
+    return ykport.CombineResult(anim.Save(), anim_name, frame_count, splits)
+
+
 def model_id_from_actions(actions):
     """Longest common prefix up to the first pXX token, e.g. y432000."""
     for a in actions:
@@ -163,7 +256,7 @@ def rename_mtn2(se, mtn2_bytes, new_name):
     return mgr.Save()
 
 
-def build_group_from_actions(se, group, group_actions, donor, arm, model_id, gap, speed, out_dir, log):
+def build_group_from_actions(se, group, group_actions, donor, arm, model_id, gap, speed, out_dir, log, bake=False):
     table = SLOTS.GROUPS.get(group, {})
     # order actions by canonical slot order, then any recognised leftovers
     ordered, used = [], set()
@@ -183,10 +276,9 @@ def build_group_from_actions(se, group, group_actions, donor, arm, model_id, gap
         return None
 
     anim_name = donor_anim_name(se, donor)
-    clips = [{"manager": export_action_to_manager(se, arm, a), "slot": slot_hex,
-              "name": a.name, "speed": speed} for a, slot_hex in ordered]
-    res = ykport.combine_managers(se.animation_manager, anim_name, clips, gap=gap)
-    log(f"[{group}] {anim_name!r} — {len(clips)} clips, {res.frame_count} frames")
+    res = export_actions_combined(se, arm, ordered, anim_name, gap, speed, bake=bake)
+    log(f"[{group}] {anim_name!r} — {len(ordered)} clips, {res.frame_count} frames"
+        + (" [baked object transform]" if bake else ""))
 
     slot_ranges, fallback = {}, None
     role_ranges = {}
@@ -276,6 +368,26 @@ def build_group_by_relabel(se, group, p20_donor, source, model_id, out_dir, log)
     return True
 
 
+def warn_unapplied_transforms(arm, log):
+    """Warn if the armature or its meshes have un-applied object transforms. The
+    exporter samples pose_bone.matrix in ARMATURE-OBJECT space, so an un-applied
+    scale/rotation/location is NOT baked into the animation -> in-game the model
+    stays in its rest/edit pose. Fix: Object mode > Object > Apply > All Transforms
+    (Ctrl+A) on the armature AND the meshes, then re-export."""
+    def bad(o):
+        s = tuple(round(v, 4) for v in o.scale)
+        r = tuple(round(v, 4) for v in o.rotation_euler)
+        l = tuple(round(v, 4) for v in o.location)
+        return s != (1.0, 1.0, 1.0) or r != (0.0, 0.0, 0.0) or l != (0.0, 0.0, 0.0)
+
+    objs = [arm] + [c for c in arm.children if c.type == "MESH"]
+    offenders = [o.name for o in objs if bad(o)]
+    if offenders:
+        log("⚠ UN-APPLIED TRANSFORMS on: " + ", ".join(offenders))
+        log("  -> Object Mode > select armature + meshes > Ctrl+A > All Transforms, then re-export.")
+        log("  (else the scale/rotation isn't baked and the model stays in its rest pose in-game).")
+
+
 def run_build(props, log):
     se = find_se()
 
@@ -302,6 +414,7 @@ def run_build(props, log):
         return bpy.path.abspath(d) if d else ""
 
     log(f"Armature: {arm.name} | model_id: {model_id or '(none)'} | {len(actions)} actions")
+    warn_unapplied_transforms(arm, log)
 
     # group actions by pXX
     by_group = {}
@@ -319,7 +432,7 @@ def run_build(props, log):
             log(f"[{group}] {len(group_actions)} actions — SKIPPED (no donor .xc set)")
             continue
         result = build_group_from_actions(se, group, group_actions, donor, arm,
-                                          model_id, gap, speed, out_dir, log)
+                                          model_id, gap, speed, out_dir, log, bake=props.bake_object)
         if result:
             built[group] = result
             made += 1
@@ -359,6 +472,12 @@ class YKPORT_Props(bpy.types.PropertyGroup):
         name="Fill p10/p84 from p20",
         description="If p10/p84 have no actions, reuse the p20 animations for their slots",
         default=True)
+    bake_object: bpy.props.BoolProperty(
+        name="Bake object transform",
+        description="Fold the armature's object transform (import 90° rotation + scale) into the "
+                    "animation. Pair this with a model _p00 whose skeleton was exported with those "
+                    "transforms APPLIED (Ctrl+A), so the mesh, skeleton and animation share one frame",
+        default=False)
     donor_p10: bpy.props.StringProperty(name="Donor p10", subtype="FILE_PATH")
     donor_p20: bpy.props.StringProperty(name="Donor p20", subtype="FILE_PATH")
     donor_p21: bpy.props.StringProperty(name="Donor p21", subtype="FILE_PATH")
@@ -402,6 +521,7 @@ class YKPORT_PT_panel(bpy.types.Panel):
         row.prop(s, "gap")
         row.prop(s, "speed")
         col.prop(s, "reuse_missing")
+        col.prop(s, "bake_object")
         col.separator()
         col.label(text="Donor .xc (per group):")
         col.prop(s, "donor_p10")
