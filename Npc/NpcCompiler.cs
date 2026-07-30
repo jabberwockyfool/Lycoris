@@ -25,6 +25,15 @@ namespace Lycoris.Npc
             public string XqLog = "";
             public List<string> Files = new List<string>();
             public string NpcIdHex => $"0x{unchecked((uint)NpcId):X8}";
+            public NpcDailyFight.Result Daily;    // set for a daily-fight NPC
+        }
+
+        /// <summary>Locations of the global flag_config for a daily-fight NPC (resolved by the caller, which
+        /// knows the mod/reference layout): where to READ it and where to WRITE the edited copy in the mod.</summary>
+        public sealed class DailyPaths
+        {
+            public string FlagConfigSrc;   // path to read flag_config_0.01r.cfg.bin (mod copy first, else reference)
+            public string FlagConfigDst;   // path to write the edited flag_config into the mod
         }
 
         /// <summary>
@@ -32,7 +41,8 @@ namespace Lycoris.Npc
         /// <paramref name="outRoot"/>. If <paramref name="mergeMapDir"/> is given, the same files are also
         /// copied there (the map folder inside the mod) — the auto-merge.
         /// </summary>
-        public static Result Compile(NpcModel npc, string mapFolder, string outRoot, string mergeMapDir = null)
+        public static Result Compile(NpcModel npc, string mapFolder, string outRoot, string mergeMapDir = null,
+            DailyPaths daily = null)
         {
             if (string.IsNullOrWhiteSpace(npc.NpcName)) throw new InvalidOperationException("The NPC must have a name.");
             string mapDir = ResolveMapDir(mapFolder, npc.MapID);
@@ -48,7 +58,8 @@ namespace Lycoris.Npc
             foreach (var (p, label) in new[] { (npcPckPath, "npc.pck"), (mapPckPath, npc.MapID + ".pck") })
                 if (p == null || !File.Exists(p)) throw new InvalidOperationException($"Required file missing: {label}");
             if (npcSetPath == null) throw new InvalidOperationException($"Required file missing: {npc.MapID}_npc_set*");
-            if (talkPath == null) throw new InvalidOperationException($"Required file missing: {npc.MapID}_npc_base_talk_{npc.ChapterCode}*");
+            if (!npc.IsDailyFight && talkPath == null)
+                throw new InvalidOperationException($"Required file missing: {npc.MapID}_npc_base_talk_{npc.ChapterCode}*");
 
             var res = new Result();
             res.NpcId = unchecked((int)Crc32.Standard(Encoding.UTF8.GetBytes(npc.NpcName)));
@@ -73,11 +84,15 @@ namespace Lycoris.Npc
             SetInts(presetE, res.NpcId, appearIndex, 1);
             AddToGroup(npcSet, "NPC_PRESET_BEGIN", "NPC_PRESET_END", presetE);
 
-            // --- npc_base_talk: BASE_TALK_INFO ---
-            var talk = T2bReader.Read(File.ReadAllBytes(talkPath));
-            var talkE = CloneRecord(talk, "BASE_TALK_INFO");
-            SetInts(talkE, res.NpcId, 0, 1, 1, 1, 2, 1, 3, 1);
-            AddToGroup(talk, "BASE_TALK_INFO_BEGIN", "BASE_TALK_INFO_END", talkE);
+            // --- npc_base_talk: BASE_TALK_INFO (simple talk NPC only; daily-fight uses npc_talk_0.01) ---
+            T2bFile talk = null;
+            if (!npc.IsDailyFight)
+            {
+                talk = T2bReader.Read(File.ReadAllBytes(talkPath));
+                var talkE = CloneRecord(talk, "BASE_TALK_INFO");
+                SetInts(talkE, res.NpcId, 0, 1, 1, 1, 2, 1, 3, 1);
+                AddToGroup(talk, "BASE_TALK_INFO_BEGIN", "BASE_TALK_INFO_END", talkE);
+            }
 
             // --- .npcbin from a vanilla template + inject into npc.pck ---
             // Clone a proper placed NPC (npc_*), NOT an ambient object (ani_*/car_*/mob_*/…) — those have a
@@ -91,11 +106,41 @@ namespace Lycoris.Npc
             Xpck.AddOrReplace(npcPck, npc.NpcName + ".npcbin", npcbinBytes);
             byte[] npcPckOut = Xpck.Write(npcPck);
 
-            // --- map .pck: OnTalk into the .xq (+ trigger link) ---
+            // --- map .pck ---
             var mapPck = Xpck.Read(File.ReadAllBytes(mapPckPath));
-            byte[] mapPckOut;
-            if (!string.IsNullOrWhiteSpace(npc.OnTalk))
+
+            // Daily-fight extra files (kept for writing below).
+            T2bFile npcTalk = null, textEn = null, textMap = null, flagConfig = null;
+            string npcTalkPath = null, textEnPath = null, textMapPath = null;
+
+            if (npc.IsDailyFight)
             {
+                npcTalkPath = PickByPrefix(mergeMapDir, mapDir, npc.MapID + "_npc_talk_0.01");
+                textEnPath = PickByPrefix(mergeMapDir, mapDir, npc.MapID + "_npc_text_c_en");
+                textMapPath = PickByPrefix(mergeMapDir, mapDir, npc.MapID + "_npc_text_map_c");
+                if (npcTalkPath == null) throw new InvalidOperationException($"Required file missing: {npc.MapID}_npc_talk_0.01*");
+                if (textEnPath == null) throw new InvalidOperationException($"Required file missing: {npc.MapID}_npc_text_c_en*");
+                if (textMapPath == null) throw new InvalidOperationException($"Required file missing: {npc.MapID}_npc_text_map_c*");
+                npcTalk = T2bReader.ReadFile(npcTalkPath);
+                textEn = T2bReader.ReadFile(textEnPath);
+                textMap = T2bReader.ReadFile(textMapPath);
+                if (daily?.FlagConfigSrc != null && File.Exists(daily.FlagConfigSrc))
+                    flagConfig = T2bReader.ReadFile(daily.FlagConfigSrc);
+
+                var xqFile = mapPck.FirstOrDefault(f => f.Name == npc.MapID + ".xq")
+                             ?? throw new InvalidOperationException($"{npc.MapID}.xq not found in {npc.MapID}.pck");
+                var trigFile = mapPck.FirstOrDefault(f => f.Name == npc.MapID + "_trigger.cfg.bin")
+                             ?? throw new InvalidOperationException($"{npc.MapID}_trigger.cfg.bin not found in {npc.MapID}.pck");
+                var trig = T2bReader.Read(trigFile.Data);
+
+                var dr = NpcDailyFight.Apply(npc, res.NpcId, npc.BaseId, npcTalk, trig, xqFile.Data, textEn, textMap, flagConfig);
+                res.Daily = dr; res.FuncId = dr.FuncIds[0]; res.XqLog = dr.XqLog;
+                Xpck.AddOrReplace(mapPck, xqFile.Name, dr.NewXq);
+                Xpck.AddOrReplace(mapPck, trigFile.Name, T2bWriter.Write(trig));
+            }
+            else if (!string.IsNullOrWhiteSpace(npc.OnTalk))
+            {
+                // Simple talk NPC: OnTalk into the .xq (+ trigger link).
                 var xqFile = mapPck.FirstOrDefault(f => f.Name == npc.MapID + ".xq")
                              ?? throw new InvalidOperationException($"{npc.MapID}.xq not found in {npc.MapID}.pck");
                 byte[] newXq = NpcXq.AddOnTalkFunction(xqFile.Data, npc.OnTalk, out int funcId, out string xqLog);
@@ -110,7 +155,7 @@ namespace Lycoris.Npc
                     Xpck.AddOrReplace(mapPck, trigFile.Name, T2bWriter.Write(trig));
                 }
             }
-            mapPckOut = Xpck.Write(mapPck);
+            byte[] mapPckOut = Xpck.Write(mapPck);
 
             // --- write outputs (mirroring the <MapID> folder so it merges into a mod's res/map) ---
             string root = Path.Combine(outRoot, SafeName(npc.NpcName) + "_output");
@@ -118,18 +163,32 @@ namespace Lycoris.Npc
             Directory.CreateDirectory(outMap);
             res.OutputDir = root;
             WriteOut(outMap, Path.GetFileName(npcSetPath), T2bWriter.Write(npcSet), res);
-            WriteOut(outMap, Path.GetFileName(talkPath), T2bWriter.Write(talk), res);
+            if (talk != null) WriteOut(outMap, Path.GetFileName(talkPath), T2bWriter.Write(talk), res);
             WriteOut(outMap, "npc.pck", npcPckOut, res);
             WriteOut(outMap, npc.MapID + ".pck", mapPckOut, res);
             WriteOut(outMap, npc.NpcName + ".npcbin", npcbinBytes, res);
+            if (npc.IsDailyFight)
+            {
+                WriteOut(outMap, Path.GetFileName(npcTalkPath), T2bWriter.Write(npcTalk), res);
+                WriteOut(outMap, Path.GetFileName(textEnPath), T2bWriter.Write(textEn), res);
+                WriteOut(outMap, Path.GetFileName(textMapPath), T2bWriter.Write(textMap), res);
+            }
 
-            // Auto-merge: copy the produced files into the mod's map folder.
+            // Auto-merge: copy the produced map files into the mod's map folder.
             if (!string.IsNullOrEmpty(mergeMapDir))
             {
                 Directory.CreateDirectory(mergeMapDir);
                 foreach (var src in res.Files)
                     File.Copy(src, Path.Combine(mergeMapDir, Path.GetFileName(src)), overwrite: true);
                 res.MergedDir = mergeMapDir;
+            }
+
+            // flag_config lives outside the map folder — write it straight to its mod destination.
+            if (npc.IsDailyFight && flagConfig != null && !string.IsNullOrEmpty(daily?.FlagConfigDst))
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(daily.FlagConfigDst));
+                File.WriteAllBytes(daily.FlagConfigDst, T2bWriter.Write(flagConfig));
+                res.Files.Add(daily.FlagConfigDst);
             }
             return res;
         }

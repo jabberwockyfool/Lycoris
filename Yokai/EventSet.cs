@@ -150,19 +150,19 @@ namespace Lycoris.Yokai
         /// bustups, intro/accept/decline dialogue (evName_010/_020/_030), an autosave prompt, a per-fight
         /// flag, and load_battle_ev(battleId). Compile with NpcXq.CompileScript.
         /// </summary>
-        public static string BuildDailyFightSource(string eventName, IEnumerable<string> bustups, string battleExpr, uint flag)
+        public static string BuildDailyFightSource(string eventName, IEnumerable<string> bustups, string battleExpr,
+            uint flag, string girlBustup = null, string boyBustup = null, bool genderDialogue = false)
         {
             var sb = new StringBuilder();
             void C(string line) => sb.Append('\t').Append(line).Append('\n');
             sb.Append("Main()\n{\n");
             C("$local1 = seq.prog_common_001.StartTalkEvent();");
             C("$local1 = seq.prog_common_001.LoadEncountEffectType(1);");
-            foreach (var m in bustups.Where(x => !string.IsNullOrWhiteSpace(x)))
-                C($"$local1 = seq.prog_common_001.BustupAssign(\"{m.Trim()}\", -1, -1);");
+            EmitBustups(sb, C, bustups, girlBustup, boyBustup);
             C("$local1 = seq.prog_common_001.WaitBGBuild();");
             C("$local1 = seq.prog_common_001.StartBrightFade(-1, 0f, 15, 1);");
             C("$local1 = seq.prog_common_001.EventTalk_CameraZoomStartNoWait();");
-            C($"$local1 = seq.prog_common_001.EventTalkRun(\"{eventName}_010\");");
+            EmitTalk(sb, C, eventName, "_010", genderDialogue, "ti");
             C("$object0 = seq.prog_common_001.EventTalkRun(\"sys_autosave_battle\");");
             C("$local1 = $object0 == 0;");
             C("if not $local1 goto \"@000@\"h;");
@@ -182,6 +182,86 @@ namespace Lycoris.Yokai
             C("$local1 = seq.prog_common_001.EndTalkEvent();");
             sb.Append("}\n");
             return sb.ToString();
+        }
+
+        /// <summary>
+        /// Build a dialogue-only daily-fight event (the battle-WIN or battle-LOSE result event), mirroring
+        /// vanilla ev75_5420: bustups (with an optional Katie/Nate branch), face the NPC, one dialogue block
+        /// (evName_010), no battle. <paramref name="turnTarget"/> is the NPC model faced (PlayerTurnTargetStart).
+        /// </summary>
+        public static string BuildDailyDialogueSource(string eventName, IEnumerable<string> bustups,
+            string turnTarget, string girlBustup = null, string boyBustup = null, bool genderDialogue = false)
+        {
+            var sb = new StringBuilder();
+            void C(string line) => sb.Append('\t').Append(line).Append('\n');
+            sb.Append("Main()\n{\n");
+            C("$local1 = seq.prog_common_001.StartTalkEvent();");
+            C("$local1 = sub26051();");
+            EmitBustups(sb, C, bustups, girlBustup, boyBustup);
+            if (!string.IsNullOrWhiteSpace(turnTarget))
+            {
+                C("$local1 = seq.prog_common_001.MoveCharaRotToPlayerWithLookAt();");
+                C($"$local1 = seq.prog_common_001.PlayerTurnTargetStart(\"{turnTarget.Trim()}\");");
+            }
+            C("$local1 = seq.prog_common_001.EventTalk_CameraZoomDirect();");
+            C("$local1 = seq.prog_common_001.WaitBGBuild();");
+            C("$local1 = seq.prog_common_001.StartBrightFade(-1, 0f, 15, 1);");
+            EmitTalk(sb, C, eventName, "_010", genderDialogue, "td");
+            C("$local1 = seq.prog_common_001.WaitFrame2(15);");
+            C("$local1 = seq.prog_common_001.EventTalk_CameraZoomEndNoWait();");
+            C("$local1 = seq.prog_common_001.EventTalk_CameraZoomWait();");
+            C("$local1 = seq.prog_common_001.EndTalkEvent();");
+            sb.Append("}\n");
+            return sb.ToString();
+        }
+
+        /// <summary>The male dialogue block key for a female block (e.g. "_010" → "_011"): increment the last digit.</summary>
+        public static string MaleBlock(string block)
+        {
+            if (string.IsNullOrEmpty(block)) return block;
+            char last = block[block.Length - 1];
+            char bumped = char.IsDigit(last) && last != '9' ? (char)(last + 1) : last;
+            return block.Substring(0, block.Length - 1) + bumped;
+        }
+
+        /// <summary>Emit an EventTalkRun for a dialogue block, optionally branching on get_player_type() so the
+        /// girl (==2) sees {block} and the boy sees {MaleBlock(block)}. labelTag must be unique in the script.</summary>
+        private static void EmitTalk(StringBuilder sb, Action<string> C, string eventName, string block,
+            bool gendered, string labelTag)
+        {
+            if (!gendered)
+            {
+                C($"$local1 = seq.prog_common_001.EventTalkRun(\"{eventName}{block}\");");
+                return;
+            }
+            C("$local2 = get_player_type();");
+            C("$local1 = $local2 == 2;");
+            C($"if not $local1 goto \"@{labelTag}m@\"h;");
+            C($"$local1 = seq.prog_common_001.EventTalkRun(\"{eventName}{block}\");");
+            C($"goto \"@{labelTag}e@\"h;");
+            sb.Append($"\"@{labelTag}m@\":\n");
+            C($"$local1 = seq.prog_common_001.EventTalkRun(\"{eventName}{MaleBlock(block)}\");");
+            sb.Append($"\"@{labelTag}e@\":\n");
+        }
+
+        /// <summary>Emit BustupAssign lines, optionally wrapping a girl/boy pair in a get_player_type() branch
+        /// (==2 → Katie/Hailey). Labels @g0@/@g1@ are distinct from the daily-fight source's @000@/@001@.</summary>
+        private static void EmitBustups(StringBuilder sb, Action<string> C, IEnumerable<string> bustups,
+            string girlBustup, string boyBustup)
+        {
+            foreach (var m in (bustups ?? Enumerable.Empty<string>()).Where(x => !string.IsNullOrWhiteSpace(x)))
+                C($"$local1 = seq.prog_common_001.BustupAssign(\"{m.Trim()}\", -1, -1);");
+            if (!string.IsNullOrWhiteSpace(girlBustup) && !string.IsNullOrWhiteSpace(boyBustup))
+            {
+                C("$local2 = get_player_type();");
+                C("$local1 = $local2 == 2;");
+                C("if not $local1 goto \"@g0@\"h;");
+                C($"$local1 = seq.prog_common_001.BustupAssign(\"{girlBustup.Trim()}\", -1, -1);");
+                C("goto \"@g1@\"h;");
+                sb.Append("\"@g0@\":\n");
+                C($"$local1 = seq.prog_common_001.BustupAssign(\"{boyBustup.Trim()}\", -1, -1);");
+                sb.Append("\"@g1@\":\n");
+            }
         }
 
         /// <summary>
@@ -271,9 +351,21 @@ namespace Lycoris.Yokai
         public static int Talker(string model) =>
             unchecked((int)Crc32.Standard(Encoding.UTF8.GetBytes(model ?? "")));
 
-        /// <summary>Fill <paramref name="textFile"/>/<paramref name="washaFile"/> (templates) with the dialogue.</summary>
+        /// <summary>Fill <paramref name="textFile"/>/<paramref name="washaFile"/> (templates) with the three
+        /// standard blocks (_010/_020/_030).</summary>
         public static void Build(T2bFile textFile, T2bFile washaFile, string eventName,
             IList<DialogueLine> intro, IList<DialogueLine> accept, IList<DialogueLine> decline)
+        {
+            BuildBlocks(textFile, washaFile, eventName, new[]
+            {
+                ("_010", intro), ("_020", accept), ("_030", decline),
+            });
+        }
+
+        /// <summary>Fill the templates with an arbitrary set of (block suffix, lines) — used for gendered
+        /// dialogue where a block has a female key (_010) and a male key (_011).</summary>
+        public static void BuildBlocks(T2bFile textFile, T2bFile washaFile, string eventName,
+            IEnumerable<(string suffix, IList<DialogueLine> lines)> blocks)
         {
             var txtTpl = textFile.Records(TxtRec).FirstOrDefault()?.Clone()
                          ?? throw new InvalidOperationException("Text template has no TEXT_INFO record to clone.");
@@ -283,12 +375,10 @@ namespace Lycoris.Yokai
             ClearGroup(textFile, TxtRec, TxtBeg);
             ClearGroup(washaFile, WmRec, WmBeg);
 
-            var byBlock = new[] { intro, accept, decline };
-            for (int b = 0; b < Blocks.Length; b++)
+            foreach (var (suffix, lines) in blocks)
             {
-                var lines = byBlock[b];
                 if (lines == null) continue;
-                int key = EventSet.NameHash(eventName + Blocks[b]);
+                int key = EventSet.NameHash(eventName + suffix);
                 for (int i = 0; i < lines.Count; i++)
                 {
                     var l = lines[i];

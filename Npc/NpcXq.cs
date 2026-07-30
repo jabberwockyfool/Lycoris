@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -59,7 +60,20 @@ namespace Lycoris.Npc
         /// </summary>
         public static byte[] AddOnTalkFunction(byte[] xq, string onTalk, out int funcId, out string log)
         {
-            funcId = 0;
+            byte[] result = AppendFunctions(xq, new[] { onTalk }, out int first, out log);
+            funcId = first;
+            return result;
+        }
+
+        /// <summary>
+        /// Append one or more RunCmd_Map functions (each string is the function BODY) to the XQ32 bytes and
+        /// recompile. Returns the recompiled bytes; <paramref name="firstFuncId"/> is the id of the first
+        /// appended function (the rest are consecutive). The existing script is normalized from xtractquery's
+        /// pretty namespace form to the compile form so it recompiles (see <see cref="NormalizeToCompileForm"/>).
+        /// </summary>
+        public static byte[] AppendFunctions(byte[] xq, IList<string> bodies, out int firstFuncId, out string log)
+        {
+            firstFuncId = 0;
             var sb = new StringBuilder();
             string work = Path.Combine(Path.GetTempPath(), "lycoris_xq_" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(work);
@@ -74,9 +88,14 @@ namespace Lycoris.Npc
                 if (txt == null || !File.Exists(txt))
                     throw new InvalidOperationException("xtractquery did not produce a decompiled file (.txt).");
 
-                string code = File.ReadAllText(txt);
-                funcId = NextRunCmdId(code);
-                code += $"\n\nRunCmd_Map{funcId}()\n{{\n{onTalk}\n}}\n";
+                string code = NormalizeToCompileForm(File.ReadAllText(txt));
+                int id = NextRunCmdId(code);
+                firstFuncId = id;
+                foreach (var body in bodies)
+                {
+                    code += $"\n\nRunCmd_Map{id}()\n{{\n{body}\n}}\n";
+                    id++;
+                }
                 File.WriteAllText(txt, code);
 
                 RunOrThrow($"-o c -t xq32 -f \"{txt}\"", work, sb);
@@ -93,6 +112,16 @@ namespace Lycoris.Npc
                 try { Directory.Delete(work, true); } catch { /* best effort */ }
             }
         }
+
+        /// <summary>
+        /// xtractquery decompiles Level-5 namespaces to a pretty, versioned form
+        /// (e.g. <c>YW3.prog_common_0.07.10.RunEvent</c>) that will NOT recompile ("multiple dots"). Map back
+        /// to the canonical compile form (<c>seq.prog_common_001.RunEvent</c>) so the edited script recompiles.
+        /// </summary>
+        public static string NormalizeToCompileForm(string code) =>
+            code == null ? null : code
+                .Replace("YW3.prog_common_0.07.10.", "seq.prog_common_001.")
+                .Replace("YW3.prog_menu_0.05.01.", "seq.prog_menu_00501.");
 
         /// <summary>Decompile an XQ32 script to its full source text (xtractquery -o e).</summary>
         public static string Decompile(byte[] xq, out string log)

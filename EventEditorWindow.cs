@@ -68,7 +68,6 @@ namespace Lycoris
 
             var toolbar = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(6) };
             toolbar.Children.Add(ToolButton("＋ Blank event maker…", OpenBlankMaker, 0));
-            toolbar.Children.Add(ToolButton("⚔ Daily Fight maker…", OpenDailyMaker));
             toolbar.Children.Add(ToolButton("Save config", SaveConfig));
             DockPanel.SetDock(toolbar, Dock.Top);
 
@@ -362,13 +361,6 @@ namespace Lycoris
             catch (Exception ex) { DarkMessage.Show(ex.Message, "Save failed", MessageBoxButton.OK, MessageBoxImage.Error); }
         }
 
-        private void OpenDailyMaker()
-        {
-            if (_es == null) { DarkMessage.Show("event_set_config is not loaded.", "Daily Fight maker"); return; }
-            if (IncludeBase == null) { DarkMessage.Show("Open a mod folder first — events are written into the mod.", "Daily Fight maker"); return; }
-            new DailyFightWindow(this) { Owner = this }.ShowDialog();
-        }
-
         private void OpenBlankMaker()
         {
             if (_es == null) { DarkMessage.Show("event_set_config is not loaded.", "Blank event maker"); return; }
@@ -407,193 +399,6 @@ namespace Lycoris
         }
     }
 
-    /// <summary>
-    /// Daily Fight generator: builds and compiles the event .xq, registers it in event_set_config, and
-    /// (optionally) generates the dialogue text + name-box washamap. All outputs go under &lt;mod&gt;/data.
-    /// </summary>
-    internal sealed class DailyFightWindow : Window
-    {
-        private readonly EventEditorWindow _host;
-        private readonly YokaiDatabase _db;
-
-        private readonly TextBox _name = new TextBox { Width = 200 };
-        private readonly TextBlock _hashLabel = new TextBlock { Foreground = Theme.FgMuted, VerticalAlignment = VerticalAlignment.Center };
-        private readonly TextBox _bustups = NewMulti(96);
-        private readonly ComboBox _battle = new ComboBox { Width = 300, IsEditable = true };
-        private readonly TextBox _flag = new TextBox { Width = 130 };
-        private readonly CheckBox _genDlg = new CheckBox { Content = "Also generate dialogue (text + name box)", IsChecked = true, Margin = new Thickness(0, 10, 0, 4) };
-        private readonly TextBox _speaker = new TextBox { Width = 160, Text = "c001000" };
-        private readonly TextBox _intro = NewMulti(54);
-        private readonly TextBox _accept = NewMulti(54);
-        private readonly TextBox _decline = NewMulti(54);
-        private readonly TextBlock _status = new TextBlock { Foreground = Theme.FgMuted, Margin = new Thickness(4) };
-
-        private static TextBox NewMulti(double h) => new TextBox { Width = 360, Height = h, AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, FontFamily = new FontFamily("Consolas"), VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
-
-        public DailyFightWindow(EventEditorWindow host)
-        {
-            _host = host; _db = host.Db;
-            Title = "Lycoris — Daily Fight maker";
-            Width = 620; Height = 680;
-            WindowStartupLocation = WindowStartupLocation.CenterOwner;
-
-            var p = new StackPanel { Margin = new Thickness(14) };
-            p.Children.Add(new TextBlock { Text = "New « Daily Fight » event", FontSize = 15, Margin = new Thickness(0, 0, 0, 4) });
-            p.Children.Add(new TextBlock { Foreground = Theme.FgMuted, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 10),
-                Text = "Generates include/seq/event/<name>.xq, registers it in event_set_config (data/res/sys), and " +
-                       "(optionally) the dialogue under data/txt/ev. Then wire an NPC to run this event. Names must end in 0." });
-
-            var nameRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 2, 0, 2) };
-            nameRow.Children.Add(Label("Event name"));
-            _name.TextChanged += (s, e) => OnNameChanged();
-            nameRow.Children.Add(_name);
-            nameRow.Children.Add(new TextBlock { Text = "  (must end in 0)", Foreground = Theme.FgMuted, VerticalAlignment = VerticalAlignment.Center });
-            p.Children.Add(nameRow);
-            p.Children.Add(Row("Event id (hash)", _hashLabel));
-
-            var busRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 6, 0, 2) };
-            busRow.Children.Add(TopLabel("Bustups (one/line)"));
-            _bustups.Text = "";
-            busRow.Children.Add(_bustups);
-            p.Children.Add(busRow);
-            p.Children.Add(Hint("One model per line — exactly the characters/yo-kai shown during the event (include the enemy's model). Nothing is added for you. Common: c001000 (hero), c003000 (friend), y001000, y597000."));
-
-            _battle.ItemsSource = CommonEnc.AllBattles(_db);
-            _battle.DisplayMemberPath = "Label";
-            _battle.Text = "enc_day_";
-            p.Children.Add(Row("Battle encounter id", _battle));
-            p.Children.Add(Hint("Pick any battle from the Battle editor (common_enc) — referenced by its EncountID — or type a custom load_battle_ev id (e.g. enc_day_y159900_01)."));
-            p.Children.Add(Row("Daily flag (auto)", _flag));
-
-            p.Children.Add(_genDlg);
-            p.Children.Add(Row("Default speaker (model)", _speaker));
-            p.Children.Add(Hint("One page/line. Start a line with « model| » to change the speaker for that line."));
-            _intro.Text = "A challenger has appeared!";
-            _accept.Text = "Then let's battle!";
-            _decline.Text = "Come back anytime.";
-            p.Children.Add(DlgRow("Intro (_010)", _intro));
-            p.Children.Add(DlgRow("Accept (_020)", _accept));
-            p.Children.Add(DlgRow("Decline (_030)", _decline));
-
-            var gen = new Button { Content = "Generate event", Padding = new Thickness(14, 6, 14, 6), Margin = new Thickness(0, 14, 0, 0), HorizontalAlignment = HorizontalAlignment.Left };
-            gen.Click += (s, e) => Generate();
-            p.Children.Add(gen);
-
-            DockPanel.SetDock(_status, Dock.Bottom);
-            var root = new DockPanel();
-            root.Children.Add(_status);
-            root.Children.Add(new ScrollViewer { Content = p, VerticalScrollBarVisibility = ScrollBarVisibility.Auto });
-            Content = root;
-            OnNameChanged();
-        }
-
-        private static UIElement Label(string t) => new TextBlock { Text = t, Width = 150, VerticalAlignment = VerticalAlignment.Center, Foreground = Theme.FgMuted };
-        private static UIElement TopLabel(string t) => new TextBlock { Text = t, Width = 150, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 4, 0, 0), Foreground = Theme.FgMuted };
-        private static FrameworkElement Row(string label, FrameworkElement field) { var sp = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 2, 0, 2) }; sp.Children.Add(Label(label)); sp.Children.Add(field); return sp; }
-        private static FrameworkElement DlgRow(string label, FrameworkElement field) { var sp = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 2, 0, 2) }; sp.Children.Add(TopLabel(label)); sp.Children.Add(field); return sp; }
-        private static UIElement Hint(string t) => new TextBlock { Foreground = Theme.FgMuted, FontSize = 11, Margin = new Thickness(150, 0, 0, 6), TextWrapping = TextWrapping.Wrap, Text = t };
-
-        private void OnNameChanged()
-        {
-            string n = _name.Text?.Trim() ?? "";
-            if (n.Length == 0) { _hashLabel.Text = "—"; return; }
-            uint h = unchecked((uint)EventSet.NameHash(n));
-            _hashLabel.Text = $"0x{h:X8}" + (_host.Events.Contains(unchecked((int)h)) ? "   ⚠ already registered" : "");
-            if (string.IsNullOrWhiteSpace(_flag.Text) || (_flag.Tag as string) == _flag.Text) { _flag.Text = $"0x{h:X8}"; _flag.Tag = _flag.Text; }
-        }
-
-        /// <summary>The load_battle_ev(...) argument: a hash literal (0x..h) for a picked/known battle, else a
-        /// quoted string for a free-text custom id. Null if nothing entered.</summary>
-        private string BattleExpr()
-        {
-            if (_battle.SelectedItem is EncTable t) return t.HashHex + "h";
-            string txt = (_battle.Text ?? "").Trim();
-            if (txt.Length == 0) return null;
-            // a label like "btl_x632_00  (0x59653864)" left in the box → take the hash.
-            int lp = txt.LastIndexOf("(0x", StringComparison.OrdinalIgnoreCase);
-            if (lp >= 0) { int rp = txt.IndexOf(')', lp); if (rp > lp && TryHex(txt.Substring(lp + 1, rp - lp - 1), out uint idb)) return $"0x{idb:X8}h"; }
-            if (TryHex(txt, out uint id)) return $"0x{id:X8}h";
-            return "\"" + txt + "\"";
-        }
-
-        private static bool TryHex(string s, out uint v)
-        {
-            v = 0; s = (s ?? "").Trim().TrimEnd('h', 'H');
-            if (s.StartsWith("0x") || s.StartsWith("0X")) s = s.Substring(2);
-            return uint.TryParse(s, System.Globalization.NumberStyles.HexNumber, System.Globalization.CultureInfo.InvariantCulture, out v);
-        }
-
-        private void Generate()
-        {
-            var es = _host.Events;
-            string incBase = _host.IncludeBase;
-            string name = _name.Text?.Trim() ?? "";
-            if (name.Length == 0) { DarkMessage.Show("Enter an event name.", "Generate"); return; }
-            if (!name.EndsWith("0")) { DarkMessage.Show("Custom event names must end in 0 (a non-0 suffix is treated as a sub-event).", "Invalid name", MessageBoxButton.OK, MessageBoxImage.Warning); return; }
-            if (name.Any(c => !(char.IsLetterOrDigit(c) || c == '_'))) { DarkMessage.Show("Use only letters, digits and underscores.", "Invalid name", MessageBoxButton.OK, MessageBoxImage.Warning); return; }
-            int hash = EventSet.NameHash(name);
-            if (!NpcXq.IsAvailable()) { DarkMessage.Show("xtractquery was not found on PATH — required to compile the event script.", "xtractquery missing", MessageBoxButton.OK, MessageBoxImage.Warning); return; }
-
-            uint flag = EventGen.ParseHex(_flag.Text, unchecked((uint)hash));
-            var bustups = _bustups.Text.Replace("\r", "").Split('\n').Select(x => x.Trim()).Where(x => x.Length > 0).ToList();
-            string battleExpr = BattleExpr();
-            if (bustups.Count == 0) { DarkMessage.Show("Add at least one bustup model.", "Generate"); return; }
-            if (battleExpr == null) { DarkMessage.Show("Choose a battle or enter a battle id.", "Generate"); return; }
-
-            try
-            {
-                string source = EventSet.BuildDailyFightSource(name, bustups, battleExpr, flag);
-                byte[] xq = NpcXq.CompileScript(source, out _);
-                string xqPath = Path.Combine(incBase, "seq", "event", name + ".xq");
-                Directory.CreateDirectory(Path.GetDirectoryName(xqPath));
-                File.WriteAllBytes(xqPath, xq);
-
-                bool addedConfig = false;
-                if (!es.Contains(hash)) { es.AddEvent(hash, name); addedConfig = true; }
-                string cfgPath = _host.ConfigSavePath;
-                Directory.CreateDirectory(Path.GetDirectoryName(cfgPath));
-                T2bWriter.WriteFile(es.File, cfgPath);
-
-                string dlgMsg = "";
-                if (_genDlg.IsChecked == true)
-                {
-                    var intro = EventGen.ParseBlock(_intro.Text, _speaker.Text?.Trim());
-                    var accept = EventGen.ParseBlock(_accept.Text, _speaker.Text?.Trim());
-                    var decline = EventGen.ParseBlock(_decline.Text, _speaker.Text?.Trim());
-                    if (intro.Count + accept.Count + decline.Count > 0)
-                    {
-                        string txtTpl = EventGen.FindTemplate(_db, incBase, "en", "_en.cfg.bin");
-                        string wmTpl = EventGen.FindTemplate(_db, incBase, null, "_map.cfg.bin");
-                        if (txtTpl == null || wmTpl == null) throw new InvalidOperationException("Could not find a vanilla *_en.cfg.bin / *_map.cfg.bin under ev/ to use as a template.");
-                        var tf = T2bReader.ReadFile(txtTpl);
-                        var wf = T2bReader.ReadFile(wmTpl);
-                        EventDialogue.Build(tf, wf, name, intro, accept, decline);
-                        string outTxt = Path.Combine(incBase, "data", "txt", "ev", "en", name + "_en.cfg.bin");
-                        string outWm = Path.Combine(incBase, "data", "txt", "ev", name + "_map.cfg.bin");
-                        Directory.CreateDirectory(Path.GetDirectoryName(outTxt));
-                        Directory.CreateDirectory(Path.GetDirectoryName(outWm));
-                        T2bWriter.WriteFile(tf, outTxt);
-                        T2bWriter.WriteFile(wf, outWm);
-                        dlgMsg = $"\nText:    {outTxt}\nName box: {outWm}";
-                    }
-                }
-
-                _host.ReloadAfterGenerate($"Generated {name} (xq + config{(dlgMsg.Length > 0 ? " + dialogue" : "")}).");
-                _status.Text = $"Generated {name}.";
-                DarkMessage.Show(
-                    $"Event « {name} » generated.\n\nScript:  {xqPath}\nConfig:  {cfgPath}{(addedConfig ? "  (entry added)" : "  (already registered)")}" +
-                    dlgMsg + $"\n\nEvent id: 0x{unchecked((uint)hash):X8}\nDaily flag: 0x{flag:X8}\n\n" +
-                    $"To make an NPC run it, set the NPC's OnTalk to:\n    {EventSet.NpcRunSnippet(name)}",
-                    "Event generated", MessageBoxButton.OK, MessageBoxImage.Information);
-            }
-            catch (Exception ex)
-            {
-                DarkMessage.Show(ex.Message, "Generation failed", MessageBoxButton.OK, MessageBoxImage.Error);
-                _status.Text = "Generation failed: " + ex.Message;
-            }
-        }
-
-    }
 
     /// <summary>Shared helpers for the event generators.</summary>
     internal static class EventGen
@@ -642,13 +447,25 @@ namespace Lycoris
         public static string WriteDialogue(YokaiDatabase db, string includeBase, string name,
             List<DialogueLine> intro, List<DialogueLine> accept, List<DialogueLine> decline)
         {
-            if (intro.Count + accept.Count + decline.Count == 0) return "";
+            return WriteDialogueBlocks(db, includeBase, name, new[]
+            {
+                ("_010", intro), ("_020", accept), ("_030", decline),
+            });
+        }
+
+        /// <summary>Write a dialogue text file + washamap for an arbitrary set of (block suffix, lines) — used
+        /// for gendered dialogue (female _010 + male _011). Returns "" if there is nothing to write.</summary>
+        public static string WriteDialogueBlocks(YokaiDatabase db, string includeBase, string name,
+            IEnumerable<(string suffix, List<DialogueLine> lines)> blocks)
+        {
+            var list = blocks.ToList();
+            if (list.Sum(b => b.lines?.Count ?? 0) == 0) return "";
             string txtTpl = FindTemplate(db, includeBase, "en", "_en.cfg.bin");
             string wmTpl = FindTemplate(db, includeBase, null, "_map.cfg.bin");
             if (txtTpl == null || wmTpl == null) throw new InvalidOperationException("Could not find a vanilla *_en.cfg.bin / *_map.cfg.bin under ev/ to use as a template.");
             var tf = T2bReader.ReadFile(txtTpl);
             var wf = T2bReader.ReadFile(wmTpl);
-            EventDialogue.Build(tf, wf, name, intro, accept, decline);
+            EventDialogue.BuildBlocks(tf, wf, name, list.Select(b => (b.suffix, (IList<DialogueLine>)(b.lines ?? new List<DialogueLine>()))));
             string outTxt = Path.Combine(includeBase, "data", "txt", "ev", "en", name + "_en.cfg.bin");
             string outWm = Path.Combine(includeBase, "data", "txt", "ev", name + "_map.cfg.bin");
             Directory.CreateDirectory(Path.GetDirectoryName(outTxt));
@@ -656,6 +473,25 @@ namespace Lycoris
             T2bWriter.WriteFile(tf, outTxt);
             T2bWriter.WriteFile(wf, outWm);
             return $"\nText:    {outTxt}\nName box: {outWm}";
+        }
+
+        /// <summary>The load_battle_ev(...) argument from a combo's text: a hash literal (0x..h) for a picked
+        /// or hex battle, else a quoted string for a custom id. Empty string if nothing entered.</summary>
+        public static string BattleExpr(string text)
+        {
+            text = (text ?? "").Trim();
+            if (text.Length == 0) return "\"\"";
+            int lp = text.LastIndexOf("(0x", StringComparison.OrdinalIgnoreCase);
+            if (lp >= 0) { int rp = text.IndexOf(')', lp); if (rp > lp && TryHex(text.Substring(lp + 1, rp - lp - 1), out uint idb)) return $"0x{idb:X8}h"; }
+            if (TryHex(text, out uint id)) return $"0x{id:X8}h";
+            return "\"" + text + "\"";
+        }
+
+        private static bool TryHex(string s, out uint v)
+        {
+            v = 0; s = (s ?? "").Trim().TrimEnd('h', 'H');
+            if (s.StartsWith("0x") || s.StartsWith("0X")) s = s.Substring(2);
+            return uint.TryParse(s, System.Globalization.NumberStyles.HexNumber, System.Globalization.CultureInfo.InvariantCulture, out v);
         }
     }
 

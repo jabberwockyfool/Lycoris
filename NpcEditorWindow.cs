@@ -157,6 +157,32 @@ namespace Lycoris
             _fields.Children.Add(TextRow("AppearCond", "AppearCond", 200));
             _fields.Children.Add(CheckRow("IsYw1 (leave unchecked for YW3)", "IsYw1"));
             _fields.Children.Add(ComboRow("NpcType", "NpcType", new[] { "HUMAN", "YOKAI" }));
+
+            _fields.Children.Add(new TextBlock
+            {
+                Text = "Daily-fight NPC (a once-a-day battle: 4 talk events). Create the battle events first in " +
+                       "the Event editor (Daily Fight), then give the base event name here. OnTalk is ignored in this mode.",
+                TextWrapping = TextWrapping.Wrap, Foreground = Theme.FgMuted, Margin = new Thickness(0, 10, 0, 2)
+            });
+            _fields.Children.Add(CheckRow("Daily-fight NPC", "IsDailyFight"));
+            _fields.Children.Add(TextRow("Base event (evXX_YYY0)", "DailyFightEvent", 160));
+            _fields.Children.Add(BattleRow());
+            _fields.Children.Add(PickModelRow("NPC model (yo-kai)", "DailyModel", "The yo-kai you fight — auto turn-target, auto BaseID, always a bustup."));
+            _fields.Children.Add(BustupsRow());
+            _fields.Children.Add(CheckRow("Differentiate Katie/Nate (gender)", "DifferentiateGender"));
+            _fields.Children.Add(PickModelRow("Girl bustup (Katie/Hailey)", "GirlBustup", null));
+            _fields.Children.Add(PickModelRow("Boy bustup (Nate)", "BoyBustup", null));
+            _fields.Children.Add(DescRow("Intro — first time (♀)", "IntroText"));
+            _fields.Children.Add(DescRow("Intro (♂ — if gender on)", "IntroTextMale"));
+            _fields.Children.Add(DescRow("Accept — before battle", "AcceptText"));
+            _fields.Children.Add(DescRow("Decline", "DeclineText"));
+            _fields.Children.Add(DescRow("Repeat fight (♀)", "RepeatText"));
+            _fields.Children.Add(DescRow("Repeat fight (♂)", "RepeatTextMale"));
+            _fields.Children.Add(DescRow("Victory (♀)", "VictoryText"));
+            _fields.Children.Add(DescRow("Victory (♂)", "VictoryTextMale"));
+            _fields.Children.Add(DescRow("Loss (♀)", "LossText"));
+            _fields.Children.Add(DescRow("Loss (♂)", "LossTextMale"));
+            _fields.Children.Add(DescRow("\"Come back tomorrow\" (npc_talk)", "TomorrowText"));
         }
 
         private static UIElement Label(string text) =>
@@ -241,6 +267,68 @@ namespace Lycoris
             return sp;
         }
 
+        // ---------- daily-fight rows ----------
+
+        /// <summary>Battle picker: the common_enc battle list (as in the Event editor) + free-text id.</summary>
+        private FrameworkElement BattleRow()
+        {
+            var sp = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 2, 0, 2) };
+            sp.Children.Add(Label("Battle"));
+            var cb = new ComboBox { Width = 300, IsEditable = true };
+            try { cb.ItemsSource = Yokai.CommonEnc.AllBattles(_db); cb.DisplayMemberPath = "Label"; } catch { /* no battles loaded */ }
+            cb.SetBinding(ComboBox.TextProperty, new Binding("DailyBattle") { UpdateSourceTrigger = UpdateSourceTrigger.LostFocus });
+            sp.Children.Add(cb);
+            return sp;
+        }
+
+        /// <summary>A model text box + "yo-kai…" picker that sets the bound property to the chosen model name.</summary>
+        private FrameworkElement PickModelRow(string label, string path, string hint)
+        {
+            var sp = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 2, 0, 2) };
+            sp.Children.Add(Label(label));
+            var tb = new TextBox { Width = 150 };
+            tb.SetBinding(TextBox.TextProperty, new Binding(path) { UpdateSourceTrigger = UpdateSourceTrigger.LostFocus });
+            sp.Children.Add(tb);
+            var btn = new Button { Content = "yo-kai…", Padding = new Thickness(8, 2, 8, 2), Margin = new Thickness(6, 0, 0, 0) };
+            btn.Click += (s, e) => { var m = PickModel(); if (m != null) SetProp(path, m); };
+            sp.Children.Add(btn);
+            if (hint != null)
+                sp.Children.Add(new TextBlock { Text = "  " + hint, Foreground = Theme.FgMuted, VerticalAlignment = VerticalAlignment.Center, TextWrapping = TextWrapping.Wrap, Width = 240 });
+            return sp;
+        }
+
+        /// <summary>Multiline bustups + a "+ yo-kai" button that appends the chosen model to the list.</summary>
+        private FrameworkElement BustupsRow()
+        {
+            var sp = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 2, 0, 2) };
+            sp.Children.Add(Label("Bustups (one/line)"));
+            var tb = new TextBox { Width = 300, Height = 70, AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, FontFamily = new FontFamily("Consolas"), VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
+            tb.SetBinding(TextBox.TextProperty, new Binding("DailyBustups") { UpdateSourceTrigger = UpdateSourceTrigger.LostFocus });
+            sp.Children.Add(tb);
+            var btn = new Button { Content = "+ yo-kai", Padding = new Thickness(8, 2, 8, 2), Margin = new Thickness(6, 0, 0, 0), VerticalAlignment = VerticalAlignment.Top };
+            btn.Click += (s, e) => AppendBustup();
+            sp.Children.Add(btn);
+            return sp;
+        }
+
+        /// <summary>Open the yo-kai picker and return the chosen model name (or a typed id), or null.</summary>
+        private string PickModel()
+        {
+            if (_db == null || _db.Yokai.Count == 0) { DarkMessage.Show("No yo-kai loaded — you can still type an id (e.g. y152000).", "Pick yo-kai"); return null; }
+            var dlg = new PickYokaiDialog(this, _db) { Owner = this };
+            if (dlg.ShowDialog() != true || dlg.Picked == null) return null;
+            return string.IsNullOrEmpty(dlg.Picked.ModelName) ? null : dlg.Picked.ModelName;
+        }
+
+        private void SetProp(string path, string value) => typeof(NpcModel).GetProperty(path)?.SetValue(Selected, value);
+
+        private void AppendBustup()
+        {
+            var m = PickModel(); var n = Selected;
+            if (m == null || n == null) return;
+            n.DailyBustups = string.IsNullOrWhiteSpace(n.DailyBustups) ? m : n.DailyBustups.TrimEnd('\r', '\n') + "\n" + m;
+        }
+
         // ---------- actions ----------
 
         private NpcModel Selected => _list.SelectedItem as NpcModel;
@@ -313,11 +401,19 @@ namespace Lycoris
             if (n == null) return;
             CommitEdits();
             if (string.IsNullOrWhiteSpace(n.NpcName)) { DarkMessage.Show("Give the NPC a name.", "Compile"); return; }
-
-            if (!string.IsNullOrWhiteSpace(n.OnTalk) && !NpcXq.IsAvailable())
+            if (n.IsDailyFight && string.IsNullOrWhiteSpace(n.DailyFightEvent))
             {
-                DarkMessage.Show("xtractquery was not found in PATH — required to compile the OnTalk code.\n" +
-                    "Install it globally (see yo-docs), or clear the OnTalk field to compile without dialogue.",
+                DarkMessage.Show("A daily-fight NPC needs a base event name (evXX_YYY0).", "Compile");
+                return;
+            }
+            // A daily-fight NPC IS the yo-kai model you fight: derive the BaseID from it if not set explicitly.
+            if (n.IsDailyFight && n.BaseId == 0 && !string.IsNullOrWhiteSpace(n.DailyModel))
+                n.BaseId = unchecked((int)Crc32.Standard(Encoding.UTF8.GetBytes(n.DailyModel.Trim())));
+
+            if ((!string.IsNullOrWhiteSpace(n.OnTalk) || n.IsDailyFight) && !NpcXq.IsAvailable())
+            {
+                DarkMessage.Show("xtractquery was not found in PATH — required to compile the talk XQ.\n" +
+                    "Install it globally (see yo-docs), or clear the OnTalk field (non-daily NPC) to compile without dialogue.",
                     "xtractquery missing", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
@@ -353,15 +449,27 @@ namespace Lycoris
                 outRoot = picked;
             }
 
+            NpcCompiler.DailyPaths daily = n.IsDailyFight ? ResolveDailyPaths() : null;
+
             try
             {
-                var r = NpcCompiler.Compile(n, mapFolder, outRoot, mergeMapDir);
+                var r = NpcCompiler.Compile(n, mapFolder, outRoot, mergeMapDir, daily);
                 _status.Text = $"NPC compiled — ID {r.NpcIdHex}." + (r.MergedDir != null ? " Merged into the mod." : "");
+
+                // Daily-fight: also generate the 4 events the NPC's triggers call (xq + config + dialogue).
+                string eventMsg = "";
+                if (n.IsDailyFight)
+                {
+                    try { eventMsg = "\n\n✔ " + GenerateDailyEvents(n); }
+                    catch (Exception ex) { eventMsg = "\n\n⚠ The NPC wiring was written, but the events were NOT generated:\n" + ex.Message; }
+                }
+
                 string msg = $"NPC \"{n.NpcName}\" compiled.\n\nNPC ID (hex): {r.NpcIdHex}\n" +
-                             (r.FuncId >= 0 ? $"OnTalk function: RunCmd_Map{r.FuncId}\n" : "OnTalk: (none)\n") +
+                             (r.FuncId >= 0 ? $"Talk function(s) start at RunCmd_Map{r.FuncId}\n" : "OnTalk: (none)\n") +
                              (r.MergedDir != null
                                 ? $"\n✔ Automatically merged into the mod:\n{r.MergedDir}\n\n(backup copy: {r.OutputDir})"
-                                : $"\nFiles written to:\n{r.OutputDir}\nMerge this folder into your mod (res/map/…).");
+                                : $"\nFiles written to:\n{r.OutputDir}\nMerge this folder into your mod (res/map/…).") +
+                             eventMsg;
                 DarkMessage.Show(msg, "Compilation succeeded", MessageBoxButton.OK, MessageBoxImage.Information);
                 PersistNpcs();
             }
@@ -388,6 +496,108 @@ namespace Lycoris
                     if (System.IO.File.Exists(System.IO.Path.Combine(cand, "npc.pck"))) return cand;
             }
             return null;
+        }
+
+        /// <summary>Locate the global flag_config for a daily-fight NPC: read the mod's copy if it exists (so
+        /// repeated compiles accumulate), else the reference; write the edit to the mod (mirrored path).</summary>
+        private NpcCompiler.DailyPaths ResolveDailyPaths()
+        {
+            string reference = FindFlagConfigUnder(_db?.ReferenceFolder);
+            string modCopy = FindFlagConfigUnder(_db?.ModFolder);
+            string dst = reference != null ? _db?.MirrorToMod(reference) : modCopy;
+            return new NpcCompiler.DailyPaths { FlagConfigSrc = modCopy ?? reference, FlagConfigDst = dst };
+        }
+
+        private static string FindFlagConfigUnder(string root)
+        {
+            if (string.IsNullOrEmpty(root) || !Directory.Exists(root)) return null;
+            string direct = Path.Combine(root, "flag_config_0.01r.cfg.bin");
+            if (File.Exists(direct)) return direct;
+            try { return Directory.EnumerateFiles(root, "flag_config_0.01r.cfg.bin", SearchOption.AllDirectories).FirstOrDefault(); }
+            catch { return null; }
+        }
+
+        /// <summary>
+        /// Generate the 4 daily-fight events the NPC's talk triggers call (ev+0/+10/+20/+30): first-time and
+        /// repeat are battle events (BuildDailyFightSource); win and lose are dialogue-only (BuildDailyDialogue-
+        /// Source). Each gets its .xq (compiled), an event_set_config entry, and its dialogue text. The daily
+        /// (sub14025) flag = CRC32(base event) — the same flag the npc_talk GetOneDayBitFlag checks.
+        /// </summary>
+        private string GenerateDailyEvents(NpcModel n)
+        {
+            string incBase = IncBase();
+            if (incBase == null) throw new InvalidOperationException("No mod loaded — cannot write the events.");
+
+            const string cfgName = "event_set_config_0.01.cfg.bin";
+            string modCfg = Path.Combine(incBase, "data", "res", "sys", cfgName);
+            string refCfg = null;
+            foreach (var cand in new[] { Path.Combine(_db?.ReferenceFolder ?? "", cfgName),
+                Path.Combine(_db?.ReferenceFolder ?? "", "data", "res", "sys", cfgName) })
+                if (File.Exists(cand)) { refCfg = cand; break; }
+            string loadPath = File.Exists(modCfg) ? modCfg : refCfg;
+            if (loadPath == null) throw new InvalidOperationException($"Could not find {cfgName} in the mod or reference.");
+
+            var eventDirs = new System.Collections.Generic.List<string>();
+            if (_db?.ReferenceFolder != null) eventDirs.Add(Path.Combine(_db.ReferenceFolder, "seq", "event"));
+            eventDirs.Add(Path.Combine(incBase, "seq", "event"));
+            var es = EventSet.Load(loadPath, eventDirs);
+
+            string ev0 = n.DailyFightEvent.Trim();
+            string[] names = { ev0, NpcDailyFight.StepEvent(ev0, 10), NpcDailyFight.StepEvent(ev0, 20), NpcDailyFight.StepEvent(ev0, 30) };
+            var bustups = (n.DailyBustups ?? "").Replace("\r", "").Split('\n').Select(x => x.Trim()).Where(x => x.Length > 0).ToList();
+            string model = n.DailyModel?.Trim();
+            // The NPC's model is the turn target and always shown — add it to the bustups if the user didn't.
+            if (!string.IsNullOrWhiteSpace(model) && !bustups.Any(b => b.Equals(model, StringComparison.OrdinalIgnoreCase)))
+                bustups.Add(model);
+            bool genderDlg = n.DifferentiateGender;
+            string girl = genderDlg ? n.GirlBustup : null;
+            string boy = genderDlg ? n.BoyBustup : null;
+            uint flag = unchecked((uint)Crc32.Standard(Encoding.UTF8.GetBytes(ev0)));
+            string battleExpr = EventGen.BattleExpr(n.DailyBattle);
+            string speaker = string.IsNullOrWhiteSpace(model) ? bustups.LastOrDefault() : model;
+
+            var sources = new[]
+            {
+                EventSet.BuildDailyFightSource(names[0], bustups, battleExpr, flag, girl, boy, genderDlg),
+                EventSet.BuildDailyFightSource(names[1], bustups, battleExpr, flag, girl, boy, genderDlg),
+                EventSet.BuildDailyDialogueSource(names[2], bustups, model, girl, boy, genderDlg),
+                EventSet.BuildDailyDialogueSource(names[3], bustups, model, girl, boy, genderDlg),
+            };
+            // Per-event dialogue: female + optional male _010 block, and (battle events only) accept/decline.
+            var dlg = new[]
+            {
+                (female: n.IntroText, male: n.IntroTextMale, accept: n.AcceptText, decline: n.DeclineText),
+                (female: n.RepeatText, male: n.RepeatTextMale, accept: n.AcceptText, decline: n.DeclineText),
+                (female: n.VictoryText, male: n.VictoryTextMale, accept: (string)null, decline: (string)null),
+                (female: n.LossText, male: n.LossTextMale, accept: (string)null, decline: (string)null),
+            };
+
+            for (int i = 0; i < 4; i++)
+            {
+                byte[] xq = NpcXq.CompileScript(sources[i], out _);
+                string xqPath = Path.Combine(incBase, "seq", "event", names[i] + ".xq");
+                Directory.CreateDirectory(Path.GetDirectoryName(xqPath));
+                File.WriteAllBytes(xqPath, xq);
+
+                int hash = EventSet.NameHash(names[i]);
+                if (!es.Contains(hash)) es.AddEvent(hash, names[i]);
+
+                var blocks = new System.Collections.Generic.List<(string, System.Collections.Generic.List<Lycoris.Yokai.DialogueLine>)>
+                {
+                    ("_010", EventGen.ParseBlock(dlg[i].female, speaker)),
+                };
+                if (genderDlg)
+                {
+                    string male = string.IsNullOrWhiteSpace(dlg[i].male) ? dlg[i].female : dlg[i].male;
+                    blocks.Add((EventSet.MaleBlock("_010"), EventGen.ParseBlock(male, speaker)));
+                }
+                if (dlg[i].accept != null) blocks.Add(("_020", EventGen.ParseBlock(dlg[i].accept, speaker)));
+                if (dlg[i].decline != null) blocks.Add(("_030", EventGen.ParseBlock(dlg[i].decline, speaker)));
+                EventGen.WriteDialogueBlocks(_db, incBase, names[i], blocks);
+            }
+            Directory.CreateDirectory(Path.GetDirectoryName(modCfg));
+            T2bWriter.WriteFile(es.File, modCfg);
+            return $"4 events generated: {string.Join(", ", names)} (+ event_set_config, dialogue{(genderDlg ? " ♀/♂" : "")}, daily flag 0x{flag:X8}).";
         }
 
         private void BaseIdFromYokai()

@@ -28,6 +28,29 @@ namespace Lycoris.Npc
             sb.Append($"AppearCond = {BasicString(n.AppearCond)}\n");
             sb.Append($"IsYw1 = {(n.IsYw1 ? "true" : "false")}\n");
             sb.Append($"NpcType = {NpcTypeValue(n.NpcType)}\n");
+            if (n.IsDailyFight)
+            {
+                sb.Append("\n# --- Lycoris daily-fight extension ---\n");
+                sb.Append("IsDailyFight = true\n");
+                sb.Append($"DailyFightEvent = {BasicString(n.DailyFightEvent)}\n");
+                sb.Append($"DailyBattle = {BasicString(n.DailyBattle)}\n");
+                sb.Append($"DailyModel = {BasicString(n.DailyModel)}\n");
+                sb.Append($"DailyBustups = \"\"\"\n{MultilineBody(n.DailyBustups)}\"\"\"\n");
+                sb.Append($"DifferentiateGender = {(n.DifferentiateGender ? "true" : "false")}\n");
+                sb.Append($"GirlBustup = {BasicString(n.GirlBustup)}\n");
+                sb.Append($"BoyBustup = {BasicString(n.BoyBustup)}\n");
+                sb.Append($"IntroText = \"\"\"\n{MultilineBody(n.IntroText)}\"\"\"\n");
+                sb.Append($"AcceptText = \"\"\"\n{MultilineBody(n.AcceptText)}\"\"\"\n");
+                sb.Append($"DeclineText = \"\"\"\n{MultilineBody(n.DeclineText)}\"\"\"\n");
+                sb.Append($"RepeatText = \"\"\"\n{MultilineBody(n.RepeatText)}\"\"\"\n");
+                sb.Append($"VictoryText = \"\"\"\n{MultilineBody(n.VictoryText)}\"\"\"\n");
+                sb.Append($"LossText = \"\"\"\n{MultilineBody(n.LossText)}\"\"\"\n");
+                sb.Append($"IntroTextMale = \"\"\"\n{MultilineBody(n.IntroTextMale)}\"\"\"\n");
+                sb.Append($"RepeatTextMale = \"\"\"\n{MultilineBody(n.RepeatTextMale)}\"\"\"\n");
+                sb.Append($"VictoryTextMale = \"\"\"\n{MultilineBody(n.VictoryTextMale)}\"\"\"\n");
+                sb.Append($"LossTextMale = \"\"\"\n{MultilineBody(n.LossTextMale)}\"\"\"\n");
+                sb.Append($"TomorrowText = \"\"\"\n{MultilineBody(n.TomorrowText)}\"\"\"\n");
+            }
             return sb.ToString();
         }
 
@@ -141,6 +164,25 @@ namespace Lycoris.Npc
                 case "AppearCond": n.AppearCond = Unquote(text); break;
                 case "IsYw1": n.IsYw1 = text.Trim().Equals("true", StringComparison.OrdinalIgnoreCase); break;
                 case "NpcType": n.NpcType = text.StartsWith("\"") ? Unquote(text) : text.Trim(); break;
+                case "IsDailyFight": n.IsDailyFight = text.Trim().Equals("true", StringComparison.OrdinalIgnoreCase); break;
+                case "DailyFightEvent": n.DailyFightEvent = Unquote(text); break;
+                case "TomorrowText": n.TomorrowText = alreadyLiteral ? text : Unquote(text); break;
+                case "DailyBattle": n.DailyBattle = Unquote(text); break;
+                case "DailyModel": n.DailyModel = Unquote(text); break;
+                case "DailyBustups": n.DailyBustups = alreadyLiteral ? text : Unquote(text); break;
+                case "DifferentiateGender": n.DifferentiateGender = text.Trim().Equals("true", StringComparison.OrdinalIgnoreCase); break;
+                case "GirlBustup": n.GirlBustup = Unquote(text); break;
+                case "BoyBustup": n.BoyBustup = Unquote(text); break;
+                case "IntroText": n.IntroText = alreadyLiteral ? text : Unquote(text); break;
+                case "AcceptText": n.AcceptText = alreadyLiteral ? text : Unquote(text); break;
+                case "DeclineText": n.DeclineText = alreadyLiteral ? text : Unquote(text); break;
+                case "RepeatText": n.RepeatText = alreadyLiteral ? text : Unquote(text); break;
+                case "VictoryText": n.VictoryText = alreadyLiteral ? text : Unquote(text); break;
+                case "LossText": n.LossText = alreadyLiteral ? text : Unquote(text); break;
+                case "IntroTextMale": n.IntroTextMale = alreadyLiteral ? text : Unquote(text); break;
+                case "RepeatTextMale": n.RepeatTextMale = alreadyLiteral ? text : Unquote(text); break;
+                case "VictoryTextMale": n.VictoryTextMale = alreadyLiteral ? text : Unquote(text); break;
+                case "LossTextMale": n.LossTextMale = alreadyLiteral ? text : Unquote(text); break;
             }
         }
 

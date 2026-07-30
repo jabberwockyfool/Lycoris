@@ -21,6 +21,28 @@ namespace Lycoris.Npc
         private bool _isYw1;
         private string _npcType = "HUMAN";              // "HUMAN"(2) / "YOKAI"(0) / raw int as string
 
+        // --- daily-fight mode (an NPC that triggers a once-a-day battle: 4 talk events) ---
+        private bool _isDailyFight;
+        private string _dailyFightEvent = "";           // base event name (evXX_YYY0); +10/+20/+30 derived
+        private string _tomorrowText = "I'll play with you next time,\nso just be patient until then!";
+        private string _dailyBattle = "";               // battle id for load_battle_ev (first + repeat events)
+        private string _dailyBustups = "";              // always-shown bustup models, one per line
+        private bool _differentiateGender;              // insert a get_player_type() branch for a girl/boy bustup
+        private string _girlBustup = "";                // bustup when get_player_type()==2 (Katie/Hailey)
+        private string _boyBustup = "";                 // bustup otherwise (Nate)
+        private string _dailyModel = "";                // the NPC yokai model (PlayerTurnTargetStart target)
+        private string _introText = "A challenger has appeared!";
+        private string _acceptText = "Then let's battle!";
+        private string _declineText = "Come back anytime.";
+        private string _repeatText = "Back for another round? Let's go!";
+        private string _victoryText = "Grrr… you got lucky this time!";
+        private string _lossText = "Ha! Better luck next time!";
+        // Male variants (used when DifferentiateGender is on; the primary fields are the female/Katie version).
+        private string _introTextMale = "";
+        private string _repeatTextMale = "";
+        private string _victoryTextMale = "";
+        private string _lossTextMale = "";
+
         public string NpcName { get => _npcName; set { if (Set(ref _npcName, value)) OnPropertyChanged(nameof(DisplayName)); } }
         public int BaseId { get => _baseId; set { if (Set(ref _baseId, value)) OnPropertyChanged(nameof(BaseIdHex)); } }
         public double NpcX { get => _npcX; set => Set(ref _npcX, value); }
@@ -33,6 +55,37 @@ namespace Lycoris.Npc
         public string AppearCond { get => _appearCond; set => Set(ref _appearCond, value); }
         public bool IsYw1 { get => _isYw1; set => Set(ref _isYw1, value); }
         public string NpcType { get => _npcType; set => Set(ref _npcType, value); }
+
+        /// <summary>When true, the NPC is compiled as a daily-fight trigger (4 talk events + battle), cloned
+        /// from a vanilla daily NPC in the map. Requires <see cref="DailyFightEvent"/>.</summary>
+        public bool IsDailyFight { get => _isDailyFight; set => Set(ref _isDailyFight, value); }
+
+        /// <summary>Base event name (evXX_YYY0) created in the Event editor; +10/+20/+30 give the repeat/win/lose events.</summary>
+        public string DailyFightEvent { get => _dailyFightEvent; set => Set(ref _dailyFightEvent, value); }
+
+        /// <summary>The overworld "come back tomorrow" line the NPC says once the daily fight is done.</summary>
+        public string TomorrowText { get => _tomorrowText; set => Set(ref _tomorrowText, value); }
+
+        /// <summary>Battle id loaded by load_battle_ev in the first/repeat events.</summary>
+        public string DailyBattle { get => _dailyBattle; set => Set(ref _dailyBattle, value); }
+        /// <summary>Always-shown bustup models (one per line).</summary>
+        public string DailyBustups { get => _dailyBustups; set => Set(ref _dailyBustups, value); }
+        /// <summary>Insert a get_player_type() branch so Katie/Hailey and Nate see a different bustup.</summary>
+        public bool DifferentiateGender { get => _differentiateGender; set => Set(ref _differentiateGender, value); }
+        public string GirlBustup { get => _girlBustup; set => Set(ref _girlBustup, value); }
+        public string BoyBustup { get => _boyBustup; set => Set(ref _boyBustup, value); }
+        /// <summary>NPC yokai model (e.g. y456000_01) — the PlayerTurnTargetStart target in win/lose events.</summary>
+        public string DailyModel { get => _dailyModel; set => Set(ref _dailyModel, value); }
+        public string IntroText { get => _introText; set => Set(ref _introText, value); }
+        public string AcceptText { get => _acceptText; set => Set(ref _acceptText, value); }
+        public string DeclineText { get => _declineText; set => Set(ref _declineText, value); }
+        public string RepeatText { get => _repeatText; set => Set(ref _repeatText, value); }
+        public string VictoryText { get => _victoryText; set => Set(ref _victoryText, value); }
+        public string LossText { get => _lossText; set => Set(ref _lossText, value); }
+        public string IntroTextMale { get => _introTextMale; set => Set(ref _introTextMale, value); }
+        public string RepeatTextMale { get => _repeatTextMale; set => Set(ref _repeatTextMale, value); }
+        public string VictoryTextMale { get => _victoryTextMale; set => Set(ref _victoryTextMale, value); }
+        public string LossTextMale { get => _lossTextMale; set => Set(ref _lossTextMale, value); }
 
         /// <summary>BaseId edited as hex ("0x…"); blank clears to 0.</summary>
         public string BaseIdHex
@@ -59,6 +112,13 @@ namespace Lycoris.Npc
             _npcName = _npcName, _baseId = _baseId, _npcX = _npcX, _npcY = _npcY, _npcZ = _npcZ,
             _npcRotation = _npcRotation, _chapterCode = _chapterCode, _mapId = _mapId, _onTalk = _onTalk,
             _appearCond = _appearCond, _isYw1 = _isYw1, _npcType = _npcType,
+            _isDailyFight = _isDailyFight, _dailyFightEvent = _dailyFightEvent, _tomorrowText = _tomorrowText,
+            _dailyBattle = _dailyBattle, _dailyBustups = _dailyBustups, _differentiateGender = _differentiateGender,
+            _girlBustup = _girlBustup, _boyBustup = _boyBustup, _dailyModel = _dailyModel,
+            _introText = _introText, _acceptText = _acceptText, _declineText = _declineText,
+            _repeatText = _repeatText, _victoryText = _victoryText, _lossText = _lossText,
+            _introTextMale = _introTextMale, _repeatTextMale = _repeatTextMale,
+            _victoryTextMale = _victoryTextMale, _lossTextMale = _lossTextMale,
         };
 
         private bool Set<T>(ref T field, T value, [CallerMemberName] string prop = null)
