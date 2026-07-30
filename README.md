@@ -1,4 +1,4 @@
-## This tool was made with the help of AI !
+## Lycoris
 Lycoris is a fork of Albatross that integrates NPCmake allowing you to use a YWML mod directly
 Currently available:
 - Yo-kai Editor
