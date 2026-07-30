@@ -34,8 +34,12 @@ namespace Lycoris.Npc
         private const string TplRunTrigger = "AAAAABICNWmE468ACgEoAAYCNBm0CpY=";
         private static readonly int TplRunTriggerDonor = 0x19B40A96;
 
-        // flag_config groups: "seen" is a permanent flag (FLAG_INFO_0); "day done" is a once-a-day flag (FLAG_INFO_6).
-        private const int FlagGroupGlobal = 0, FlagGroupOneDay = 6;
+        // flag_config groups, identified by their BEGIN field[0] (a category id, NOT a position): "seen" is a
+        // permanent GetGlobalBitFlag flag → category 0 (the group shown as "FLAG_INFO_0"); "day done" is a
+        // GetOneDayBitFlag flag → category 23 (the 7th group, shown as "FLAG_INFO_6"). CONFIRMED on vanilla:
+        // the daily flag 0xF2A22B7C lives in the field[0]==23 group. Registering it elsewhere makes
+        // GetOneDayBitFlag never see it (→ can re-fight same day, no win/lose).
+        private const int FlagGroupGlobal = 0, FlagGroupOneDay = 23;
 
         // Trigger record types (constant for every daily NPC).
         private const int TrigTalkFirst = 12, TrigTalkRepeat = 12, TrigBattleWin = 80, TrigBattleLose = 81;
@@ -73,7 +77,12 @@ namespace Lycoris.Npc
             r.FlagDayDone = Crc(ev);
             r.TrigFirst = Crc(npc.NpcName + "_dtrig_first");
             r.TrigRepeat = Crc(npc.NpcName + "_dtrig_repeat");
-            r.TrigBattle = Crc(npc.NpcName + "_dtrig_battle");
+            // The win/lose triggers are routed by the BATTLE id: the game matches the battle that just ended
+            // (its id = the load_battle_ev value) to a type-80/81 trigger's field[1]. So it MUST equal the
+            // battle id, not an arbitrary hash. (Confirmed on vanilla: CRC32("enc_day_y780000_01") = the id.)
+            r.TrigBattle = string.IsNullOrWhiteSpace(npc.DailyBattle)
+                ? Crc(npc.NpcName + "_dtrig_battle")
+                : BattleId(npc.DailyBattle);
             r.TextId = Crc(npc.NpcName + "_daily_tomorrow");
             int talker = baseId != 0 ? baseId : npcId;
 
@@ -243,6 +252,25 @@ namespace Lycoris.Npc
             if (num.Length == 0) return name;
             long v = long.Parse(num) + add;
             return name.Substring(0, i) + v.ToString(new string('0', num.Length));
+        }
+
+        /// <summary>The battle's identifying id from the picker text: a hash (from a "(0x…)" label or a hex
+        /// entry), else CRC32 of the plain battle name (what the game derives from load_battle_ev("name")).
+        /// This must equal the load_battle_ev value so the win/lose triggers match the battle that ended.</summary>
+        public static int BattleId(string battle)
+        {
+            string t = (battle ?? "").Trim();
+            int lp = t.LastIndexOf("(0x", StringComparison.OrdinalIgnoreCase);
+            if (lp >= 0) { int rp = t.IndexOf(')', lp); if (rp > lp && TryHex(t.Substring(lp + 1, rp - lp - 1), out uint idb)) return unchecked((int)idb); }
+            if (TryHex(t, out uint id)) return unchecked((int)id);
+            return Crc(t);
+        }
+
+        private static bool TryHex(string s, out uint v)
+        {
+            v = 0; s = (s ?? "").Trim().TrimEnd('h', 'H');
+            if (s.StartsWith("0x") || s.StartsWith("0X")) s = s.Substring(2);
+            return uint.TryParse(s, System.Globalization.NumberStyles.HexNumber, System.Globalization.CultureInfo.InvariantCulture, out v);
         }
 
         private static int Crc(string s) => unchecked((int)Crc32.Standard(Encoding.UTF8.GetBytes(s ?? "")));

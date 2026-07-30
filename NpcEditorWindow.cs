@@ -502,10 +502,15 @@ namespace Lycoris
         /// repeated compiles accumulate), else the reference; write the edit to the mod (mirrored path).</summary>
         private NpcCompiler.DailyPaths ResolveDailyPaths()
         {
-            string reference = FindFlagConfigUnder(_db?.ReferenceFolder);
-            string modCopy = FindFlagConfigUnder(_db?.ModFolder);
-            string dst = reference != null ? _db?.MirrorToMod(reference) : modCopy;
-            return new NpcCompiler.DailyPaths { FlagConfigSrc = modCopy ?? reference, FlagConfigDst = dst };
+            // flag_config belongs at (mod)/include/data/res/sys — same place as event_set_config (the reference
+            // keeps it at its cfg root, so MirrorToMod would put it in the wrong spot). Read the mod copy first
+            // (so repeated compiles accumulate), else the reference.
+            const string flagName = "flag_config_0.01r.cfg.bin";
+            string incBase = IncBase();
+            string modCfg = incBase != null ? Path.Combine(incBase, "data", "res", "sys", flagName) : null;
+            string refCfg = FindFlagConfigUnder(_db?.ReferenceFolder);
+            string src = (modCfg != null && File.Exists(modCfg)) ? modCfg : refCfg;
+            return new NpcCompiler.DailyPaths { FlagConfigSrc = src, FlagConfigDst = modCfg };
         }
 
         private static string FindFlagConfigUnder(string root)
