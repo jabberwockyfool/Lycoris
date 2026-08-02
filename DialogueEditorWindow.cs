@@ -36,6 +36,10 @@ namespace Lycoris
         private readonly TextBlock _speakerHint = new TextBlock { Foreground = Theme.FgMuted, VerticalAlignment = VerticalAlignment.Center };
         private readonly Button _nameBoxBtn = new Button { Content = "＋ Name box", Padding = new Thickness(9, 4, 9, 4), Margin = new Thickness(6, 0, 0, 0) };
         private readonly ComboBox _block = new ComboBox { Width = 90, IsEditable = true };
+        // voice + bustup pickers (preview a voice, insert a <PV#voice_..> / <A01/NN> tag for the current speaker)
+        private readonly ComboBox _voiceCombo = new ComboBox { Width = 64 };
+        private readonly ComboBox _exprCombo = new ComboBox { Width = 64 };
+        private string _speakerModel;
         // --- live text-bubble preview (control codes interpreted, à la Kuriimu) ---
         private readonly Border _nameBox = new Border { HorizontalAlignment = HorizontalAlignment.Left, Padding = new Thickness(10, 2, 10, 2), CornerRadius = new CornerRadius(8), Margin = new Thickness(6, 10, 0, -8), Visibility = Visibility.Collapsed };
         private readonly TextBlock _nameText = new TextBlock { Foreground = Brushes.White, FontWeight = FontWeights.Bold, FontSize = 13 };
@@ -108,7 +112,18 @@ namespace Lycoris
             _text.LostFocus += (s, e) => TextChanged();
             _text.TextChanged += (s, e) => { if (!_suppress) UpdatePreview(); };   // live bubble + bustup (expression <A..>)
             right.Children.Add(_text);
-            right.Children.Add(new TextBlock { Foreground = Theme.FgMuted, FontSize = 11, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 6, 0, 0), Text = "" });
+
+            // Voice + bustup pickers: preview the speaker's voice, insert its <PV#voice_..> / <A01/NN> tag.
+            var mediaRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 8, 0, 0) };
+            mediaRow.Children.Add(new TextBlock { Text = "Voice ", VerticalAlignment = VerticalAlignment.Center, Foreground = Theme.FgMuted });
+            mediaRow.Children.Add(_voiceCombo);
+            mediaRow.Children.Add(Btn("▶ Play", PlayVoice));
+            mediaRow.Children.Add(Btn("Insert", InsertVoice));
+            mediaRow.Children.Add(new TextBlock { Text = "    Bustup ", VerticalAlignment = VerticalAlignment.Center, Foreground = Theme.FgMuted });
+            mediaRow.Children.Add(_exprCombo);
+            mediaRow.Children.Add(Btn("Insert", InsertExpr));
+            right.Children.Add(mediaRow);
+            right.Children.Add(new TextBlock { Foreground = Theme.FgMuted, FontSize = 11, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 4, 0, 0), Text = "Voice/bustup lists follow the speaker (name box). Play previews the voice; Insert adds the tag at the caret." });
 
             // Live text-bubble preview (control codes interpreted, à la Kuriimu).
             var bubbleBorder = new SolidColorBrush(Color.FromRgb(0x8B, 0x5C, 0xF6));
@@ -197,6 +212,7 @@ namespace Lycoris
                 _nameBoxBtn.Visibility = hasBox ? Visibility.Collapsed : Visibility.Visible; // offer to add one
             }
             _suppress = false;
+            RefreshMedia();
             UpdatePreview();
         }
 
@@ -257,6 +273,7 @@ namespace Lycoris
             int id = Resolve(_speaker.Text);
             _row.TalkerBaseId = id;
             _row.SpeakerName = _talkerNames.TryGetValue(id, out var nm) ? nm : null;
+            RefreshMedia();
             UpdatePreview();
         }
 
@@ -272,6 +289,45 @@ namespace Lycoris
             var portrait = named ? Bustup.Get(_db, _row.TalkerBaseId, _text.Text) : null;
             _bustupImg.Source = portrait;
             _bustupImg.Visibility = portrait != null ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        /// <summary>Repopulate the voice + expression lists for the current speaker's model (called on line/speaker
+        /// change, not per keystroke).</summary>
+        private void RefreshMedia()
+        {
+            _speakerModel = _row != null && _row.TalkerBaseId != 0 ? Bustup.ModelFor(_db, _row.TalkerBaseId) : null;
+            _voiceCombo.ItemsSource = _speakerModel != null ? VoiceAudio.List(_db, _speakerModel) : null;
+            _exprCombo.ItemsSource = _row != null && _row.TalkerBaseId != 0 ? Bustup.Expressions(_db, _row.TalkerBaseId) : null;
+        }
+
+        private void PlayVoice()
+        {
+            if (_speakerModel == null || _voiceCombo.SelectedItem == null) { DarkMessage.Show("Pick a speaker (name box) and a voice number first.", "Voice"); return; }
+            try { VoiceAudio.Play(_db, _speakerModel, (string)_voiceCombo.SelectedItem); }
+            catch (Exception ex) { DarkMessage.Show(ex.Message, "Voice", MessageBoxButton.OK, MessageBoxImage.Error); }
+        }
+
+        private void InsertVoice()
+        {
+            if (_speakerModel == null || _voiceCombo.SelectedItem == null) { DarkMessage.Show("Pick a speaker (name box) and a voice number first.", "Voice"); return; }
+            InsertAtCaret("<PV#voice_" + _speakerModel + "_" + _voiceCombo.SelectedItem + ">");
+        }
+
+        private void InsertExpr()
+        {
+            if (_exprCombo.SelectedItem == null) { DarkMessage.Show("Pick a speaker with a bustup and an expression first.", "Bustup"); return; }
+            InsertAtCaret("<A01/" + _exprCombo.SelectedItem + ">");
+        }
+
+        /// <summary>Insert a tag at the caret (or end) of the text box and commit it to the line.</summary>
+        private void InsertAtCaret(string tag)
+        {
+            if (_row == null) return;
+            int i = Math.Min(_text.CaretIndex, _text.Text.Length);
+            _text.Text = _text.Text.Insert(i, tag);
+            _text.CaretIndex = i + tag.Length;
+            _row.Text = _text.Text;
+            _text.Focus();
         }
 
         /// <summary>Interpret the game's text control codes into a readable preview (à la Kuriimu): strip tag

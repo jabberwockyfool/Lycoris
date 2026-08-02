@@ -29,9 +29,35 @@ namespace Lycoris
         }
 
         private static Dictionary<int, string> _idToModel;
-        private static string _dir;
+        private static List<string> _dirs;
         private static readonly Dictionary<string, Set> _sets = new Dictionary<string, Set>(StringComparer.OrdinalIgnoreCase);
         private static readonly Dictionary<string, ImageSource> _imgCache = new Dictionary<string, ImageSource>(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>Model name (e.g. "c001000") for a washamap talker id (CRC32 of model), or null if unknown.</summary>
+        public static string ModelFor(YokaiDatabase db, int talker)
+        {
+            EnsureMap(db);
+            return _idToModel != null && _idToModel.TryGetValue(talker, out string m) ? m : null;
+        }
+
+        /// <summary>Expression codes available for a talker's bustup, i.e. the NN in &lt;A01/NN&gt; — parsed from the
+        /// ANMC part names (#01NN_01 …). Empty if the model has no bustup. Always includes "01" (neutral).</summary>
+        public static List<string> Expressions(YokaiDatabase db, int talker)
+        {
+            var list = new List<string>();
+            string model = ModelFor(db, talker);
+            if (model == null) return list;
+            var set = GetSet(model);
+            if (set?.NameToPbi == null) return list;
+            var seen = new HashSet<string>();
+            foreach (var name in set.NameToPbi.Keys)
+            {
+                var m = Regex.Match(name, @"#(\d{2})(\d{2})_01");   // #AANN_01 <channel>
+                if (m.Success && seen.Add(m.Groups[2].Value)) list.Add(m.Groups[2].Value);
+            }
+            list.Sort(StringComparer.Ordinal);
+            return list;
+        }
 
         /// <summary>Portrait for a washamap talker id (CRC32 of model), with the expression from the line's
         /// &lt;A..&gt; code (default neutral). Null if no bustup exists.</summary>
@@ -59,30 +85,34 @@ namespace Lycoris
         {
             if (_idToModel != null) return;
             _idToModel = new Dictionary<int, string>();
-            _dir = FindDir(db);
-            if (_dir == null) return;
-            try
-            {
-                foreach (var f in Directory.EnumerateFiles(_dir, "*.xa"))
+            _dirs = FindDirs(db);
+            foreach (var dir in _dirs)
+                try
                 {
-                    string name = Path.GetFileNameWithoutExtension(f);
-                    int crc = unchecked((int)Crc32.Standard(Encoding.UTF8.GetBytes(name)));
-                    if (!_idToModel.ContainsKey(crc)) _idToModel[crc] = name;
+                    foreach (var f in Directory.EnumerateFiles(dir, "*.xa"))
+                    {
+                        string name = Path.GetFileNameWithoutExtension(f);
+                        int crc = unchecked((int)Crc32.Standard(Encoding.UTF8.GetBytes(name)));
+                        if (!_idToModel.ContainsKey(crc)) _idToModel[crc] = name;   // reference wins; mod adds customs
+                    }
                 }
-            }
-            catch { }
+                catch { }
         }
 
-        private static string FindDir(YokaiDatabase db)
+        // Bustup dirs to search, REFERENCE (vanilla cfg) first then MOD (customs not in the reference).
+        private static List<string> FindDirs(YokaiDatabase db)
         {
-            foreach (var root in new[] { db?.ModFolder, db?.ReferenceFolder })
+            var dirs = new List<string>();
+            foreach (var root in new[] { db?.ReferenceFolder, db?.ModFolder })
             {
                 if (string.IsNullOrEmpty(root)) continue;
-                foreach (var cand in new[] { Path.Combine(root, "bustup"), Path.Combine(root, "data", "bustup"),
-                    Path.Combine(root, "include", "data", "bustup") })
-                    if (Directory.Exists(cand)) return cand;
+                foreach (var cand in new[] {
+                    Path.Combine(root, "data", "menu", "bustup"),          // real romfs path
+                    Path.Combine(root, "include", "data", "menu", "bustup"),
+                    Path.Combine(root, "bustup"), Path.Combine(root, "data", "bustup") })
+                    if (Directory.Exists(cand) && !dirs.Contains(cand)) { dirs.Add(cand); break; }
             }
-            return null;
+            return dirs;
         }
 
         private static Set GetSet(string model)
@@ -97,8 +127,9 @@ namespace Lycoris
         {
             try
             {
-                string path = Path.Combine(_dir, model + ".xa");
-                if (!File.Exists(path)) return null;
+                // Reference (vanilla) first, then mod (custom); first match wins.
+                string path = _dirs.Select(d => Path.Combine(d, model + ".xa")).FirstOrDefault(File.Exists);
+                if (path == null) return null;
                 var files = Xpck.Read(File.ReadAllBytes(path));
 
                 var xiFile = files.FirstOrDefault(f => f.Name.EndsWith(".xi", StringComparison.OrdinalIgnoreCase));

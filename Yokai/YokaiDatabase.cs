@@ -255,9 +255,11 @@ namespace Lycoris.Yokai
                 target = resolvedPath;
             else if (_referenceFolder != null &&
                      resolvedPath.StartsWith(_referenceFolder, StringComparison.OrdinalIgnoreCase))
+                // Mirror by path RELATIVE to the reference into the mod. The reference mirrors the mod layout
+                // (cfg/include/data/…, cfg/include/seq/…), so a plain relative copy reproduces the in-game path.
                 target = Path.Combine(_modFolder, resolvedPath.Substring(_referenceFolder.Length).TrimStart('\\', '/'));
             else
-                target = Path.Combine(_modFolder, Path.GetFileName(resolvedPath));
+                target = Path.Combine(IncludeBase() ?? _modFolder, Path.GetFileName(resolvedPath));
             Directory.CreateDirectory(Path.GetDirectoryName(target));
             return target;
         }

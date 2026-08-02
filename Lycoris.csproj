@@ -105,6 +105,8 @@
     <Compile Include="DialogueEditorWindow.cs" />
     <Compile Include="DialogueBubble.cs" />
     <Compile Include="Bustup.cs" />
+    <Compile Include="Formats\Bcstm.cs" />
+    <Compile Include="VoiceAudio.cs" />
     <Compile Include="HomeWindow.cs" />
     <Compile Include="AddYokaiDialog.cs" />
     <Compile Include="AtlasPickerWindow.cs" />
