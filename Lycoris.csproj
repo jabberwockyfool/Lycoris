@@ -106,7 +106,11 @@
     <Compile Include="DialogueBubble.cs" />
     <Compile Include="Bustup.cs" />
     <Compile Include="Formats\Bcstm.cs" />
+    <Compile Include="Formats\DspAdpcm.cs" />
+    <Compile Include="BustupBuilder.cs" />
     <Compile Include="VoiceAudio.cs" />
+    <Compile Include="Yokai\WarpSet.cs" />
+    <Compile Include="WarpEditorWindow.cs" />
     <Compile Include="HomeWindow.cs" />
     <Compile Include="AddYokaiDialog.cs" />
     <Compile Include="AtlasPickerWindow.cs" />
@@ -147,6 +151,9 @@
     </EmbeddedResource>
     <EmbeddedResource Include="Resources\ft_nrm.xf">
       <LogicalName>Lycoris.Resources.ft_nrm.xf</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Resources\mir001.npcbin">
+      <LogicalName>Lycoris.Resources.mir001.npcbin</LogicalName>
     </EmbeddedResource>
     <None Include="Properties\Settings.settings">
       <Generator>SettingsSingleFileGenerator</Generator>

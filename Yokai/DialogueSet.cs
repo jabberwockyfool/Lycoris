@@ -297,6 +297,7 @@ namespace Lycoris.Yokai
             {
                 yield return Path.Combine(db.ReferenceFolder, "res", "map");
                 yield return Path.Combine(db.ReferenceFolder, "data", "res", "map");
+                yield return Path.Combine(db.ReferenceFolder, "include", "data", "res", "map");   // reorg: cfg/include/…
             }
         }
 
@@ -348,6 +349,7 @@ namespace Lycoris.Yokai
             {
                 yield return Path.Combine(db.ReferenceFolder, "ev", "en");
                 yield return Path.Combine(db.ReferenceFolder, "data", "txt", "ev", "en");
+                yield return Path.Combine(db.ReferenceFolder, "include", "data", "txt", "ev", "en");  // reorg: cfg/include/…
             }
         }
 
@@ -382,7 +384,8 @@ namespace Lycoris.Yokai
             foreach (var dir in new[] {
                 inc != null ? Path.Combine(inc, "data", "txt", "ev") : null,
                 db?.ReferenceFolder != null ? Path.Combine(db.ReferenceFolder, "ev") : null,
-                db?.ReferenceFolder != null ? Path.Combine(db.ReferenceFolder, "data", "txt", "ev") : null })
+                db?.ReferenceFolder != null ? Path.Combine(db.ReferenceFolder, "data", "txt", "ev") : null,
+                db?.ReferenceFolder != null ? Path.Combine(db.ReferenceFolder, "include", "data", "txt", "ev") : null })
             {
                 if (dir == null) continue;
                 string p = Path.Combine(dir, ev + "_map.cfg.bin");

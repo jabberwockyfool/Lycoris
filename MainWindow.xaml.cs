@@ -459,6 +459,109 @@ namespace Lycoris
             y.IconFile = target;
         }
 
+        /// <summary>Encode a 16-bit PCM WAV to a DSP-ADPCM .bcstm and write it as this yo-kai's medallium cry
+        /// (m_&lt;model&gt;_en.dspadpcm.bcstm) into the mod's snd folder.</summary>
+        private void AddMedalliumSound_Click(object sender, RoutedEventArgs e)
+        {
+            var y = Selector.SelectedItem as YokaiInfo;
+            if (y == null) return;
+            string model = y.ModelName;
+            if (_db.ModIncludeBase == null || string.IsNullOrEmpty(model))
+            { DarkMessage.Show("Open a mod and set the yo-kai's Model first (the sound is named after it).", "Medallium sound"); return; }
+
+            var dlg = new Microsoft.Win32.OpenFileDialog { Filter = "16-bit PCM WAV|*.wav", Title = "Medallium cry — 16-bit PCM WAV (mono preferred)" };
+            if (dlg.ShowDialog() != true) return;
+            try
+            {
+                byte[] bcstm = Bcstm.FromWav(System.IO.File.ReadAllBytes(dlg.FileName));
+                string dir = System.IO.Path.Combine(_db.ModIncludeBase, "data", "snd", "product", "stream");
+                System.IO.Directory.CreateDirectory(dir);
+                string target = System.IO.Path.Combine(dir, "m_" + model + "_en.dspadpcm.bcstm");
+                System.IO.File.WriteAllBytes(target, bcstm);
+                StatusText.Text = $"Medallium sound: {System.IO.Path.GetFileName(target)}";
+                DarkMessage.Show($"Medallium sound saved:\n{target}", "Medallium sound", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            catch (Exception ex) { DarkMessage.Show(ex.Message, "WAV→BCSTM error", MessageBoxButton.OK, MessageBoxImage.Error); }
+        }
+
+        /// <summary>Build a custom dialogue portrait (.xa bustup) from a PNG — grafting it onto the neutral
+        /// expression &lt;A01/01&gt; of a vanilla template — and write it as &lt;model&gt;.xa into the mod.</summary>
+        private void AddCustomBustup_Click(object sender, RoutedEventArgs e)
+        {
+            var y = Selector.SelectedItem as YokaiInfo;
+            if (y == null) return;
+            string model = y.ModelName;
+            if (_db.ModIncludeBase == null || string.IsNullOrEmpty(model))
+            { DarkMessage.Show("Open a mod and set the yo-kai's Model first (the portrait is named after it).", "Custom bustup"); return; }
+
+            byte[] template = FindBustupTemplate(model);
+            if (template == null)
+            { DarkMessage.Show("No vanilla bustup found to use as a template (need cfg/…/menu/bustup/*.xa).", "Custom bustup"); return; }
+
+            var dlg = new Microsoft.Win32.OpenFileDialog { Filter = "PNG images|*.png", Title = "Bustup portrait — PNG (square, e.g. 128×128)" };
+            if (dlg.ShowDialog() != true) return;
+            try
+            {
+                // Dimensions must be multiples of 8 for the XI encoder; round up and letterbox the PNG.
+                var raw = PngToBgraNative(dlg.FileName, out int w, out int h);
+                int pw = RoundUp8(w), ph = RoundUp8(h);
+                byte[] bgra = (pw == w && ph == h) ? raw : Letterbox(raw, w, h, pw, ph);
+
+                byte[] xa = BustupBuilder.Build(template, bgra, pw, ph);
+                string dir = System.IO.Path.Combine(_db.ModIncludeBase, "data", "menu", "bustup");
+                System.IO.Directory.CreateDirectory(dir);
+                string target = System.IO.Path.Combine(dir, model + ".xa");
+                System.IO.File.WriteAllBytes(target, xa);
+                StatusText.Text = $"Custom bustup: {System.IO.Path.GetFileName(target)}";
+                DarkMessage.Show($"Custom bustup saved:\n{target}\n\nShown for <A01/01> (neutral). Test in-game.", "Custom bustup", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            catch (Exception ex) { DarkMessage.Show(ex.Message, "PNG→bustup error", MessageBoxButton.OK, MessageBoxImage.Error); }
+        }
+
+        /// <summary>A vanilla .xa to use as the bustup template: the model's own if present, else any available.</summary>
+        private byte[] FindBustupTemplate(string model)
+        {
+            foreach (var root in new[] { _referenceFolder, _db.ModFolder })
+            {
+                if (string.IsNullOrEmpty(root)) continue;
+                foreach (var cand in new[] {
+                    System.IO.Path.Combine(root, "data", "menu", "bustup"),
+                    System.IO.Path.Combine(root, "include", "data", "menu", "bustup") })
+                {
+                    if (!System.IO.Directory.Exists(cand)) continue;
+                    string own = System.IO.Path.Combine(cand, model + ".xa");
+                    if (System.IO.File.Exists(own)) return System.IO.File.ReadAllBytes(own);
+                    var any = System.IO.Directory.EnumerateFiles(cand, "*.xa").FirstOrDefault();
+                    if (any != null) return System.IO.File.ReadAllBytes(any);
+                }
+            }
+            return null;
+        }
+
+        private static int RoundUp8(int v) => (v + 7) / 8 * 8;
+
+        /// <summary>Decode a PNG to top-down BGRA at its native size.</summary>
+        private static byte[] PngToBgraNative(string path, out int w, out int h)
+        {
+            var bmp = new BitmapImage();
+            bmp.BeginInit(); bmp.CacheOption = BitmapCacheOption.OnLoad; bmp.UriSource = new Uri(path); bmp.EndInit();
+            var conv = new FormatConvertedBitmap(bmp, PixelFormats.Bgra32, null, 0);
+            w = conv.PixelWidth; h = conv.PixelHeight;
+            var buf = new byte[w * h * 4];
+            conv.CopyPixels(buf, w * 4, 0);
+            return buf;
+        }
+
+        /// <summary>Centre a w×h BGRA image on a transparent pw×ph canvas.</summary>
+        private static byte[] Letterbox(byte[] src, int w, int h, int pw, int ph)
+        {
+            var dst = new byte[pw * ph * 4];
+            int ox = (pw - w) / 2, oy = (ph - h) / 2;
+            for (int y = 0; y < h; y++)
+                Array.Copy(src, y * w * 4, dst, ((oy + y) * pw + ox) * 4, w * 4);
+            return dst;
+        }
+
         private void Prev_Click(object sender, RoutedEventArgs e)
         {
             if (Selector.SelectedIndex > 0) Selector.SelectedIndex--;

@@ -22,6 +22,7 @@ namespace Lycoris
         private readonly Button _skillBtn;
         private readonly Button _npcBtn;
         private readonly Button _mapBtn;
+        private readonly Button _warpBtn;
         private readonly Button _eventBtn;
         private readonly Button _dialogueBtn;
         private readonly Button _battleBtn;
@@ -39,7 +40,7 @@ namespace Lycoris
         public HomeWindow()
         {
             Title = "Lycoris — Yo-kai Watch 3 Editor";
-            Width = 460; Height = 1050;
+            Width = 460; Height = 1130;
             WindowStartupLocation = WindowStartupLocation.CenterScreen;
             Background = Theme.WindowBg;
 
@@ -65,6 +66,7 @@ namespace Lycoris
             _skillBtn = BigButton("⚔  Skill Editor", "Type, element, power, hits, Soultimate range… (add/delete)", OpenSkillEditor);
             _npcBtn = BigButton("🧍  NPC Editor", "NPCMake config (TOML) editable in the GUI, import/export .toml.", OpenNpcEditor);
             _mapBtn = BigButton("🗺  Map Editor", "map_config: add/edit map entries (MapID, name, ShowMapCard…).", OpenMapEditor);
+            _warpBtn = BigButton("🌀  Warp Editor (Mirapo)", "warp_config: edit/add Mirapo warps (destination, spawn X/Y/Z, preview).", OpenWarpEditor);
             _eventBtn = BigButton("🎬  Event Editor", "event_set_config: generate « Daily Fight » events (.xq + registration).", OpenEventEditor);
             _dialogueBtn = BigButton("💬  Dialogue Editor", "Edit event/story dialogue lines and the speaker name-box (ev/en).", OpenDialogueEditor);
             _battleBtn = BigButton("⚔  Battle Editor", "common_enc: edit event/story battles (yo-kai slots, BattleScript).", OpenBattleEditor);
@@ -75,6 +77,7 @@ namespace Lycoris
             _skillBtn.IsEnabled = false;
             _npcBtn.IsEnabled = false;
             _mapBtn.IsEnabled = false;
+            _warpBtn.IsEnabled = false;
             _eventBtn.IsEnabled = false;
             _dialogueBtn.IsEnabled = false;
             _battleBtn.IsEnabled = false;
@@ -85,6 +88,7 @@ namespace Lycoris
             root.Children.Add(_skillBtn);
             root.Children.Add(_npcBtn);
             root.Children.Add(_mapBtn);
+            root.Children.Add(_warpBtn);
             root.Children.Add(_eventBtn);
             root.Children.Add(_dialogueBtn);
             root.Children.Add(_battleBtn);
@@ -138,6 +142,7 @@ namespace Lycoris
                 _skillBtn.IsEnabled = _db.Skills.Count > 0;
                 _npcBtn.IsEnabled = _db.ParamFile != null;
                 _mapBtn.IsEnabled = _db.Maps.Count > 0;
+                _warpBtn.IsEnabled = _referenceFolder != null || _db.ModFolder != null;
                 _eventBtn.IsEnabled = _referenceFolder != null || _db.ModFolder != null;
                 _dialogueBtn.IsEnabled = _referenceFolder != null || _db.ModFolder != null;
                 _battleBtn.IsEnabled = _db.Yokai.Count > 0;
@@ -204,6 +209,12 @@ namespace Lycoris
         {
             if (_db == null || _db.Yokai.Count == 0) return;
             new BattleEditorWindow(this, _db) { Owner = this }.Show();
+        }
+
+        private void OpenWarpEditor()
+        {
+            if (_db == null) return;
+            new WarpEditorWindow(this, _db) { Owner = this }.Show();
         }
 
         private void OpenDialogueEditor()

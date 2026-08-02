@@ -268,6 +268,9 @@ namespace Lycoris.Yokai
         public string ModFaceIconDir => _faceIconDirs.FirstOrDefault(IsUnderMod);
 
         /// <summary>The mod's romfs base: the "include" folder (…/mod/include) if present, else the mod root.</summary>
+        /// <summary>The mod's romfs base (&lt;mod&gt;/include), where snd/bustup/etc. are written at their in-game path.</summary>
+        public string ModIncludeBase => IncludeBase();
+
         private string IncludeBase()
         {
             if (_modFolder == null) return null;

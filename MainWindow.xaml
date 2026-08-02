@@ -78,6 +78,12 @@
                                 <TextBlock Text="Name" Width="45"/>
                                 <TextBox Text="{Binding Name, UpdateSourceTrigger=LostFocus}" Width="180"/>
                             </StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="45,4,0,0">
+                                <Button Content="🔊 Medallium sound (WAV)…" FontSize="10" Padding="5,1" Click="AddMedalliumSound_Click"
+                                        ToolTip="Encode a 16-bit WAV to m_&lt;model&gt;_en.dspadpcm.bcstm into the mod"/>
+                                <Button Content="🖼 Custom bustup (PNG)…" FontSize="10" Padding="5,1" Margin="6,0,0,0" Click="AddCustomBustup_Click"
+                                        ToolTip="Build a custom &lt;model&gt;.xa dialogue portrait from a PNG"/>
+                            </StackPanel>
                         </StackPanel>
                         <StackPanel Grid.Column="2">
                             <StackPanel Orientation="Horizontal">

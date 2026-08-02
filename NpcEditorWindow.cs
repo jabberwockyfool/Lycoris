@@ -562,7 +562,11 @@ namespace Lycoris
             if (loadPath == null) throw new InvalidOperationException($"Could not find {cfgName} in the mod or reference.");
 
             var eventDirs = new System.Collections.Generic.List<string>();
-            if (_db?.ReferenceFolder != null) eventDirs.Add(Path.Combine(_db.ReferenceFolder, "seq", "event"));
+            if (_db?.ReferenceFolder != null)
+            {
+                eventDirs.Add(Path.Combine(_db.ReferenceFolder, "seq", "event"));
+                eventDirs.Add(Path.Combine(_db.ReferenceFolder, "include", "seq", "event"));   // reorg: cfg/include/…
+            }
             eventDirs.Add(Path.Combine(incBase, "seq", "event"));
             var es = EventSet.Load(loadPath, eventDirs);
 

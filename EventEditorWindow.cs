@@ -159,8 +159,14 @@ namespace Lycoris
             if (loadPath == null) { _status.Text = $"Could not find {cfgName} in the mod or reference."; return; }
             _configSavePath = modCfg ?? loadPath;
 
+            // .xq filenames resolve event ids → readable names. seq/ lives under include/ (cfg/include/seq/event),
+            // so search both the reference root AND its include base, plus the mod's include.
             var eventDirs = new List<string>();
-            if (_db?.ReferenceFolder != null) eventDirs.Add(Path.Combine(_db.ReferenceFolder, "seq", "event"));
+            if (_db?.ReferenceFolder != null)
+            {
+                eventDirs.Add(Path.Combine(_db.ReferenceFolder, "seq", "event"));
+                eventDirs.Add(Path.Combine(_db.ReferenceFolder, "include", "seq", "event"));
+            }
             if (IncludeBase != null) eventDirs.Add(Path.Combine(IncludeBase, "seq", "event"));
 
             try { _es = EventSet.Load(loadPath, eventDirs); }
@@ -245,7 +251,8 @@ namespace Lycoris
         {
             foreach (var dir in new[] {
                 IncludeBase != null ? Path.Combine(IncludeBase, "seq", "event") : null,
-                _db?.ReferenceFolder != null ? Path.Combine(_db.ReferenceFolder, "seq", "event") : null })
+                _db?.ReferenceFolder != null ? Path.Combine(_db.ReferenceFolder, "seq", "event") : null,
+                _db?.ReferenceFolder != null ? Path.Combine(_db.ReferenceFolder, "include", "seq", "event") : null })
             {
                 if (string.IsNullOrEmpty(dir)) continue;
                 string p = Path.Combine(dir, name + ".xq");

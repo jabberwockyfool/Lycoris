@@ -193,6 +193,124 @@ namespace Lycoris.Npc
             return res;
         }
 
+        /// <summary>
+        /// Place a Mirapo warp NPC in a map, reusing the NPC-wiring helpers. The mirapo is a built-in TYPE-9 NPC
+        /// (no xq/trigger): NPC_BASE id = CRC32("warp_"+mapid) (the same value as warp_config field[0]) with base =
+        /// CRC32("y130000") (the Mirapo model), plus an NPC_APPEAR mirror (a y130000 npcbin placed at the given
+        /// position) and an NPC_PRESET linking them. Writes the edited npc_set + npc.pck for the map.
+        /// </summary>
+        public static Result CompileWarpNpc(string mapId, string mapFolder, string outRoot, string mergeMapDir,
+            double mx, double my, double mz, double mrot, byte[] mirrorTemplate)
+        {
+            if (mirrorTemplate == null) throw new InvalidOperationException("Mirror npcbin template not available.");
+            // A warp id may carry a point suffix (_02, _03…) — the warp id uses the FULL id, but the actual map
+            // (folder, npc_set, npc.pck) is the BASE map. Multiple warp points thus share one map's npc_set.
+            string baseMap = WarpBaseMapId(mapId);
+            string mapDir = ResolveMapDir(mapFolder, baseMap);
+            if (mapDir == null) throw new InvalidOperationException($"Map folder not found for \"{baseMap}\" (npc.pck missing in the mod or reference).");
+            string npcPckPath = PickFile(mergeMapDir, mapDir, "npc.pck");
+            string npcSetPath = PickByPrefix(mergeMapDir, mapDir, baseMap + "_npc_set");
+            if (npcPckPath == null || !File.Exists(npcPckPath)) throw new InvalidOperationException("Required file missing: npc.pck");
+            if (npcSetPath == null) throw new InvalidOperationException($"Required file missing: {mapId}_npc_set*");
+
+            var res = new Result();
+            int warpId = unchecked((int)Crc32.Standard(Encoding.UTF8.GetBytes("warp_" + mapId)));
+            int model = unchecked((int)Crc32.Standard(Encoding.UTF8.GetBytes("y130000")));   // Mirapo yo-kai model
+            res.NpcId = warpId;
+
+            var npcSet = T2bReader.Read(File.ReadAllBytes(npcSetPath));
+            if (npcSet.Records("NPC_BASE").Any(e => (e.GetInt(0) ?? 0) == warpId))
+                throw new InvalidOperationException($"This map already has a Mirapo warp NPC for \"{mapId}\" (0x{unchecked((uint)warpId):X8}). " +
+                    $"To add ANOTHER warp point to the same map, use a suffixed id like \"{baseMap}_02\" (\"{baseMap}_03\", …).");
+            var npcPck = Xpck.Read(File.ReadAllBytes(npcPckPath));
+            string mirName = UniqueMirrorName(npcSet, npcPck);
+
+            // NPC_BASE: [warpId, 0, model, 0, 9(warp type), 0,0,0,0,0, 0]
+            var baseE = CloneRecord(npcSet, "NPC_BASE");
+            SetInts(baseE, warpId, 0, model, 0, 9, 0, 0, 0, 0, 0, 0);
+            AddToGroup(npcSet, "NPC_BASE_BEGIN", "NPC_BASE_END", baseE);
+
+            // NPC_APPEAR: the mirror model (always visible: cond "0")
+            int appearIndex = GroupCount(npcSet, "NPC_APPEAR_BEGIN");
+            var appearE = CloneRecord(npcSet, "NPC_APPEAR");
+            SetStr(appearE, 0, mirName);
+            SetInt(appearE, 1, -1); SetInt(appearE, 2, -1);
+            SetStr(appearE, 3, "0");
+            SetInt(appearE, 4, -1); SetInt(appearE, 5, 0); SetInt(appearE, 6, -1);
+            AddToGroup(npcSet, "NPC_APPEAR_BEGIN", "NPC_APPEAR_END", appearE);
+
+            // NPC_PRESET: link base warpId -> the mirror appear (group 2, as vanilla)
+            var presetE = CloneRecord(npcSet, "NPC_PRESET");
+            SetInts(presetE, warpId, appearIndex, 2);
+            AddToGroup(npcSet, "NPC_PRESET_BEGIN", "NPC_PRESET_END", presetE);
+
+            // Mirror npcbin (y130000) placed at the given position, injected into npc.pck.
+            var npcbin = T2bReader.Read(mirrorTemplate);
+            SetPointCoords(npcbin, mx, my, mz, mrot);
+            byte[] npcbinBytes = T2bWriter.Write(npcbin);
+            Xpck.AddOrReplace(npcPck, mirName + ".npcbin", npcbinBytes);
+            byte[] npcPckOut = Xpck.Write(npcPck);
+
+            string root = Path.Combine(outRoot, "warp_" + mapId + "_output");
+            string outMap = Path.Combine(root, baseMap);   // mirror the real (base) map folder
+            Directory.CreateDirectory(outMap);
+            res.OutputDir = root;
+            WriteOut(outMap, Path.GetFileName(npcSetPath), T2bWriter.Write(npcSet), res);
+            WriteOut(outMap, "npc.pck", npcPckOut, res);
+            WriteOut(outMap, mirName + ".npcbin", npcbinBytes, res);
+
+            if (!string.IsNullOrEmpty(mergeMapDir))
+            {
+                Directory.CreateDirectory(mergeMapDir);
+                foreach (var src in res.Files)
+                    File.Copy(src, Path.Combine(mergeMapDir, Path.GetFileName(src)), overwrite: true);
+                res.MergedDir = mergeMapDir;
+            }
+            return res;
+        }
+
+        /// <summary>Load the bundled mir001 mirror npcbin template (Mirapo model y130000).</summary>
+        public static byte[] MirrorTemplate()
+        {
+            var asm = System.Reflection.Assembly.GetExecutingAssembly();
+            using (var s = asm.GetManifestResourceStream("Lycoris.Resources.mir001.npcbin"))
+            {
+                if (s == null) return null;
+                var b = new byte[s.Length];
+                int off = 0, n;
+                while (off < b.Length && (n = s.Read(b, off, b.Length - off)) > 0) off += n;
+                return b;
+            }
+        }
+
+        // Strip a warp-point suffix (_02, _03…) to the base map id (self-contained copy of WarpSet.BaseMapId).
+        private static string WarpBaseMapId(string mapId) =>
+            System.Text.RegularExpressions.Regex.Replace(mapId ?? "", @"_\d+$", "");
+
+        private static string UniqueMirrorName(T2bFile npcSet, List<XpckFile> npcPck)
+        {
+            var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var e in npcSet.Records("NPC_APPEAR"))
+                if (e.Values.Count > 0 && e.Values[0].Type == VT.String) used.Add((string)e.Values[0].Value);
+            foreach (var f in npcPck)
+                if (f.Name.EndsWith(".npcbin", StringComparison.OrdinalIgnoreCase)) used.Add(Path.GetFileNameWithoutExtension(f.Name));
+            for (int i = 1; i < 1000; i++) { string n = "mir" + i.ToString("000"); if (!used.Contains(n)) return n; }
+            return "mir001";
+        }
+
+        private static void SetPointCoords(T2bFile npcbin, double x, double y, double z, double rot)
+        {
+            var pt = npcbin.Entries.FirstOrDefault(e => e.Name == "POINT")
+                     ?? throw new InvalidOperationException("POINT entry missing from the mirror .npcbin.");
+            double[] vals = { x, y, z, rot };   // POINT = [X, height(Y), Z, rotation]
+            for (int i = 0; i < 4 && i < pt.Values.Count; i++)
+            {
+                double v = vals[i];
+                if (Math.Abs(v - Math.Round(v)) < 1e-4) { pt.Values[i].Type = VT.Integer; pt.Values[i].Value = (int)Math.Round(v); }
+                else { pt.Values[i].Type = VT.FloatingPoint; pt.Values[i].Value = (float)v; }
+            }
+        }
+
         // ---------- CfgBin editing helpers ----------
 
         private static T2bEntry CloneRecord(T2bFile f, string name)
