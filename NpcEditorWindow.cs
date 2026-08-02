@@ -337,6 +337,25 @@ namespace Lycoris
         {
             var f = System.Windows.Input.Keyboard.FocusedElement as UIElement;
             f?.RaiseEvent(new RoutedEventArgs(LostFocusEvent));
+            // Belt-and-suspenders: flush every bound TextBox/ComboBox in the fields panel so a pending edit
+            // (e.g. a dialogue field the user just typed in) is written to the model before compiling.
+            foreach (var el in Descendants(_fields))
+            {
+                (el as TextBox)?.GetBindingExpression(TextBox.TextProperty)?.UpdateSource();
+                (el as ComboBox)?.GetBindingExpression(ComboBox.TextProperty)?.UpdateSource();
+            }
+        }
+
+        private static System.Collections.Generic.IEnumerable<DependencyObject> Descendants(DependencyObject root)
+        {
+            if (root == null) yield break;
+            int n = System.Windows.Media.VisualTreeHelper.GetChildrenCount(root);
+            for (int i = 0; i < n; i++)
+            {
+                var child = System.Windows.Media.VisualTreeHelper.GetChild(root, i);
+                yield return child;
+                foreach (var d in Descendants(child)) yield return d;
+            }
         }
 
         private void NewNpc()

@@ -134,6 +134,81 @@ namespace Lycoris.Yokai
             return row;
         }
 
+        /// <summary>
+        /// Make sure <paramref name="row"/> has a name-box (TEXT_WASHA_MAP) entry so its speaker can be set:
+        /// if the event has no washamap at all, create one from <paramref name="templateWashaPath"/> (a vanilla
+        /// *_map.cfg.bin, cloned then emptied); then append an entry for the row with the given talker.
+        /// No-op if the row already has a washa entry.
+        /// </summary>
+        public static void EnsureWasha(DialogueFile f, DialogueLineRow row, string templateWashaPath, int talkerBaseId)
+        {
+            if (row == null) return;
+
+            T2bEntry recTemplate;
+            if (f.WashaData == null)
+            {
+                if (string.IsNullOrEmpty(templateWashaPath) || !File.Exists(templateWashaPath))
+                    throw new InvalidOperationException("No vanilla *_map.cfg.bin found to use as a name-box template.");
+                f.WashaData = T2bReader.ReadFile(templateWashaPath);
+                recTemplate = f.WashaData.Records(WmRec).FirstOrDefault()?.Clone()
+                              ?? throw new InvalidOperationException("The name-box template has no TEXT_WASHA_MAP record.");
+                // The template came from another event — empty its records so we start clean.
+                f.WashaData.Entries.RemoveAll(e => e.Name == WmRec);
+                var beg = f.WashaData.Entries.FirstOrDefault(e => e.Name == WmBeg);
+                if (beg != null && beg.Values.Count > 0) { beg.Values[0].Type = VT.Integer; beg.Values[0].Value = 0; }
+                f.WashaPath = null; // written to the mod washa path on Save
+            }
+            else
+            {
+                recTemplate = f.WashaData.Records(WmRec).FirstOrDefault()?.Clone()
+                              ?? throw new InvalidOperationException("The washamap has no TEXT_WASHA_MAP record to clone.");
+            }
+
+            if (row.WashaEntry != null) { row.TalkerBaseId = talkerBaseId; SetInt(row.WashaEntry, W_Talker, talkerBaseId); return; }
+
+            var we = recTemplate;
+            SetInt(we, W_Key, row.KeyId); SetInt(we, W_Page, row.Page); SetInt(we, W_Talker, talkerBaseId);
+            SetInt(we, W_Var, row.Variant); SetInt(we, W_U4, -1); SetInt(we, W_U5, 0);
+            InsertBefore(f.WashaData, WmEnd, we); Bump(f.WashaData, WmBeg, 1);
+            row.WashaEntry = we; row.TalkerBaseId = talkerBaseId;
+        }
+
+        /// <summary>Move a line to another block (suffix, e.g. "_010" → "_020"): the key becomes
+        /// CRC32(eventName + suffix) on both the text and its washamap entry. Events only (needs the event name).</summary>
+        public static void SetBlock(DialogueLineRow row, string eventName, string suffix)
+        {
+            if (row == null || string.IsNullOrEmpty(suffix)) return;
+            int key = unchecked((int)Crc32.Standard(Encoding.UTF8.GetBytes((eventName ?? "") + suffix)));
+            row.KeyId = key;
+            row.KeyLabel = suffix;
+            SetInt(row.TextEntry, T_Key, key);
+            if (row.WashaEntry != null) SetInt(row.WashaEntry, W_Key, key);
+        }
+
+        /// <summary>
+        /// Replace all pages of a block (identified by <paramref name="keyId"/>) with <paramref name="lines"/>,
+        /// one page per line (page 0,1,2…), each line's Speaker → TalkerBaseID (CRC32). Creates the washamap /
+        /// entries as needed (from <paramref name="washaTemplatePath"/> when the event has none). Returns the new rows.
+        /// </summary>
+        public static List<DialogueLineRow> ReplaceBlock(DialogueFile f, int keyId, string keyLabel,
+            IList<DialogueLine> lines, string washaTemplatePath, YokaiDatabase db)
+        {
+            foreach (var r in f.Rows.Where(r => r.KeyId == keyId).ToList()) RemoveRow(f, r);
+
+            var talkerNames = BuildTalkerMap(db);
+            var added = new List<DialogueLineRow>();
+            foreach (var l in lines ?? new List<DialogueLine>())
+            {
+                int talker = string.IsNullOrWhiteSpace(l.Speaker)
+                    ? 0 : unchecked((int)Crc32.Standard(Encoding.UTF8.GetBytes(l.Speaker.Trim())));
+                var row = AddRow(f, keyId, keyLabel, l.Text ?? "", talker);   // appends at the next free page
+                if (talker != 0 && row.WashaEntry == null) EnsureWasha(f, row, washaTemplatePath, talker);
+                if (talker != 0 && talkerNames.TryGetValue(talker, out var nm)) row.SpeakerName = nm;
+                added.Add(row);
+            }
+            return added;
+        }
+
         public static void RemoveRow(DialogueFile f, DialogueLineRow row)
         {
             if (f.TextData.Entries.Remove(row.TextEntry)) Bump(f.TextData, TxtBeg, -1);
@@ -181,9 +256,83 @@ namespace Lycoris.Yokai
         private static void SetStr(T2bEntry e, int i, string v) { if (i < e.Values.Count) { e.Values[i].Type = VT.String; e.Values[i].Value = v ?? ""; } }
     }
 
+    /// <summary>A browsable dialogue source: an event's text (data/txt/ev) or a map's NPC text (data/res/map).
+    /// Carries its resolved source paths and where to write the edited copies in the mod.</summary>
+    public sealed class DialogueTarget
+    {
+        public string Label;         // shown in the list
+        public string Kind;          // "event" or "map"
+        public string EventName;     // event name (key-label resolution); null for map targets
+        public string TextPath;      // source text file (mod first, else reference)
+        public string WashaPath;     // source washamap (may be null)
+        public bool FromMod;
+        public string ModTextPath;   // where the edited text is written in the mod
+        public string ModWashaPath;  // where the edited washamap is written in the mod
+        public override string ToString() => Label;
+    }
+
     /// <summary>Finds and lists per-event dialogue files (mod's data/txt/ev, else the reference's ev).</summary>
     public static class DialoguePaths
     {
+        /// <summary>Every editable dialogue source: event dialogues (data/txt/ev) + map NPC texts (data/res/map).</summary>
+        public static List<DialogueTarget> AllTargets(YokaiDatabase db)
+        {
+            var list = new List<DialogueTarget>();
+            foreach (var ev in EventNames(db))
+                list.Add(new DialogueTarget
+                {
+                    Label = ev, Kind = "event", EventName = ev,
+                    TextPath = FindText(db, ev, out bool fromMod), WashaPath = FindWasha(db, ev), FromMod = fromMod,
+                    ModTextPath = ModTextPath(db, ev), ModWashaPath = ModWashaPath(db, ev),
+                });
+            list.AddRange(MapTextTargets(db));
+            return list;
+        }
+
+        private static IEnumerable<string> MapRoots(YokaiDatabase db)
+        {
+            string inc = IncBase(db);
+            if (inc != null) yield return Path.Combine(inc, "data", "res", "map");   // mod first
+            if (db?.ReferenceFolder != null)
+            {
+                yield return Path.Combine(db.ReferenceFolder, "res", "map");
+                yield return Path.Combine(db.ReferenceFolder, "data", "res", "map");
+            }
+        }
+
+        // Map NPC text = <mapid>_..._c_en.cfg.bin, washamap = the same base with _map_c.cfg.bin.
+        private static IEnumerable<DialogueTarget> MapTextTargets(YokaiDatabase db)
+        {
+            const string txtSuffix = "_c_en.cfg.bin", wmSuffix = "_map_c.cfg.bin";
+            string inc = IncBase(db);
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var root in MapRoots(db))
+            {
+                if (!Directory.Exists(root)) continue;
+                foreach (var mapDir in Directory.EnumerateDirectories(root))
+                {
+                    string mapId = Path.GetFileName(mapDir);
+                    foreach (var textFile in Directory.EnumerateFiles(mapDir, "*" + txtSuffix))
+                    {
+                        string fn = Path.GetFileName(textFile);
+                        string baseName = fn.Substring(0, fn.Length - txtSuffix.Length); // e.g. t001d57_npc_text
+                        if (!seen.Add(mapId + "/" + baseName)) continue;                 // mod copy already listed
+                        string washaFile = Path.Combine(mapDir, baseName + wmSuffix);
+                        yield return new DialogueTarget
+                        {
+                            Label = "🗺 " + baseName + "  (" + mapId + ")",
+                            Kind = "map", EventName = null,
+                            TextPath = textFile,
+                            WashaPath = File.Exists(washaFile) ? washaFile : null,
+                            FromMod = inc != null && textFile.StartsWith(inc, StringComparison.OrdinalIgnoreCase),
+                            ModTextPath = inc == null ? null : Path.Combine(inc, "data", "res", "map", mapId, baseName + txtSuffix),
+                            ModWashaPath = inc == null ? null : Path.Combine(inc, "data", "res", "map", mapId, baseName + wmSuffix),
+                        };
+                    }
+                }
+            }
+        }
+
         public static string IncBase(YokaiDatabase db)
         {
             if (db == null || string.IsNullOrEmpty(db.ModFolder)) return null;
