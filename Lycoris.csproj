@@ -155,6 +155,9 @@
     <EmbeddedResource Include="Resources\mir001.npcbin">
       <LogicalName>Lycoris.Resources.mir001.npcbin</LogicalName>
     </EmbeddedResource>
+    <EmbeddedResource Include="Resources\mir002.npcbin">
+      <LogicalName>Lycoris.Resources.mir002.npcbin</LogicalName>
+    </EmbeddedResource>
     <None Include="Properties\Settings.settings">
       <Generator>SettingsSingleFileGenerator</Generator>
       <LastGenOutput>Settings.Designer.cs</LastGenOutput>

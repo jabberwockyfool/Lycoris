@@ -29,6 +29,7 @@ namespace Lycoris
         private readonly ListBox _list = new ListBox();
         private readonly TextBox _search = new TextBox { Margin = new Thickness(0, 0, 0, 4) };
         private readonly TextBox _x = Num(), _y = Num(), _z = Num(), _rot = Num();
+        private readonly TextBox _custName = new TextBox { Width = 220, FontFamily = new FontFamily("Consolas") };
         private readonly TextBlock _dest = new TextBlock { FontSize = 14, TextWrapping = TextWrapping.Wrap };
         private readonly TextBlock _hashes = new TextBlock { Foreground = Theme.FgMuted, FontFamily = new FontFamily("Consolas"), FontSize = 11, Margin = new Thickness(0, 2, 0, 8), TextWrapping = TextWrapping.Wrap };
         private readonly Image _preview = new Image { Stretch = Stretch.Uniform, MaxHeight = 140, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 8, 0, 0) };
@@ -82,17 +83,20 @@ namespace Lycoris
             _detail.Children.Add(_dest);
             _detail.Children.Add(_hashes);
 
+            _detail.Children.Add(Row("Custom name", _custName));
+            _detail.Children.Add(new TextBlock { Foreground = Theme.FgMuted, FontSize = 11, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(110, 0, 0, 6), Text = "The specific warp-point name shown in the menu (field[2] → system_text), e.g. \"Northbeech - City Hall\". Empty = use the map name." });
             _detail.Children.Add(Row("Spawn X", _x));
-            _detail.Children.Add(Row("Spawn Y", _y));
-            _detail.Children.Add(Row("Spawn Z", _z));
+            _detail.Children.Add(Row("Spawn Y (2D)", _y));
+            _detail.Children.Add(Row("Spawn Z (height)", _z));
             _detail.Children.Add(Row("Rotation (°)", _rot));
             foreach (var tb in new[] { _x, _y, _z, _rot }) tb.LostFocus += (s, e) => Commit();
+            _custName.LostFocus += (s, e) => CommitName();
 
             _detail.Children.Add(new TextBlock
             {
                 Foreground = Theme.FgMuted, FontSize = 11, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 8, 0, 0),
-                Text = "Spawn coordinates are the position on the destination map where the player appears (copy them " +
-                       "from an existing warp to the same map, or read them from the map). Rotation is the facing in degrees."
+                Text = "Spawn = where the player appears when warping here. SAME axes as the NPC editor: X, Y (2D " +
+                       "horizontal), Z (height). warp_config stores [X, height, depth]; the editor handles the Y/Z swap."
             });
 
             var previewBar = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 12, 0, 0) };
@@ -153,7 +157,10 @@ namespace Lycoris
                 _detail.IsEnabled = true;
                 _dest.Text = "Destination: " + (w.MapName ?? "(unnamed)") + (w.MapId != null ? "  —  " + w.MapId : "");
                 _hashes.Text = $"map hash (field1) = {w.HashHex}   |   warp id (field0) = 0x{unchecked((uint)w.Field0):X8}";
-                _x.Text = Fmt(w.X); _y.Text = Fmt(w.Y); _z.Text = Fmt(w.Z); _rot.Text = w.Rotation.ToString();
+                // NPC-editor convention: field "Y (2D)" = the horizontal depth (WarpEntry.Z = field[5]),
+                // field "Z (height)" = the height (WarpEntry.Y = field[4]). warp_config keeps [X, height, depth].
+                _x.Text = Fmt(w.X); _y.Text = Fmt(w.Z); _z.Text = Fmt(w.Y); _rot.Text = w.Rotation.ToString();
+                _custName.Text = w.CustomName ?? "";
                 _preview.Source = LoadPreview(w.MapId);
             }
             _suppress = false;
@@ -162,11 +169,19 @@ namespace Lycoris
         private void Commit()
         {
             if (_suppress || _sel == null) return;
+            // "Y (2D)" → depth (field[5] = _sel.Z), "Z (height)" → height (field[4] = _sel.Y).
             if (double.TryParse(_x.Text?.Trim(), out double x)) _sel.X = x;
-            if (double.TryParse(_y.Text?.Trim(), out double y)) _sel.Y = y;
-            if (double.TryParse(_z.Text?.Trim(), out double z)) _sel.Z = z;
+            if (double.TryParse(_y.Text?.Trim(), out double y)) _sel.Z = y;
+            if (double.TryParse(_z.Text?.Trim(), out double z)) _sel.Y = z;
             if (int.TryParse(_rot.Text?.Trim(), out int r)) _sel.Rotation = r;
             _list.Items.Refresh();
+        }
+
+        private void CommitName()
+        {
+            if (_suppress || _sel == null) return;
+            try { _ws.SetCustomName(_sel, _custName.Text); _list.Items.Refresh(); }
+            catch (Exception ex) { DarkMessage.Show(ex.Message, "Custom name", MessageBoxButton.OK, MessageBoxImage.Error); }
         }
 
         private void AddWarp()
@@ -229,15 +244,22 @@ namespace Lycoris
             string mapFolder = _db?.ReferenceFolder ?? _db?.ModFolder;
             if (mapFolder == null) { DarkMessage.Show("No reference/mod folder to read the map's npc.pck from.", "Mirapo NPC"); return; }
 
-            var c = CoordsDialog.Ask(this, $"Mirapo mirror position in {_sel.MapId}", _sel.X, _sel.Y, _sel.Z, _sel.Rotation);
+            // Same coordinate convention as the daily-fight NPC editor: X, Y (2D horizontal), Z (height).
+            // The warp spawn stores [X, height, depth]; present it in that convention (Y=depth, Z=height).
+            var c = CoordsDialog.Ask(this, $"Mirapo mirror position in {_sel.MapId}", _sel.X, _sel.Z, _sel.Y, _sel.Rotation);
             if (c == null) return;
             try
             {
-                byte[] tpl = NpcCompiler.MirrorTemplate();
+                byte[] full = NpcCompiler.MirrorTemplate(), simple = NpcCompiler.MirrorTemplateSimple();
                 string mergeMapDir = Path.Combine(IncBase, "data", "res", "map", WarpSet.BaseMapId(_sel.MapId));
                 string outRoot = Path.Combine(Path.GetTempPath(), "Lycoris_warp");
+                // flag_config: register warp_<mapid> so its global bit flag is recognised/persistent.
+                string flagDst = Path.Combine(IncBase, "data", "res", "sys", "flag_config_0.01r.cfg.bin");
+                string flagSrc = File.Exists(flagDst) ? flagDst
+                    : FirstExisting(new[] { IncBase != null ? Path.Combine(IncBase, "data", "res", "sys", "flag_config_0.01r.cfg.bin") : null }
+                        .Concat(RefCandidates("data", "res", "sys", "flag_config_0.01r.cfg.bin")));
                 var res = NpcCompiler.CompileWarpNpc(_sel.MapId, mapFolder, outRoot, mergeMapDir,
-                    c.Value.x, c.Value.y, c.Value.z, (int)c.Value.rot, tpl);
+                    c.Value.x, c.Value.y, c.Value.z, (int)c.Value.rot, full, simple, flagSrc, flagDst);
                 _preview.Source = LoadPreview(_sel.MapId);
                 _status.Text = $"Mirapo NPC placed in {_sel.MapId} ({res.NpcIdHex}) — merged into the mod.";
                 DarkMessage.Show($"Mirapo warp NPC added to {_sel.MapId}:\n" +
@@ -256,9 +278,10 @@ namespace Lycoris
             try
             {
                 string outPath = _savePath;
-                _ws.Save(outPath);
-                _status.Text = $"Saved {_ws.Warps.Count} warps to the mod.";
-                DarkMessage.Show($"Warp table saved:\n{outPath}", "Saved", MessageBoxButton.OK, MessageBoxImage.Information);
+                string sysOut = Path.Combine(IncBase, "data", "res", "text", "system_text_en.cfg.bin");
+                _ws.Save(outPath, sysOut);
+                _status.Text = $"Saved {_ws.Warps.Count} warps to the mod" + (_ws.SystemTextDirty ? " (+ custom names in system_text)." : ".");
+                DarkMessage.Show($"Warp table saved:\n{outPath}" + (_ws.SystemTextDirty ? $"\nCustom names:\n{sysOut}" : ""), "Saved", MessageBoxButton.OK, MessageBoxImage.Information);
             }
             catch (Exception ex) { DarkMessage.Show(ex.Message, "Save warps", MessageBoxButton.OK, MessageBoxImage.Error); }
         }
@@ -365,10 +388,10 @@ namespace Lycoris
                 sp.Children.Add(tb); return sp;
             }
             var panel = new StackPanel { Margin = new Thickness(14) };
-            panel.Children.Add(new TextBlock { Text = "Where the mirror stands in the map (you talk to it to warp out).", Foreground = Theme.FgMuted, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 10) });
+            panel.Children.Add(new TextBlock { Text = "Where the mirror stands in the map (you talk to it to warp out). Same axes as the NPC editor.", Foreground = Theme.FgMuted, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 10) });
             panel.Children.Add(R("Mirror X", bx));
-            panel.Children.Add(R("Mirror Y (height)", by));
-            panel.Children.Add(R("Mirror Z", bz));
+            panel.Children.Add(R("Mirror Y (2D)", by));
+            panel.Children.Add(R("Mirror Z (height)", bz));
             panel.Children.Add(R("Rotation (°)", br));
             (double x, double y, double z, double rot)? result = null;
             var ok = new Button { Content = "Place", Width = 90, Margin = new Thickness(0, 0, 6, 0), IsDefault = true };

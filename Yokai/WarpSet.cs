@@ -28,7 +28,9 @@ namespace Lycoris.Yokai
         public int Field0;                 // CRC32("warp_"+mapid) (the warp-point id)
         public int MapHash;                // CRC32(mapid) = field[1]
         public string MapId;               // destination map id
-        public string MapName;             // display name from system_text
+        public string MapName;             // general map name from system_text (field[1])
+        public int CustomTextId;           // field[2]: text id of the specific warp-point name (0 = none)
+        public string CustomName;          // the specific warp-point name shown in the menu (field[2] → system_text)
 
         private double _x, _y, _z; private int _rot;
         public double X { get => _x; set { _x = value; Raise(nameof(X)); } }
@@ -37,7 +39,8 @@ namespace Lycoris.Yokai
         public int Rotation { get => _rot; set { _rot = value; Raise(nameof(Rotation)); } }
 
         public string HashHex => $"0x{unchecked((uint)MapHash):X8}";
-        public string Display => (MapName ?? MapId ?? HashHex) + (MapId != null ? $"   ({MapId})" : "");
+        // Prefer the specific warp-point name (field[2]) for display, else the general map name.
+        public string Display => (CustomName ?? MapName ?? MapId ?? HashHex) + (MapId != null ? $"   ({MapId})" : "");
         public override string ToString() => Display;
 
         public event PropertyChangedEventHandler PropertyChanged;
@@ -53,6 +56,8 @@ namespace Lycoris.Yokai
 
         private Dictionary<int, string> _names = new Dictionary<int, string>();
         private Dictionary<int, string> _mapIdByHash = new Dictionary<int, string>();
+        private T2bFile _systemText;        // kept so custom warp-point names can be added to it
+        public bool SystemTextDirty { get; private set; }
 
         // Field indices for the detected layout.
         private bool _newFmt;               // field[0] is a "warp_<mapid>" string
@@ -84,6 +89,7 @@ namespace Lycoris.Yokai
             {
                 int mapHash = e.GetInt(1) ?? 0;
                 string mapId = ws.ReadMapId(e, mapHash);
+                int custId = ws._newFmt ? (e.GetInt(2) ?? 0) : 0;   // field[2] = specific warp-point name text id
                 ws.Warps.Add(new WarpEntry
                 {
                     Entry = e,
@@ -91,6 +97,8 @@ namespace Lycoris.Yokai
                     MapHash = mapHash,
                     MapId = mapId,
                     MapName = ws._names.TryGetValue(mapHash, out var nm) ? nm : null,
+                    CustomTextId = custId,
+                    CustomName = custId != 0 && ws._names.TryGetValue(custId, out var cn) ? cn : null,
                     X = Num(e, ws._fx), Y = Num(e, ws._fy), Z = Num(e, ws._fz), Rotation = (int)Num(e, ws._frot),
                 });
             }
@@ -185,11 +193,53 @@ namespace Lycoris.Yokai
             }
         }
 
-        public void Save(string path)
+        public void Save(string path) => Save(path, null);
+
+        /// <summary>Write warp_config; if a custom warp-point name was set, also write the edited system_text to
+        /// <paramref name="systemTextDst"/> (the mod copy).</summary>
+        public void Save(string path, string systemTextDst)
         {
             CommitEdits();
             Directory.CreateDirectory(Path.GetDirectoryName(path));
             System.IO.File.WriteAllBytes(path, T2bWriter.Write(File));
+            if (SystemTextDirty && _systemText != null && !string.IsNullOrEmpty(systemTextDst))
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(systemTextDst));
+                System.IO.File.WriteAllBytes(systemTextDst, T2bWriter.Write(_systemText));
+            }
+        }
+
+        /// <summary>Set (or clear, if empty) the warp's specific name (field[2]) — shown in the warp menu instead of
+        /// the general map name. Registers the text in system_text with a derived id.</summary>
+        public void SetCustomName(WarpEntry w, string name)
+        {
+            name = (name ?? "").Trim();
+            if (string.Equals(name, w.CustomName ?? "", StringComparison.Ordinal)) return;
+            if (name.Length == 0)
+            {
+                SetInt(w.Entry, 2, 0); w.CustomTextId = 0; w.CustomName = null;
+                return;
+            }
+            if (_systemText == null) throw new InvalidOperationException("system_text not loaded — cannot set a custom warp name.");
+            int textId = unchecked((int)Crc32.Standard(Encoding.UTF8.GetBytes("warp_" + w.MapId + "_name")));
+            SetInt(w.Entry, 2, textId);
+            UpsertText(textId, name);
+            _names[textId] = name;
+            w.CustomTextId = textId; w.CustomName = name;
+            SystemTextDirty = true;
+        }
+
+        // Add or update a TEXT_INFO [id, 0, text] in system_text (bumping the group count on insert).
+        private void UpsertText(int textId, string text)
+        {
+            var existing = _systemText.Records("TEXT_INFO").FirstOrDefault(e => (e.GetInt(0) ?? 0) == textId);
+            if (existing != null) { SetStr(existing, 2, text); return; }
+            var tpl = _systemText.Records("TEXT_INFO").First().Clone();
+            SetInt(tpl, 0, textId); SetInt(tpl, 1, 0); SetStr(tpl, 2, text);
+            int endIdx = _systemText.Entries.FindIndex(e => e.Name == "TEXT_INFO_END");
+            if (endIdx < 0) _systemText.Entries.Add(tpl); else _systemText.Entries.Insert(endIdx, tpl);
+            var begin = _systemText.Entries.FirstOrDefault(e => e.Name == "TEXT_INFO_BEGIN");
+            if (begin != null && begin.Values.Count > 0 && begin.Values[0].Value is int c) begin.Values[0].Value = c + 1;
         }
 
         /// <summary>Locate the warp table, preferring the versioned shipping name (warp_config_0.01b.cfg.bin).</summary>
@@ -207,7 +257,8 @@ namespace Lycoris.Yokai
         private void BuildNameMap(string systemTextPath)
         {
             if (string.IsNullOrEmpty(systemTextPath) || !System.IO.File.Exists(systemTextPath)) return;
-            var st = T2bReader.ReadFile(systemTextPath);
+            _systemText = T2bReader.ReadFile(systemTextPath);
+            var st = _systemText;
             foreach (var e in st.Records("TEXT_INFO"))
                 if (e.Values.Count >= 3 && e.Values[0].Type == VT.Integer && e.Values[2].Type == VT.String)
                 {

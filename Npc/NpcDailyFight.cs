@@ -184,7 +184,10 @@ namespace Lycoris.Npc
 
         // ---------- flags ----------
 
-        private static void AddFlagIfAbsent(T2bFile flagConfig, int flagId, int groupIndex)
+        /// <summary>Register a flag id in flag_config's group whose BEGIN field[0]==groupIndex (0 = permanent
+        /// GlobalBitFlag), assigning the next free slot and bumping the group count. No-op if already present.
+        /// Reused by the Mirapo/warp generator so its warp_&lt;mapid&gt; flag is recognised/persistent.</summary>
+        public static void AddFlagIfAbsent(T2bFile flagConfig, int flagId, int groupIndex)
         {
             if (flagConfig == null) return;
             if (flagConfig.Records("FLAG_INFO").Any(e => (e.GetInt(1) ?? 0) == flagId)) return; // already registered

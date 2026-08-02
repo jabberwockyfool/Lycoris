@@ -200,18 +200,25 @@ namespace Lycoris.Npc
         /// position) and an NPC_PRESET linking them. Writes the edited npc_set + npc.pck for the map.
         /// </summary>
         public static Result CompileWarpNpc(string mapId, string mapFolder, string outRoot, string mergeMapDir,
-            double mx, double my, double mz, double mrot, byte[] mirrorTemplate)
+            double mx, double my, double mz, double mrot, byte[] mirrorFull, byte[] mirrorSimple,
+            string flagConfigSrc = null, string flagConfigDst = null)
         {
-            if (mirrorTemplate == null) throw new InvalidOperationException("Mirror npcbin template not available.");
+            if (mirrorFull == null || mirrorSimple == null) throw new InvalidOperationException("Mirror npcbin templates not available.");
             // A warp id may carry a point suffix (_02, _03…) — the warp id uses the FULL id, but the actual map
             // (folder, npc_set, npc.pck) is the BASE map. Multiple warp points thus share one map's npc_set.
             string baseMap = WarpBaseMapId(mapId);
+            // The map may be in the reference (vanilla) OR only in the mod (a CUSTOM map). Try the reference first,
+            // then fall back to the mod's map folder (mergeMapDir) — the custom map lives there with its npc.pck.
             string mapDir = ResolveMapDir(mapFolder, baseMap);
-            if (mapDir == null) throw new InvalidOperationException($"Map folder not found for \"{baseMap}\" (npc.pck missing in the mod or reference).");
+            if (mapDir == null && !string.IsNullOrEmpty(mergeMapDir) && File.Exists(Path.Combine(mergeMapDir, "npc.pck")))
+                mapDir = mergeMapDir;
+            if (mapDir == null) throw new InvalidOperationException($"Map folder not found for \"{baseMap}\" — no npc.pck in the reference or the mod (<mod>/include/data/res/map/{baseMap}/).");
             string npcPckPath = PickFile(mergeMapDir, mapDir, "npc.pck");
             string npcSetPath = PickByPrefix(mergeMapDir, mapDir, baseMap + "_npc_set");
+            string npcTalkPath = PickByPrefix(mergeMapDir, mapDir, baseMap + "_npc_talk_0.01");
             if (npcPckPath == null || !File.Exists(npcPckPath)) throw new InvalidOperationException("Required file missing: npc.pck");
-            if (npcSetPath == null) throw new InvalidOperationException($"Required file missing: {mapId}_npc_set*");
+            if (npcSetPath == null) throw new InvalidOperationException($"Required file missing: {baseMap}_npc_set*");
+            if (npcTalkPath == null) throw new InvalidOperationException($"Required file missing: {baseMap}_npc_talk_0.01* (needed for the Mirapo's talk/warp-menu entry).");
 
             var res = new Result();
             int warpId = unchecked((int)Crc32.Standard(Encoding.UTF8.GetBytes("warp_" + mapId)));
@@ -223,41 +230,55 @@ namespace Lycoris.Npc
                 throw new InvalidOperationException($"This map already has a Mirapo warp NPC for \"{mapId}\" (0x{unchecked((uint)warpId):X8}). " +
                     $"To add ANOTHER warp point to the same map, use a suffixed id like \"{baseMap}_02\" (\"{baseMap}_03\", …).");
             var npcPck = Xpck.Read(File.ReadAllBytes(npcPckPath));
-            string mirName = UniqueMirrorName(npcSet, npcPck);
+            // A Mirapo point needs a PAIR of mirror npcbins at the SAME position (vanilla: mir001 full w/ motion +
+            // mir002 simple w/o motion — e.g. Northbeech's 4 warps use 8 mir npcbins). One alone won't work.
+            string mirA = UniqueMirrorName(npcSet, npcPck);
+            string mirB = UniqueMirrorName(npcSet, npcPck, mirA);
 
             // NPC_BASE: [warpId, 0, model, 0, 9(warp type), 0,0,0,0,0, 0]
             var baseE = CloneRecord(npcSet, "NPC_BASE");
             SetInts(baseE, warpId, 0, model, 0, 9, 0, 0, 0, 0, 0, 0);
             AddToGroup(npcSet, "NPC_BASE_BEGIN", "NPC_BASE_END", baseE);
 
-            // NPC_APPEAR: the mirror model (always visible: cond "0")
-            int appearIndex = GroupCount(npcSet, "NPC_APPEAR_BEGIN");
-            var appearE = CloneRecord(npcSet, "NPC_APPEAR");
-            SetStr(appearE, 0, mirName);
-            SetInt(appearE, 1, -1); SetInt(appearE, 2, -1);
-            SetStr(appearE, 3, "0");
-            SetInt(appearE, 4, -1); SetInt(appearE, 5, 0); SetInt(appearE, 6, -1);
-            AddToGroup(npcSet, "NPC_APPEAR_BEGIN", "NPC_APPEAR_END", appearE);
+            // Appear conditions drive the dormant/AWAKENED pose: the vanilla mirror cond checks a per-region
+            // "mirapo enabled" flag + GetGlobalBitFlag(warpId) (the warp being unlocked → awakened). Copy those
+            // conds from an EXISTING type-9 mirapo in this map (so the region flag is correct) and remap its warp
+            // id → ours. Fallback "0" (always visible but stuck dormant) when the map has no other mirapo.
+            FindMirrorConds(npcSet, warpId, out string condFull, out string condSimple);
 
-            // NPC_PRESET: link base warpId -> the mirror appear (group 2, as vanilla)
+            // NPC_APPEAR ×2: the two mirrors (full + simple companion), consecutive.
+            int appearIndex = GroupCount(npcSet, "NPC_APPEAR_BEGIN");
+            AddMirrorAppear(npcSet, mirA, condFull);
+            AddMirrorAppear(npcSet, mirB, condSimple);
+
+            // NPC_PRESET: [warpId, firstAppearIndex, appearCount]. field[2] is the NUMBER of consecutive
+            // NPC_APPEAR entries this preset spans — MUST equal the two mirrors we add (2), else the span runs
+            // into a garbage/unrelated appear (its position) and the NPC fails to spawn / appears elsewhere.
             var presetE = CloneRecord(npcSet, "NPC_PRESET");
             SetInts(presetE, warpId, appearIndex, 2);
             AddToGroup(npcSet, "NPC_PRESET_BEGIN", "NPC_PRESET_END", presetE);
 
-            // Mirror npcbin (y130000) placed at the given position, injected into npc.pck.
-            var npcbin = T2bReader.Read(mirrorTemplate);
-            SetPointCoords(npcbin, mx, my, mz, mrot);
-            byte[] npcbinBytes = T2bWriter.Write(npcbin);
-            Xpck.AddOrReplace(npcPck, mirName + ".npcbin", npcbinBytes);
+            // Both mirror npcbins at the SAME position (mirA = full model, mirB = simple companion).
+            byte[] binA = MakeMirrorBin(mirrorFull, mx, my, mz, mrot);
+            byte[] binB = MakeMirrorBin(mirrorSimple, mx, my, mz, mrot);
+            Xpck.AddOrReplace(npcPck, mirA + ".npcbin", binA);
+            Xpck.AddOrReplace(npcPck, mirB + ".npcbin", binB);
             byte[] npcPckOut = Xpck.Write(npcPck);
+
+            // npc_talk: the TALK_INFO + 2 TALK_CONFIG (one of which opens the warp menu) that make the type-9 NPC
+            // actually talkable — WITHOUT this, talking to the Mirapo does nothing.
+            var npcTalk = T2bReader.Read(File.ReadAllBytes(npcTalkPath));
+            AddMirapoTalk(npcTalk, warpId);
 
             string root = Path.Combine(outRoot, "warp_" + mapId + "_output");
             string outMap = Path.Combine(root, baseMap);   // mirror the real (base) map folder
             Directory.CreateDirectory(outMap);
             res.OutputDir = root;
             WriteOut(outMap, Path.GetFileName(npcSetPath), T2bWriter.Write(npcSet), res);
+            WriteOut(outMap, Path.GetFileName(npcTalkPath), T2bWriter.Write(npcTalk), res);
             WriteOut(outMap, "npc.pck", npcPckOut, res);
-            WriteOut(outMap, mirName + ".npcbin", npcbinBytes, res);
+            WriteOut(outMap, mirA + ".npcbin", binA, res);
+            WriteOut(outMap, mirB + ".npcbin", binB, res);
 
             if (!string.IsNullOrEmpty(mergeMapDir))
             {
@@ -266,14 +287,30 @@ namespace Lycoris.Npc
                     File.Copy(src, Path.Combine(mergeMapDir, Path.GetFileName(src)), overwrite: true);
                 res.MergedDir = mergeMapDir;
             }
+
+            // flag_config: register the warp flag "warp_<mapid>" in the GlobalBitFlag group (field[0]==0) so
+            // SetGlobalBitFlag(warpId) is a recognised, persistent flag. Written straight to its mod destination.
+            if (!string.IsNullOrEmpty(flagConfigSrc) && File.Exists(flagConfigSrc) && !string.IsNullOrEmpty(flagConfigDst))
+            {
+                var flagConfig = T2bReader.Read(File.ReadAllBytes(flagConfigSrc));
+                NpcDailyFight.AddFlagIfAbsent(flagConfig, warpId, 0);   // 0 = permanent GlobalBitFlag group
+                Directory.CreateDirectory(Path.GetDirectoryName(flagConfigDst));
+                File.WriteAllBytes(flagConfigDst, T2bWriter.Write(flagConfig));
+                res.Files.Add(flagConfigDst);
+            }
             return res;
         }
 
-        /// <summary>Load the bundled mir001 mirror npcbin template (Mirapo model y130000).</summary>
-        public static byte[] MirrorTemplate()
+        /// <summary>Load the bundled mir001 mirror npcbin template (full — Mirapo model y130000 with motion).</summary>
+        public static byte[] MirrorTemplate() => LoadResource("Lycoris.Resources.mir001.npcbin");
+
+        /// <summary>Load the bundled mir002 mirror npcbin template (simple companion — no motion).</summary>
+        public static byte[] MirrorTemplateSimple() => LoadResource("Lycoris.Resources.mir002.npcbin");
+
+        private static byte[] LoadResource(string name)
         {
             var asm = System.Reflection.Assembly.GetExecutingAssembly();
-            using (var s = asm.GetManifestResourceStream("Lycoris.Resources.mir001.npcbin"))
+            using (var s = asm.GetManifestResourceStream(name))
             {
                 if (s == null) return null;
                 var b = new byte[s.Length];
@@ -287,9 +324,9 @@ namespace Lycoris.Npc
         private static string WarpBaseMapId(string mapId) =>
             System.Text.RegularExpressions.Regex.Replace(mapId ?? "", @"_\d+$", "");
 
-        private static string UniqueMirrorName(T2bFile npcSet, List<XpckFile> npcPck)
+        private static string UniqueMirrorName(T2bFile npcSet, List<XpckFile> npcPck, params string[] alsoUsed)
         {
-            var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var used = new HashSet<string>(alsoUsed ?? new string[0], StringComparer.OrdinalIgnoreCase);
             foreach (var e in npcSet.Records("NPC_APPEAR"))
                 if (e.Values.Count > 0 && e.Values[0].Type == VT.String) used.Add((string)e.Values[0].Value);
             foreach (var f in npcPck)
@@ -298,11 +335,114 @@ namespace Lycoris.Npc
             return "mir001";
         }
 
-        private static void SetPointCoords(T2bFile npcbin, double x, double y, double z, double rot)
+        // Add a mirror NPC_APPEAR with the given condition blob ("0" = always visible).
+        private static void AddMirrorAppear(T2bFile npcSet, string mirName, string cond)
+        {
+            var appearE = CloneRecord(npcSet, "NPC_APPEAR");
+            SetStr(appearE, 0, mirName);
+            SetInt(appearE, 1, -1); SetInt(appearE, 2, -1);
+            SetStr(appearE, 3, string.IsNullOrEmpty(cond) ? "0" : cond);
+            SetInt(appearE, 4, -1); SetInt(appearE, 5, 0); SetInt(appearE, 6, -1);
+            AddToGroup(npcSet, "NPC_APPEAR_BEGIN", "NPC_APPEAR_END", appearE);
+        }
+
+        // Vanilla t101i02 mirror appear conds (region flag 0xA83CA9FF = Springdale, warp id 0x5A640058):
+        //   full   = GetGlobalBitFlag(0xA83CA9FF)==1 && GetGlobalBitFlag(warpId)!=1  (dormant)
+        //   simple = GetGlobalBitFlag(0xA83CA9FF)==1
+        // Springdale's mirapo flag is set very early, so it works as a fallback for custom maps.
+        private const string SpringdaleCondFull = "AAAAADALNSo9RUMACgEoAAYCNKg8qf8yAAAAAXg1Kj1FQwAKASgABgI0WmQAWDIAAAABeY8=";
+        private const string SpringdaleCondSimple = "AAAAABgFNSo9RUMACgEoAAYCNKg8qf8yAAAAAXg=";
+
+        // Appear condition blobs (full + simple mirror) that drive the dormant/awakened pose (region flag + warp
+        // flag). Prefer copying from an EXISTING type-9 mirapo in this map (correct region flag) and remapping its
+        // warp id → ours; fall back to the Springdale conds (early-unlock flag) for a custom map with no mirapo.
+        private static void FindMirrorConds(T2bFile npcSet, int warpId, out string condFull, out string condSimple)
+        {
+            var exBase = npcSet.Records("NPC_BASE").FirstOrDefault(e => (e.GetInt(4) ?? 0) == 9 && (e.GetInt(0) ?? 0) != warpId);
+            if (exBase != null)
+            {
+                int exWarpId = exBase.GetInt(0) ?? 0;
+                var exPreset = npcSet.Records("NPC_PRESET").FirstOrDefault(p => (p.GetInt(0) ?? 0) == exWarpId);
+                if (exPreset != null)
+                {
+                    int ai = exPreset.GetInt(1) ?? 0, cnt = exPreset.GetInt(2) ?? 0;
+                    var appears = npcSet.Records("NPC_APPEAR").ToList();
+                    string Cond(int i) => i >= 0 && i < appears.Count && appears[i].Values.Count > 3 && appears[i].Values[3].Type == VT.String
+                        ? YwCond.RemapBase64((string)appears[i].Values[3].Value, exWarpId, warpId) : "0";
+                    condFull = Cond(ai);
+                    condSimple = cnt > 1 ? Cond(ai + 1) : "0";
+                    return;
+                }
+            }
+            // Custom map (no other mirapo): reuse the Springdale conds, remapping the warp id in the full one.
+            condFull = YwCond.RemapBase64(SpringdaleCondFull, MirapoVanillaWarpId, warpId);
+            condSimple = SpringdaleCondSimple;
+        }
+
+        // Build a mirror npcbin from a template, placed at (x,y,z,rot).
+        private static byte[] MakeMirrorBin(byte[] template, double x, double y, double z, double rot)
+        {
+            var bin = T2bReader.Read(template);
+            SetPointCoords(bin, x, y, z, rot);
+            return T2bWriter.Write(bin);
+        }
+
+        // --- Mirapo talk chain (fixed template; only the warp id varies) ---
+        // Vanilla t101i02 blobs (warp id 0x5A640058): cond = GetGlobalBitFlag(warpId); trigA = open-warp-menu
+        // command (carries warpId at offset 19); trigB + the two page text ids are CONSTANT across all maps.
+        private const int MirapoVanillaWarpId = 0x5A640058;
+        // CFG#1 gate: GetGlobalBitFlag(warpId)==NOT-set → "first time" (awaken). CFG#1 trig then does
+        // SetGlobalBitFlag(warpId) (awaken + register) + RunTrigger(awaken intro/menu). Once the flag is set,
+        // CFG#1's cond fails and CFG#2 (the repeat: direct warp menu) runs instead.
+        private const string MirapoCond = "AAAAABgFNSo9RUMACgEoAAYCNFpkAFgyAAAAAXk=";
+        private const string MirapoTrigA = "AAAAAC0FNRgrN1oAEwIoAAYCNFpkAFgoAAYCMgAAAAE1aYTjrwAKASgABgI0uDqdiI8=";
+        private const string MirapoTrigB = "AAAAABICNWmE468ACgEoAAYCNCn5Ri0=";
+        private static readonly int MirapoText1 = unchecked((int)0xAF6C8F02);
+        private static readonly int MirapoText2 = 0x3665DEB8;
+
+        /// <summary>Add the Mirapo's talk entry (TALK_INFO + 2 TALK_CONFIG + 2 TALK_PAGE) so the type-9 NPC is
+        /// talkable and opens the warp menu. Indices are absolute positions in each group, computed before adding.</summary>
+        private static void AddMirapoTalk(T2bFile talk, int warpId)
+        {
+            int cfgStart = GroupCount(talk, "TALK_CONFIG_BEGIN");
+            int pageStart = GroupCount(talk, "TALK_PAGE_BEGIN");
+            string cond = YwCond.RemapBase64(MirapoCond, MirapoVanillaWarpId, warpId);
+            string trigA = YwCond.RemapBase64(MirapoTrigA, MirapoVanillaWarpId, warpId);
+
+            // TALK_INFO = [warpId, cfgStart, 2]
+            var info = CloneRecord(talk, "TALK_INFO");
+            SetInts(info, warpId, cfgStart, 2);
+            AddToGroup(talk, "TALK_INFO_BEGIN", "TALK_INFO_END", info);
+
+            // TALK_CONFIG #1 = [1,0, pageStart, 1, 0,0,-1,-1, cond, trigA] — the FIRST-TIME (awaken) branch: its
+            // cond passes only while GetGlobalBitFlag(warpId) is NOT set, and its trig SetGlobalBitFlag(warpId)
+            // registers/awakens. Once set, CFG#1 no longer matches → CFG#2 (repeat: direct warp menu) runs. The
+            // flag is declared in flag_config below so it persists (else the awaken would repeat forever).
+            var c1 = CloneRecord(talk, "TALK_CONFIG");
+            SetInts(c1, 1, 0, pageStart, 1, 0, 0, -1, -1);
+            SetStr(c1, 8, cond); SetStr(c1, 9, trigA);
+            AddToGroup(talk, "TALK_CONFIG_BEGIN", "TALK_CONFIG_END", c1);
+
+            // TALK_CONFIG #2 = [1,0, pageStart+1, 1, 0,0,-1,-1, 0,    trigB]
+            var c2 = CloneRecord(talk, "TALK_CONFIG");
+            SetInts(c2, 1, 0, pageStart + 1, 1, 0, 0, -1, -1);
+            SetInt(c2, 8, 0); SetStr(c2, 9, MirapoTrigB);
+            AddToGroup(talk, "TALK_CONFIG_BEGIN", "TALK_CONFIG_END", c2);
+
+            // TALK_PAGE ×2 = [textId, -1]
+            var p1 = CloneRecord(talk, "TALK_PAGE"); SetInts(p1, MirapoText1, -1);
+            AddToGroup(talk, "TALK_PAGE_BEGIN", "TALK_PAGE_END", p1);
+            var p2 = CloneRecord(talk, "TALK_PAGE"); SetInts(p2, MirapoText2, -1);
+            AddToGroup(talk, "TALK_PAGE_BEGIN", "TALK_PAGE_END", p2);
+        }
+
+        private static void SetPointCoords(T2bFile npcbin, double x, double y2d, double zHeight, double rot)
         {
             var pt = npcbin.Entries.FirstOrDefault(e => e.Name == "POINT")
                      ?? throw new InvalidOperationException("POINT entry missing from the mirror .npcbin.");
-            double[] vals = { x, y, z, rot };   // POINT = [X, height(Y), Z, rotation]
+            // Same mapping as the daily-fight NPC's SetPoint: POINT = [X, Z(height), Y(2D horizontal), rotation]
+            // — the game POINT is [X, height, Z, rot] and the input Y/Z are swapped (NPCMake convention).
+            double[] vals = { x, zHeight, y2d, rot };
             for (int i = 0; i < 4 && i < pt.Values.Count; i++)
             {
                 double v = vals[i];
