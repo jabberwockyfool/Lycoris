@@ -132,11 +132,16 @@ namespace Lycoris.Npc
             AddRecord(npcTalk, "TALK_INFO", "TALK_INFO_BEGIN", "TALK_INFO_END", 0,
                 IntV(npcId), IntV(cfgStart), IntV(3));
 
-            // --- text: the "come back tomorrow" line (one page) ---
-            AddRecord(textEn, "TEXT_INFO", "TEXT_INFO_BEGIN", "TEXT_INFO_END", 0,
-                IntV(r.TextId), IntV(0), StrV(npc.TomorrowText ?? ""), IntV(0));
-            AddRecord(textMap, "TEXT_WASHA_MAP", "TEXT_WASHA_MAP_BEGIN", "TEXT_WASHA_MAP_END", 0,
-                IntV(r.TextId), IntV(0), IntV(talker), IntV(0), IntV(-1), IntV(0));
+            // --- text: the "come back tomorrow" dialogue (one page per line; "model|text" sets a page's speaker) ---
+            var tomorrow = ParseLines(npc.TomorrowText, talker);
+            if (tomorrow.Count == 0) tomorrow.Add((talker, ""));
+            for (int page = 0; page < tomorrow.Count; page++)
+            {
+                AddRecord(textEn, "TEXT_INFO", "TEXT_INFO_BEGIN", "TEXT_INFO_END", 0,
+                    IntV(r.TextId), IntV(page), StrV(tomorrow[page].text), IntV(0));
+                AddRecord(textMap, "TEXT_WASHA_MAP", "TEXT_WASHA_MAP_BEGIN", "TEXT_WASHA_MAP_END", 0,
+                    IntV(r.TextId), IntV(page), IntV(tomorrow[page].talker), IntV(0), IntV(-1), IntV(0));
+            }
 
             return r;
         }
@@ -271,6 +276,32 @@ namespace Lycoris.Npc
             v = 0; s = (s ?? "").Trim().TrimEnd('h', 'H');
             if (s.StartsWith("0x") || s.StartsWith("0X")) s = s.Substring(2);
             return uint.TryParse(s, System.Globalization.NumberStyles.HexNumber, System.Globalization.CultureInfo.InvariantCulture, out v);
+        }
+
+        /// <summary>Split a dialogue block into (talker, text) per non-empty line. A leading "model|" / "0xHEX|"
+        /// sets that line's speaker (only a plausible id prefix is treated as one); otherwise the default talker.</summary>
+        private static List<(int talker, string text)> ParseLines(string block, int defaultTalker)
+        {
+            var res = new List<(int talker, string text)>();
+            foreach (var raw in (block ?? "").Replace("\r", "").Split('\n'))
+            {
+                if (raw.Trim().Length == 0) continue;
+                int talker = defaultTalker; string text = raw;
+                int bar = raw.IndexOf('|');
+                if (bar > 0)
+                {
+                    string pre = raw.Substring(0, bar).Trim();
+                    if (System.Text.RegularExpressions.Regex.IsMatch(pre, @"^(0x[0-9A-Fa-f]{1,8}|[A-Za-z]\d{6}(_\d{1,2})?)$"))
+                    {
+                        talker = pre.StartsWith("0x", StringComparison.OrdinalIgnoreCase)
+                            ? unchecked((int)uint.Parse(pre.Substring(2), System.Globalization.NumberStyles.HexNumber))
+                            : Crc(pre);
+                        text = raw.Substring(bar + 1);
+                    }
+                }
+                res.Add((talker, text));
+            }
+            return res;
         }
 
         private static int Crc(string s) => unchecked((int)Crc32.Standard(Encoding.UTF8.GetBytes(s ?? "")));

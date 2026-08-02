@@ -67,6 +67,7 @@
     <Compile Include="Formats\T2bTree.cs" />
     <Compile Include="Formats\T2bEntryExtensions.cs" />
     <Compile Include="Formats\Imgc.cs" />
+    <Compile Include="Formats\XfFont.cs" />
     <Compile Include="Formats\Xpck.cs" />
     <Compile Include="Formats\YwSave.cs" />
     <Compile Include="Yokai\IconNaming.cs" />
@@ -102,6 +103,8 @@
     <Compile Include="EventEditorWindow.cs" />
     <Compile Include="BattleEditorWindow.cs" />
     <Compile Include="DialogueEditorWindow.cs" />
+    <Compile Include="DialogueBubble.cs" />
+    <Compile Include="Bustup.cs" />
     <Compile Include="HomeWindow.cs" />
     <Compile Include="AddYokaiDialog.cs" />
     <Compile Include="AtlasPickerWindow.cs" />
@@ -136,6 +139,12 @@
     <EmbeddedResource Include="Properties\Resources.resx">
       <Generator>ResXFileCodeGenerator</Generator>
       <LastGenOutput>Resources.Designer.cs</LastGenOutput>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Resources\blank_top.png">
+      <LogicalName>Lycoris.Resources.blank_top.png</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Resources\ft_nrm.xf">
+      <LogicalName>Lycoris.Resources.ft_nrm.xf</LogicalName>
     </EmbeddedResource>
     <None Include="Properties\Settings.settings">
       <Generator>SettingsSingleFileGenerator</Generator>

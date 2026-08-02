@@ -202,6 +202,7 @@ namespace Lycoris.Formats
                 {
                     case 0: return new ColorFormat { Name = "RGBA8", Size = 4 };
                     case 1: return new ColorFormat { Name = "RGBA4", Size = 2 };
+                    case 2: return new ColorFormat { Name = "RGBA5551", Size = 2 };
                     case 28: return new ColorFormat { Name = "ETC1A4", Size = 4 };
                     default: throw new NotSupportedException($"IMGC image format {id} not supported.");
                 }
@@ -220,6 +221,14 @@ namespace Lycoris.Formats
                         g = (byte)(((v >> 8) & 0xF) * 16);
                         b = (byte)(((v >> 4) & 0xF) * 16);
                         a = (byte)((v & 0xF) * 16);
+                        break;
+                    case "RGBA5551": // little-endian ushort: R5 G5 B5 A1 (high->low)
+                        ushort w = (ushort)((d[off + 1] << 8) | d[off]);
+                        int r5 = (w >> 11) & 0x1F, g5 = (w >> 6) & 0x1F, b5 = (w >> 1) & 0x1F;
+                        r = (byte)((r5 << 3) | (r5 >> 2));
+                        g = (byte)((g5 << 3) | (g5 >> 2));
+                        b = (byte)((b5 << 3) | (b5 >> 2));
+                        a = (byte)((w & 1) * 255);
                         break;
                     default: // ETC1A4 already decoded to [R,G,B,A]
                         r = d[off]; g = d[off + 1]; b = d[off + 2]; a = d[off + 3];
@@ -350,6 +359,7 @@ namespace Lycoris.Formats
                 case 1: return Lz10(data).Take(size).ToArray();            // LZ10
                 case 2: return Huffman(data, 4).Take(size).ToArray();      // Huffman 4-bit
                 case 3: return Huffman(data, 8).Take(size).ToArray();      // Huffman 8-bit
+                case 4: return Rle(data, size);                            // RLE
                 default: throw new NotSupportedException($"Compression method {method} not supported for .xi.");
             }
         }
@@ -383,6 +393,30 @@ namespace Lycoris.Formats
             for (int j = 0; j < decompressedSize; j++)
                 combined[j] = (byte)(result[2 * j] | (result[2 * j + 1] << 4));
             return combined;
+        }
+
+        /// <summary>Level-5 RLE (method 4): flag&gt;=128 → repeat next byte (flag-128+3) times; else copy (flag+1) literals.</summary>
+        private static byte[] Rle(byte[] data, int size)
+        {
+            var output = new List<byte>(size);
+            int p = 4;
+            while (output.Count < size && p < data.Length)
+            {
+                byte flag = data[p++];
+                if (flag >= 128)
+                {
+                    if (p >= data.Length) break;
+                    byte val = data[p++];
+                    int n = flag - 128 + 3;
+                    for (int i = 0; i < n && output.Count < size; i++) output.Add(val);
+                }
+                else
+                {
+                    int n = flag + 1;
+                    for (int i = 0; i < n && p < data.Length && output.Count < size; i++) output.Add(data[p++]);
+                }
+            }
+            return output.ToArray();
         }
 
         private static byte[] Lz10(byte[] data)

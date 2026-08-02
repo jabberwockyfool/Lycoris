@@ -36,6 +36,13 @@ namespace Lycoris
         private readonly TextBlock _speakerHint = new TextBlock { Foreground = Theme.FgMuted, VerticalAlignment = VerticalAlignment.Center };
         private readonly Button _nameBoxBtn = new Button { Content = "＋ Name box", Padding = new Thickness(9, 4, 9, 4), Margin = new Thickness(6, 0, 0, 0) };
         private readonly ComboBox _block = new ComboBox { Width = 90, IsEditable = true };
+        // --- live text-bubble preview (control codes interpreted, à la Kuriimu) ---
+        private readonly Border _nameBox = new Border { HorizontalAlignment = HorizontalAlignment.Left, Padding = new Thickness(10, 2, 10, 2), CornerRadius = new CornerRadius(8), Margin = new Thickness(6, 10, 0, -8), Visibility = Visibility.Collapsed };
+        private readonly TextBlock _nameText = new TextBlock { Foreground = Brushes.White, FontWeight = FontWeights.Bold, FontSize = 13 };
+        private readonly Border _bubble = new Border { CornerRadius = new CornerRadius(20), BorderThickness = new Thickness(3), Padding = new Thickness(18, 16, 18, 16), Margin = new Thickness(0, 0, 0, 0) };
+        private readonly TextBlock _bubbleText = new TextBlock { TextWrapping = TextWrapping.Wrap, FontSize = 16, LineHeight = 22 };
+        private readonly Image _bubbleImg = new Image { Stretch = Stretch.None, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 2, 0, 0) };
+        private readonly Image _bustupImg = new Image { Stretch = Stretch.Uniform, MaxHeight = 180, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 4, 0, 0) };
         private readonly TextBlock _status = new TextBlock { Foreground = Theme.FgMuted, Margin = new Thickness(4) };
 
         public DialogueEditorWindow(Window owner, YokaiDatabase db)
@@ -83,7 +90,7 @@ namespace Lycoris
             _block.LostFocus += (s, e) => BlockChanged();
             _block.SelectionChanged += (s, e) => BlockChanged();
             blkRow.Children.Add(_block);
-            blkRow.Children.Add(new TextBlock { Text = "  (event block — key = CRC32(event + suffix); e.g. _010 intro, _011 male, _020 accept, _030 decline)", VerticalAlignment = VerticalAlignment.Center, Foreground = Theme.FgMuted, TextWrapping = TextWrapping.Wrap });
+            blkRow.Children.Add(new TextBlock { Text = "(E.g. _010 intro, _011 male, _020 accept, _030 decline)", VerticalAlignment = VerticalAlignment.Center, Foreground = Theme.FgMuted, TextWrapping = TextWrapping.Wrap });
             right.Children.Add(blkRow);
 
             var spRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 6) };
@@ -99,8 +106,29 @@ namespace Lycoris
             _nameBoxBtn.Click += (s, e) => AddNameBox();
             right.Children.Add(new TextBlock { Text = "Text", Foreground = Theme.FgMuted, Margin = new Thickness(0, 0, 0, 2) });
             _text.LostFocus += (s, e) => TextChanged();
+            _text.TextChanged += (s, e) => { if (!_suppress) UpdatePreview(); };   // live bubble + bustup (expression <A..>)
             right.Children.Add(_text);
-            right.Children.Add(new TextBlock { Foreground = Theme.FgMuted, FontSize = 11, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 6, 0, 0), Text = "Control codes like <PV#voice_y001000_31>, <A01/06>, <CG>…</C> are kept as-is. Speaker: a model name (c001000, y597000 → CRC32) or a hex TalkerBaseID; 0x00000000 = no name box. Shortcut: start the text with « model| » (e.g. y152000|Hello) to set the speaker inline." });
+            right.Children.Add(new TextBlock { Foreground = Theme.FgMuted, FontSize = 11, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 6, 0, 0), Text = "" });
+
+            // Live text-bubble preview (control codes interpreted, à la Kuriimu).
+            var bubbleBorder = new SolidColorBrush(Color.FromRgb(0x8B, 0x5C, 0xF6));
+            _bubble.Background = new SolidColorBrush(Color.FromRgb(0xF5, 0xF1, 0xFB));
+            _bubble.BorderBrush = bubbleBorder;
+            _bubbleText.Foreground = new SolidColorBrush(Color.FromRgb(0x2A, 0x20, 0x3A));
+            _bubble.Child = _bubbleText;
+            _nameBox.Background = bubbleBorder;
+            _nameBox.Child = _nameText;
+            right.Children.Add(new TextBlock { Text = "Preview", Foreground = Theme.FgMuted, Margin = new Thickness(0, 12, 0, 2) });
+            right.Children.Add(_bustupImg);   // speaker portrait (bustup), when available
+            right.Children.Add(_nameBox);
+            // Faithful bubble (game font + dialog box) when the embedded resources loaded; else the styled fallback.
+            if (DialogueBubble.Available)
+            {
+                _bubble.Visibility = Visibility.Collapsed;
+                right.Children.Add(new ScrollViewer { Content = _bubbleImg, HorizontalScrollBarVisibility = ScrollBarVisibility.Auto, VerticalScrollBarVisibility = ScrollBarVisibility.Disabled });
+            }
+            else right.Children.Add(_bubble);
+
             _detail = right;
             _detail.IsEnabled = false;
 
@@ -169,6 +197,7 @@ namespace Lycoris
                 _nameBoxBtn.Visibility = hasBox ? Visibility.Collapsed : Visibility.Visible; // offer to add one
             }
             _suppress = false;
+            UpdatePreview();
         }
 
         private void BlockChanged()
@@ -228,6 +257,32 @@ namespace Lycoris
             int id = Resolve(_speaker.Text);
             _row.TalkerBaseId = id;
             _row.SpeakerName = _talkerNames.TryGetValue(id, out var nm) ? nm : null;
+            UpdatePreview();
+        }
+
+        /// <summary>Refresh the text-bubble preview (game font + dialog box, or the styled fallback) + name box.</summary>
+        private void UpdatePreview()
+        {
+            if (DialogueBubble.Available) _bubbleImg.Source = DialogueBubble.Render(_text.Text);
+            else _bubbleText.Text = RenderText(_text.Text);
+            bool named = _row != null && _row.WashaEntry != null && _row.TalkerBaseId != 0;
+            if (named) { _nameText.Text = _row.SpeakerName ?? _row.TalkerHex; _nameBox.Visibility = Visibility.Visible; }
+            else _nameBox.Visibility = Visibility.Collapsed;
+
+            var portrait = named ? Bustup.Get(_db, _row.TalkerBaseId, _text.Text) : null;
+            _bustupImg.Source = portrait;
+            _bustupImg.Visibility = portrait != null ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        /// <summary>Interpret the game's text control codes into a readable preview (à la Kuriimu): strip tag
+        /// codes (&lt;PV#…&gt;, &lt;A../..&gt;, colour tags), keep furigana base text, expand \n and &lt;PNAME&gt;.</summary>
+        private static string RenderText(string raw)
+        {
+            if (string.IsNullOrEmpty(raw)) return "";
+            string s = raw.Replace("<PNAME>", "Nate");
+            s = System.Text.RegularExpressions.Regex.Replace(s, @"\[([^/\]]*)/[^\]]*\]", "$1"); // furigana [base/ruby] → base
+            s = System.Text.RegularExpressions.Regex.Replace(s, @"<[^>]*>", "");                 // strip control tags
+            return s.Replace("\\n", "\n").Replace("\r", "");
         }
 
         /// <summary>Pick a yo-kai from the loaded list and set it as this line's speaker (talker = CRC32(model)).
