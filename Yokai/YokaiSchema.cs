@@ -65,6 +65,7 @@ namespace Lycoris.Yokai
         // --- Drops / rewards (battle_chara_param) — editable, keyed by ParamHash ---
         public string BattleParamFilePrefix = "battle_chara_param";
         public string BattleRecord = "BATTLE_CHARA_PARAM_INFO";
+        public int B_InspiritEvasionIndex = 1; // BaseInspiritEvasionRate: higher = harder to dodge Inspirit
         public int B_MoneyIndex = 3;
         public int B_ExpIndex = 4;
         public int B_Drop1Index = 5;

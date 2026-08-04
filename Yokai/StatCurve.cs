@@ -21,6 +21,8 @@ namespace Lycoris.Yokai
         private static readonly int[] RankSpr = { 138, 150, 162, 172, 186, 200, 245 };
         private static readonly int[] RankDef = { 106, 115, 120, 132, 145, 158, 215 };
         private static readonly int[] RankSpd = { 140, 148, 155, 162, 172, 200, 285 };
+        // battle_chara_param BaseInspiritEvasionRate per rank (documented in-game values). Higher = dodges less.
+        private static readonly int[] RankEvasion = { 50, 60, 70, 75, 85, 90, 95 };
 
         // Legacy power (1–10) Max curve — anchored on the overall YW3 stat distribution.
         private static readonly int[] Hp  = { 280, 320, 350, 375, 395, 420, 440, 455, 475, 650 };
@@ -31,6 +33,13 @@ namespace Lycoris.Yokai
 
         // Median Min/Max ratio per stat (HP, Str, Spr, Def, Spd) from the game data.
         private const double RHp = 0.13, RStr = 0.14, RSpr = 0.14, RDef = 0.17, RSpd = 0.11;
+
+        /// <summary>Documented BaseInspiritEvasionRate for a rank code (E→Z), or null for Unrank/unknown.</summary>
+        public static int? EvasionForRank(int? rank)
+        {
+            int? tier = TierOfRank(rank);
+            return tier.HasValue ? (int?)RankEvasion[tier.Value] : null;
+        }
 
         /// <summary>Rank code (0=E … 5=S, 9=Z) → tier index 0..6, or null for Unrank/unknown.</summary>
         public static int? TierOfRank(int? rank)
@@ -63,6 +72,7 @@ namespace Lycoris.Yokai
             y.MaxSpirit = RankSpr[i];   y.MinSpirit = R(RankSpr[i], RSpr);
             y.MaxDefense = RankDef[i];  y.MinDefense = R(RankDef[i], RDef);
             y.MaxSpeed = RankSpd[i];    y.MinSpeed = R(RankSpd[i], RSpd);
+            y.InspiritEvasion = RankEvasion[i]; // battle_chara_param (only persists if the yo-kai has a battle entry)
             return true;
         }
 

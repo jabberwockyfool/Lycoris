@@ -264,10 +264,10 @@
                           </StackPanel>
                         </TabItem>
 
-                        <!-- ================= Drops ================= -->
-                        <TabItem Header="Drops">
+                        <!-- ================= Battle ================= -->
+                        <TabItem Header="Battle">
                           <StackPanel Margin="8">
-                            <Button x:Name="EnableDropsButton" Content="Enable Drops for this yo-kai"
+                            <Button x:Name="EnableDropsButton" Content="Enable Battle stats for this yo-kai"
                                     HorizontalAlignment="Left" Padding="8,3" Margin="0,0,0,8" Click="EnableDrops_Click"/>
                             <StackPanel IsEnabled="{Binding HasDrops}">
                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
@@ -275,6 +275,14 @@
                                     <TextBox Text="{Binding Money}" Width="80"/>
                                     <TextBlock Text="Exp" Width="40" Margin="16,0,0,0"/>
                                     <TextBox Text="{Binding Experience}" Width="80"/>
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                    <TextBlock Text="Inspirit evasion" Width="90" VerticalAlignment="Center"/>
+                                    <ComboBox Width="90" ItemsSource="{x:Static yk:YokaiEnums.InspiritEvasions}"
+                                              SelectedValuePath="Key" DisplayMemberPath="Name"
+                                              SelectedValue="{Binding InspiritEvasion}"/>
+                                    <TextBlock Text="Chance to dodge an inspirit"
+                                               VerticalAlignment="Center" Margin="10,0,0,0" Opacity="0.6"/>
                                 </StackPanel>
                                 <GroupBox Header="Drop 1">
                                     <StackPanel Orientation="Horizontal" Margin="4">

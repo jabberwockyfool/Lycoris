@@ -236,6 +236,9 @@ namespace Lycoris.Yokai
         private int? _money, _exp, _drop1, _drop1Rate, _drop2, _drop2Rate;
         public int? Money { get => _money; set => SetField(ref _money, value); }
         public int? Experience { get => _exp; set => SetField(ref _exp, value); }
+        private int? _inspiritEvasion;
+        /// <summary>battle_chara_param BaseInspiritEvasionRate — higher = the yo-kai dodges Inspirits less.</summary>
+        public int? InspiritEvasion { get => _inspiritEvasion; set => SetField(ref _inspiritEvasion, value); }
         public int? Drop1Hash { get => _drop1; set => SetField(ref _drop1, value); }
         public int? Drop1Rate { get => _drop1Rate; set => SetField(ref _drop1Rate, value); }
         public int? Drop2Hash { get => _drop2; set => SetField(ref _drop2, value); }

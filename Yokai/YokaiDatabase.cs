@@ -574,6 +574,7 @@ namespace Lycoris.Yokai
                 if (battleByParam.TryGetValue(y.ParamHash, out T2bEntry bE))
                 {
                     y.BattleEntry = bE;
+                    y.InspiritEvasion = bE.GetInt(Schema.B_InspiritEvasionIndex);
                     y.Money = bE.GetInt(Schema.B_MoneyIndex);
                     y.Experience = bE.GetInt(Schema.B_ExpIndex);
                     y.Drop1Hash = bE.GetInt(Schema.B_Drop1Index);
@@ -1311,6 +1312,7 @@ namespace Lycoris.Yokai
             if (btSave)
                 foreach (var y in Yokai.Where(y => y.BattleEntry != null))
                 {
+                    dr += SetInt(y.BattleEntry, Schema.B_InspiritEvasionIndex, y.InspiritEvasion);
                     dr += SetInt(y.BattleEntry, Schema.B_MoneyIndex, y.Money);
                     dr += SetInt(y.BattleEntry, Schema.B_ExpIndex, y.Experience);
                     dr += SetInt(y.BattleEntry, Schema.B_Drop1Index, y.Drop1Hash);
@@ -1622,6 +1624,7 @@ namespace Lycoris.Yokai
                 // Blaster-T / drops
                 BtAbilityHash = src.BtAbilityHash, BtSoultimateHash = src.BtSoultimateHash,
                 BtAttackAHash = src.BtAttackAHash, BtAttackYHash = src.BtAttackYHash, BtAttackXHash = src.BtAttackXHash,
+                InspiritEvasion = src.InspiritEvasion,
                 Money = src.Money, Experience = src.Experience,
                 Drop1Hash = src.Drop1Hash, Drop1Rate = src.Drop1Rate, Drop2Hash = src.Drop2Hash, Drop2Rate = src.Drop2Rate,
             };
@@ -1741,6 +1744,7 @@ namespace Lycoris.Yokai
             SetIntForce(entry, 0, y.ParamHash);
             InsertIntoGroup(BattleData, Schema.BattleGroupBegin, Schema.BattleGroupEnd, entry);
             y.BattleEntry = entry;
+            y.InspiritEvasion = StatCurve.EvasionForRank(y.Rank) ?? entry.GetInt(Schema.B_InspiritEvasionIndex);
             y.Money = entry.GetInt(Schema.B_MoneyIndex);
             y.Experience = entry.GetInt(Schema.B_ExpIndex);
             y.Drop1Hash = entry.GetInt(Schema.B_Drop1Index);

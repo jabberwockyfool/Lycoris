@@ -42,6 +42,12 @@ namespace Lycoris.Yokai
             {1, "Normal attack"}, {3, "Technique (elemental)"}, {4, "Soultimate"}, {5, "Inspiration"},
         });
 
+        // battle_chara_param BaseInspiritEvasionRate — the documented per-rank values, shown as a rank list.
+        public static readonly List<EnumEntry> InspiritEvasions = Build(new Dictionary<int, string>
+        {
+            {50, "E (50)"}, {60, "D (60)"}, {70, "C (70)"}, {75, "B (75)"}, {85, "A (85)"}, {90, "S (90)"}, {95, "Z (95)"},
+        });
+
         public static readonly List<EnumEntry> Speeds = Build(new Dictionary<int, string>
         {
             {0, "Normal"}, {1, "Fast"}, {2, "Slow"},
