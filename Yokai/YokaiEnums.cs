@@ -26,7 +26,7 @@ namespace Lycoris.Yokai
 
         public static readonly List<EnumEntry> Ranks = Build(new Dictionary<int, string>
         {
-            {0, "E"}, {1, "D"}, {2, "C"}, {3, "B"}, {4, "A"}, {5, "S"}, {15, "Unrank"},
+            {0, "E"}, {1, "D"}, {2, "C"}, {3, "B"}, {4, "A"}, {5, "S"}, {9, "Z"}, {15, "Unrank"},
         });
 
         // Used for both Resistance (Strongest) and Weakness.

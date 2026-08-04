@@ -22,6 +22,7 @@ namespace Lycoris.Yokai
         public T2bFile BaseData { get; private set; }
         public T2bFile TextData { get; private set; }
         public T2bFile DescData { get; private set; }
+        public T2bFile AddmemberTextData { get; private set; }   // befriend/trade dialogue text
         public T2bFile ScaleData { get; private set; }
         public T2bFile SkillTextData { get; private set; }
         public T2bFile SkillDescTextData { get; private set; }
@@ -61,6 +62,7 @@ namespace Lycoris.Yokai
         public string BaseFile { get; private set; }
         public string TextFile { get; private set; }
         public string DescFile { get; private set; }
+        public string AddmemberTextFile { get; private set; }
         public string ScaleFile { get; private set; }
         public string SkillTextFile { get; private set; }
         public string SkillDescTextFile { get; private set; }
@@ -130,6 +132,7 @@ namespace Lycoris.Yokai
             BaseFile = FindNewest(folder, Schema.BaseFilePrefix);
             TextFile = FindNewest(folder, Schema.TextFilePrefix);
             DescFile = FindNewest(folder, Schema.DescFilePrefix);
+            AddmemberTextFile = FindNewest(folder, Schema.AddmemberTextFilePrefix);
             ScaleFile = FindNewest(folder, Schema.ScaleFilePrefix);
 
             // Read-only resolvers: mod folder, else reference folder.
@@ -407,6 +410,7 @@ namespace Lycoris.Yokai
             BaseData = BaseFile != null ? T2bReader.ReadFile(BaseFile) : null;
             TextData = TextFile != null ? T2bReader.ReadFile(TextFile) : null;
             DescData = DescFile != null ? T2bReader.ReadFile(DescFile) : null;
+            AddmemberTextData = AddmemberTextFile != null ? T2bReader.ReadFile(AddmemberTextFile) : null;
             ScaleData = ScaleFile != null ? T2bReader.ReadFile(ScaleFile) : null;
             SkillTextData = SkillTextFile != null ? T2bReader.ReadFile(SkillTextFile) : null;
             SkillDescTextData = SkillDescTextFile != null ? T2bReader.ReadFile(SkillDescTextFile) : null;
@@ -436,6 +440,7 @@ namespace Lycoris.Yokai
             var baseByHash = BuildBaseMap(BaseData);
             var nounByKey = BuildTextEntryMap(TextData);
             var textByKey = BuildTextEntryMap(DescData);
+            var befriendByKey = BuildTextEntryMap(AddmemberTextData);
             var scaleByBase = BuildScaleMap(ScaleData);
             SkillNames = BuildTextValueMap(SkillTextData);
             _moveNames = BuildMoveNames();
@@ -480,6 +485,10 @@ namespace Lycoris.Yokai
                     SoultimateHash = e.GetInt(Schema.SoultimateHashIndex),
                     AbilityHash = e.GetInt(Schema.AbilityHashIndex),
                     EvolveOffset = e.GetInt(Schema.EvolveOffsetIndex),
+                    AttitudeType = e.GetInt(Schema.AttitudeIndex),
+                    ItemSlots = e.GetInt(Schema.ItemSlotsIndex),
+                    MoveCooldown = e.GetInt(Schema.MoveCooldownIndex),
+                    BefriendTextHash = e.GetInt(Schema.BefriendTextIndex),
                 };
 
                 if (y.EvolveOffset.HasValue && y.EvolveOffset.Value >= 0 && y.EvolveOffset.Value < evolveList.Count)
@@ -542,6 +551,13 @@ namespace Lycoris.Yokai
 
                 ResolveMoves(y);
 
+                if (y.BefriendTextHash.HasValue && befriendByKey.TryGetValue(y.BefriendTextHash.Value, out T2bEntry bfe))
+                {
+                    y.BefriendTextEntry = bfe;
+                    y.BefriendText = bfe.FirstText();
+                    y.OriginalBefriendText = y.BefriendText;
+                }
+
                 if (hackslashByParam.TryGetValue(y.ParamHash, out T2bEntry hsE))
                 {
                     y.HackslashEntry = hsE;
@@ -564,6 +580,7 @@ namespace Lycoris.Yokai
 
                 y.OriginalName = y.Name;
                 y.OriginalDescription = y.Description;
+                y.OriginalBefriendText = y.BefriendText;
                 y.OriginalRank = y.Rank;
                 y.OriginalTribe = y.Tribe;
                 y.OriginalEvolveOffset = y.EvolveOffset;
@@ -1242,6 +1259,10 @@ namespace Lycoris.Yokai
                 pv += SetInt(y.SourceEntry, Schema.SoultimateHashIndex, y.SoultimateHash);
                 pv += SetInt(y.SourceEntry, Schema.AbilityHashIndex, y.AbilityHash);
                 pv += SetInt(y.SourceEntry, Schema.EvolveOffsetIndex, y.EvolveOffset);
+                pv += SetInt(y.SourceEntry, Schema.AttitudeIndex, y.AttitudeType);
+                pv += SetInt(y.SourceEntry, Schema.ItemSlotsIndex, y.ItemSlots);
+                pv += SetInt(y.SourceEntry, Schema.MoveCooldownIndex, y.MoveCooldown);
+                pv += SetInt(y.SourceEntry, Schema.BefriendTextIndex, y.BefriendTextHash);
             }
 
             // Charabase fields (rank, tribe, model, medal pos, food, role, status flags) — base records
@@ -1303,10 +1324,15 @@ namespace Lycoris.Yokai
             foreach (var y in Yokai.Where(y => y.DescEntry != null && (y.IsNew || y.DescriptionChanged)))
                 dv += SetText(y.DescEntry, Schema.DescTextIndex, y.Description);
 
+            int bfv = 0;   // befriend/trade dialogue (addmembermenu_text)
+            foreach (var y in Yokai.Where(y => y.BefriendTextEntry != null && y.BefriendTextChanged))
+                bfv += SetText(y.BefriendTextEntry, Schema.DescTextIndex, y.BefriendText);
+
             T2bWriter.WriteFile(ParamData, ParamFile);
             if (BaseData != null) T2bWriter.WriteFile(BaseData, BaseFile);
             if (TextData != null) T2bWriter.WriteFile(TextData, TextFile);
             if (DescData != null) T2bWriter.WriteFile(DescData, DescFile);
+            if (bfv > 0 && AddmemberTextData != null && IsUnderMod(AddmemberTextFile)) T2bWriter.WriteFile(AddmemberTextData, AddmemberTextFile);
             if (ScaleData != null) T2bWriter.WriteFile(ScaleData, ScaleFile);
             if (hsSave) T2bWriter.WriteFile(HackslashData, HackslashFile);
             if (btSave) T2bWriter.WriteFile(BattleData, BattleFile);
@@ -1317,6 +1343,7 @@ namespace Lycoris.Yokai
                 y.IsNew = false;
                 y.OriginalName = y.Name;
                 y.OriginalDescription = y.Description;
+                y.OriginalBefriendText = y.BefriendText;
                 y.OriginalRank = y.Rank;
                 y.OriginalTribe = y.Tribe;
                 foreach (var kv in y.BaseFieldValues(Schema)) y.BaseOriginal[kv.Key] = kv.Value;
@@ -1347,6 +1374,10 @@ namespace Lycoris.Yokai
                 changed += SetInt(y.SourceEntry, Schema.AttackHashIndex, y.AttackHash);
                 changed += SetInt(y.SourceEntry, Schema.SoultimateHashIndex, y.SoultimateHash);
                 changed += SetInt(y.SourceEntry, Schema.AbilityHashIndex, y.AbilityHash);
+                changed += SetInt(y.SourceEntry, Schema.AttitudeIndex, y.AttitudeType);
+                changed += SetInt(y.SourceEntry, Schema.ItemSlotsIndex, y.ItemSlots);
+                changed += SetInt(y.SourceEntry, Schema.MoveCooldownIndex, y.MoveCooldown);
+                changed += SetInt(y.SourceEntry, Schema.BefriendTextIndex, y.BefriendTextHash);
             }
             T2bWriter.WriteFile(ParamData, path);
             foreach (var y in Yokai) y.IsDirty = false;
@@ -1442,6 +1473,10 @@ namespace Lycoris.Yokai
                 AttackHash = paramTpl.GetInt(Schema.AttackHashIndex),
                 SoultimateHash = paramTpl.GetInt(Schema.SoultimateHashIndex),
                 AbilityHash = paramTpl.GetInt(Schema.AbilityHashIndex),
+                AttitudeType = paramTpl.GetInt(Schema.AttitudeIndex),
+                ItemSlots = paramTpl.GetInt(Schema.ItemSlotsIndex),
+                MoveCooldown = paramTpl.GetInt(Schema.MoveCooldownIndex),
+                BefriendTextHash = paramTpl.GetInt(Schema.BefriendTextIndex),
             };
             if (hasModel)
             {
@@ -1563,6 +1598,8 @@ namespace Lycoris.Yokai
                 MinHp = src.MinHp, MaxHp = src.MaxHp, MinStrength = src.MinStrength, MaxStrength = src.MaxStrength,
                 MinSpirit = src.MinSpirit, MaxSpirit = src.MaxSpirit, MinDefense = src.MinDefense, MaxDefense = src.MaxDefense,
                 MinSpeed = src.MinSpeed, MaxSpeed = src.MaxSpeed,
+                AttitudeType = src.AttitudeType, ItemSlots = src.ItemSlots, MoveCooldown = src.MoveCooldown,
+                BefriendTextHash = src.BefriendTextHash,
                 // moves
                 AttackHash = src.AttackHash, AttackPct = src.AttackPct, TechniqueHash = src.TechniqueHash, TechniquePct = src.TechniquePct,
                 InspiritHash = src.InspiritHash, InspiritPct = src.InspiritPct, GuardHash = src.GuardHash, GuardPct = src.GuardPct,
@@ -1585,6 +1622,11 @@ namespace Lycoris.Yokai
                 Drop1Hash = src.Drop1Hash, Drop1Rate = src.Drop1Rate, Drop2Hash = src.Drop2Hash, Drop2Rate = src.Drop2Rate,
             };
             for (int i = 1; i <= 7; i++) y.InitScale(i, src.GetScale(i));
+
+            // Befriend/trade dialogue: shares the source's text id (same addmember entry).
+            y.BefriendTextEntry = src.BefriendTextEntry;
+            y.BefriendText = src.BefriendText;
+            y.OriginalBefriendText = y.BefriendText;
 
             // Snapshots so SaveAll doesn't treat the (already-correct) shared records as edited.
             y.OriginalRank = y.Rank; y.OriginalTribe = y.Tribe;

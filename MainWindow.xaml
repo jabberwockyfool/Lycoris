@@ -162,6 +162,21 @@
                                     </StackPanel>
                                 </GroupBox>
 
+                                <!-- Battle behaviour -->
+                                <GroupBox Header="Battle behaviour" Margin="0,10,0,0">
+                                    <StackPanel Orientation="Horizontal" Margin="4">
+                                        <TextBlock Text="Item slots" VerticalAlignment="Center"/>
+                                        <TextBox Width="50" Margin="6,0,0,0" Text="{Binding ItemSlots}"/>
+                                        <TextBlock Text="Wait Time" VerticalAlignment="Center" Margin="18,0,0,0"/>
+                                        <TextBox Width="50" Margin="6,0,0,0" Text="{Binding MoveCooldown}"/>
+                                        <TextBlock Text="Attitude" VerticalAlignment="Center" Margin="18,0,0,0"/>
+                                        <TextBox Width="60" Margin="6,0,0,0" Text="{Binding AttitudeType}"/>
+                                        <Button Content="🎲" Margin="4,0,0,0" Padding="4,0" Click="RandomizeAttitude_Click"
+                                                ToolTip="Randomise Attitude — tire une valeur parmi celles présentes dans les données"/>
+                                        <TextBlock Text="(CharaRandomActType)" VerticalAlignment="Center" Margin="6,0,0,0" Opacity="0.6"/>
+                                    </StackPanel>
+                                </GroupBox>
+
                                 <!-- Moves -->
                                 <GroupBox Header="Moves" Margin="0,10,0,0">
                                     <Grid Margin="4">
@@ -236,10 +251,10 @@
                                 <TextBlock Grid.Row="0" Grid.Column="0" Text="Attack A"/>
                                 <ComboBox x:Name="BtAtkACombo" Grid.Row="0" Grid.Column="1" IsTextSearchEnabled="True" Margin="0,2"
                                           SelectedValuePath="Key" DisplayMemberPath="Name" TextSearch.TextPath="Name" SelectedValue="{Binding BtAttackAHash}"/>
-                                <TextBlock Grid.Row="1" Grid.Column="0" Text="Attack Y"/>
+                                <TextBlock Grid.Row="1" Grid.Column="0" Text="Attack X"/>
                                 <ComboBox x:Name="BtAtkYCombo" Grid.Row="1" Grid.Column="1" IsTextSearchEnabled="True" Margin="0,2"
                                           SelectedValuePath="Key" DisplayMemberPath="Name" TextSearch.TextPath="Name" SelectedValue="{Binding BtAttackYHash}"/>
-                                <TextBlock Grid.Row="2" Grid.Column="0" Text="Attack X"/>
+                                <TextBlock Grid.Row="2" Grid.Column="0" Text="Attack Y"/>
                                 <ComboBox x:Name="BtAtkXCombo" Grid.Row="2" Grid.Column="1" IsTextSearchEnabled="True" Margin="0,2"
                                           SelectedValuePath="Key" DisplayMemberPath="Name" TextSearch.TextPath="Name" SelectedValue="{Binding BtAttackXHash}"/>
                                 <TextBlock Grid.Row="3" Grid.Column="0" Text="Soultimate"/>
@@ -407,8 +422,25 @@
 
                         <!-- ================= Quotes ================= -->
                         <TabItem Header="Quotes">
-                            <TextBlock Margin="12" Foreground="{StaticResource FgMutedBrush}"
-                                       Text="Quotes (befriend quotes) will be added later."/>
+                            <StackPanel Margin="8">
+                                <GroupBox Header="Befriend / Trade dialogue (Addmember&amp;TradeTextID)">
+                                    <StackPanel Margin="4">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="Text ID" VerticalAlignment="Center" Width="55"/>
+                                            <TextBox Width="110" Text="{Binding BefriendTextHex}"
+                                                     FontFamily="Consolas"/>
+                                            <TextBlock Text="(same id used for befriend and trade)" VerticalAlignment="Center"
+                                                       Margin="8,0,0,0" Opacity="0.6"/>
+                                        </StackPanel>
+                                        <TextBlock Text="Dialogue" Margin="0,8,0,2"/>
+                                        <TextBox Text="{Binding BefriendText, UpdateSourceTrigger=PropertyChanged}"
+                                                 AcceptsReturn="True" TextWrapping="Wrap" MinHeight="70"
+                                                 VerticalScrollBarVisibility="Auto"/>
+                                        <TextBlock Margin="0,4,0,0" Opacity="0.6" TextWrapping="Wrap"
+                                                   Text="Empty = the text container for this id was not found/loaded. The Text ID above is always editable."/>
+                                    </StackPanel>
+                                </GroupBox>
+                            </StackPanel>
                         </TabItem>
                     </TabControl>
                 </StackPanel>

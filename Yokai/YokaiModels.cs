@@ -152,6 +152,23 @@ namespace Lycoris.Yokai
         public int? MinSpeed { get => _minSpeed; set => SetField(ref _minSpeed, value); }
         public int? MaxSpeed { get => _maxSpeed; set => SetField(ref _maxSpeed, value); }
 
+        // --- Extra param fields (unique per yo-kai) ---
+        private int? _attitude, _itemSlots, _moveCooldown, _befriendTextHash;
+        /// <summary>CharaRandomActType — the yo-kai's Attitude/behaviour type.</summary>
+        public int? AttitudeType { get => _attitude; set => SetField(ref _attitude, value); }
+        public int? ItemSlots { get => _itemSlots; set => SetField(ref _itemSlots, value); }
+        /// <summary>MoveCooldown — the in-game "Wait Time" between a yo-kai's attacks.</summary>
+        public int? MoveCooldown { get => _moveCooldown; set => SetField(ref _moveCooldown, value); }
+        /// <summary>Addmember&amp;TradeTextID — text id for the befriend AND trade dialogue (same id).</summary>
+        public int? BefriendTextHash { get => _befriendTextHash; set => SetField(ref _befriendTextHash, value); }
+        public string BefriendTextHex { get => Hex(_befriendTextHash); set => BefriendTextHash = ParseHex(value, _befriendTextHash); }
+        /// <summary>Resolved befriend/trade dialogue text (editable). Written back to its text container on save.</summary>
+        private string _befriendText;
+        public string BefriendText { get => _befriendText; set => SetField(ref _befriendText, value); }
+        internal string OriginalBefriendText { get; set; }
+        public bool BefriendTextChanged => !System.Collections.Generic.EqualityComparer<string>.Default.Equals(BefriendText, OriginalBefriendText);
+        internal Formats.T2bEntry BefriendTextEntry { get; set; }   // NOUN/TEXT record holding the dialogue, or null
+
         // --- Moves: hash + percentage, plus a resolved display name (set by the resolver) ---
         private int? _attackHash, _techniqueHash, _inspiritHash, _guardHash, _soultimateHash, _abilityHash;
         private int? _attackPct, _techniquePct, _inspiritPct, _guardPct;
@@ -285,6 +302,7 @@ namespace Lycoris.Yokai
                 case nameof(GuardHash): OnPropertyChanged(nameof(GuardHex)); break;
                 case nameof(SoultimateHash): OnPropertyChanged(nameof(SoultimateHex)); break;
                 case nameof(AbilityHash): OnPropertyChanged(nameof(AbilityHex)); break;
+                case nameof(BefriendTextHash): OnPropertyChanged(nameof(BefriendTextHex)); break;
             }
         }
 

@@ -174,6 +174,31 @@ namespace Lycoris
             EnableDropsButton.IsEnabled = y != null && !y.HasDrops;
         }
 
+        private readonly Random _rng = new Random();
+
+        /// <summary>
+        /// Randomise the selected yo-kai's Attitude (CharaRandomActType), drawing only from the distinct
+        /// values already present in the loaded data so the result is always a valid in-game attitude.
+        /// </summary>
+        private void RandomizeAttitude_Click(object sender, RoutedEventArgs e)
+        {
+            var y = Selector.SelectedItem as YokaiInfo;
+            if (y == null) return;
+
+            var pool = _db.Yokai.Where(o => o.AttitudeType.HasValue)
+                                .Select(o => o.AttitudeType.Value)
+                                .Distinct().ToList();
+            if (pool.Count == 0) return;
+
+            // Prefer a value different from the current one when the pool allows it.
+            var choices = pool.Count > 1 && y.AttitudeType.HasValue
+                ? pool.Where(v => v != y.AttitudeType.Value).ToList()
+                : pool;
+            if (choices.Count == 0) choices = pool;
+
+            y.AttitudeType = choices[_rng.Next(choices.Count)];
+        }
+
         private void EnableBt_Click(object sender, RoutedEventArgs e)
         {
             var y = Selector.SelectedItem as YokaiInfo;

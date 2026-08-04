@@ -18,6 +18,7 @@ namespace Lycoris.Yokai
         public string BaseFilePrefix = "chara_base";
         public string TextFilePrefix = "chara_text";       // names   (glob excludes chara_desc_text*)
         public string DescFilePrefix = "chara_desc_text";  // descriptions
+        public string AddmemberTextFilePrefix = "addmembermenu_text";  // befriend dialogue (TEXT_INFO, key[0], text[2])
         public string ScaleFilePrefix = "chara_scale";     // model scale, keyed by BaseHash
         public string SkillTextFilePrefix = "skill_text";  // skill/move NAME text container (NOUN)
         public string SkillDescTextFilePrefix = "skill_desc_text"; // skill DESCRIPTION text container (TEXT_INFO)
@@ -149,7 +150,11 @@ namespace Lycoris.Yokai
         public int GuardHashIndex = 25;
         public int GuardPctIndex = 26;
         public int SoultimateHashIndex = 27;
-        public int AbilityHashIndex = 28;
+        public int AbilityHashIndex = 28;         // SkillID
+        public int AttitudeIndex = 18;            // CharaRandomActType (Attitude)
+        public int BefriendTextIndex = 36;        // Addmember&TradeTextID (befriend + trade dialogue text id)
+        public int ItemSlotsIndex = 39;
+        public int MoveCooldownIndex = 40;        // "Wait Time" between attacks
 
         // CHARA_BASE_YOKAI_INFO field layout (YW3, 0-indexed; validated against real data).
         public int Base_BaseHashIndex = 0;
