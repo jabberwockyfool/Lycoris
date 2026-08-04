@@ -144,7 +144,7 @@ namespace Lycoris.Yokai
             HackslashFile = FindResolver(folder, referenceFolder, Schema.HackslashParamFilePrefix, null);
             BattleFile = FindResolver(folder, referenceFolder, Schema.BattleParamFilePrefix, null);
             // Blaster-T / item name resolvers (read-only).
-            _hsTechnicFile = FindResolver(folder, referenceFolder, Schema.HackslashTechnicFilePrefix, "text");
+            _hsTechnicFile = FindResolver(folder, referenceFolder, Schema.HackslashTechnicFilePrefix, "text,menu");
             _hsTechnicTextFile = FindResolver(folder, referenceFolder, Schema.HackslashTechnicTextFilePrefix, null);
             _hsAbilityFile = FindResolver(folder, referenceFolder, Schema.HackslashAbilityFilePrefix, "text");
             _hsAbilityTextFile = FindResolver(folder, referenceFolder, Schema.HackslashAbilityTextFilePrefix, null);
@@ -2148,10 +2148,18 @@ namespace Lycoris.Yokai
             return sb.ToString();
         }
 
-        private static string FindNewest(string folder, string prefix, string exclude = null) =>
-            Directory.EnumerateFiles(folder, prefix + "*.cfg.bin", SearchOption.AllDirectories)
-                .Where(p => exclude == null || Path.GetFileName(p).IndexOf(exclude, StringComparison.OrdinalIgnoreCase) < 0)
+        // exclude may be a comma-separated list of substrings; a file is skipped if its name contains ANY of them.
+        // (e.g. "text,menu" keeps hackslash_technic_0.01t but drops hackslash_technic_menu / _text variants that
+        // share the same prefix but hold a different record type.)
+        private static string FindNewest(string folder, string prefix, string exclude = null)
+        {
+            var ex = string.IsNullOrEmpty(exclude)
+                ? Array.Empty<string>()
+                : exclude.Split(',').Select(s => s.Trim()).Where(s => s.Length > 0).ToArray();
+            return Directory.EnumerateFiles(folder, prefix + "*.cfg.bin", SearchOption.AllDirectories)
+                .Where(p => ex.All(x => Path.GetFileName(p).IndexOf(x, StringComparison.OrdinalIgnoreCase) < 0))
                 .OrderByDescending(Path.GetFileName, StringComparer.OrdinalIgnoreCase)
                 .FirstOrDefault();
+        }
     }
 }

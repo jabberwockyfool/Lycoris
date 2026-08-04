@@ -45,26 +45,40 @@ namespace Lycoris
             var nums = new List<string>();
             if (string.IsNullOrEmpty(model)) return nums;
             var seen = new HashSet<string>();
-            var rx = new Regex(@"^pv_" + Regex.Escape(model) + @"_(\d+)", RegexOptions.IgnoreCase);
+            // Files are voice_<model>_<code>_en.dspadpcm.bcstm; <code> = digits + optional letter/prefix (e.g. 06,
+            // 01a, s12). The <PV#voice_<model>_<code>> tag matches this. (Older dumps used pv_… — also accepted.)
             foreach (var dir in Dirs(db))
-                foreach (var f in Directory.EnumerateFiles(dir, "pv_" + model + "_*.bcstm"))
-                {
-                    var m = rx.Match(Path.GetFileName(f));
-                    if (m.Success && seen.Add(m.Groups[1].Value)) nums.Add(m.Groups[1].Value);
-                }
+                foreach (var prefix in new[] { "voice_" + model + "_", "pv_" + model + "_" })
+                    foreach (var f in Directory.EnumerateFiles(dir, prefix + "*.bcstm"))
+                    {
+                        string code = VoiceCode(Path.GetFileName(f), prefix);
+                        if (code.Length > 0 && seen.Add(code)) nums.Add(code);
+                    }
             nums.Sort(StringComparer.Ordinal);
             return nums;
+        }
+
+        // Strip the "<prefix>" and the "_en.dspadpcm.bcstm" (or ".dspadpcm.bcstm"/".bcstm") tail → the voice code.
+        private static string VoiceCode(string fileName, string prefix)
+        {
+            if (!fileName.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) return "";
+            string code = fileName.Substring(prefix.Length);
+            foreach (var suf in new[] { "_en.dspadpcm.bcstm", ".dspadpcm.bcstm", ".bcstm" })
+                if (code.EndsWith(suf, StringComparison.OrdinalIgnoreCase)) { code = code.Substring(0, code.Length - suf.Length); break; }
+            return code;
         }
 
         /// <summary>Locate the .bcstm for a voice (reference first, then mod), or null.</summary>
         public static string FindFile(YokaiDatabase db, string model, string nn)
         {
             foreach (var dir in Dirs(db))
-            {
-                var hit = Directory.EnumerateFiles(dir, "pv_" + model + "_" + nn + "_*.bcstm").FirstOrDefault()
-                          ?? Directory.EnumerateFiles(dir, "pv_" + model + "_" + nn + ".bcstm").FirstOrDefault();
-                if (hit != null) return hit;
-            }
+                foreach (var prefix in new[] { "voice_" + model + "_" + nn, "pv_" + model + "_" + nn })
+                {
+                    var hit = Directory.EnumerateFiles(dir, prefix + "_en*.bcstm").FirstOrDefault()
+                              ?? Directory.EnumerateFiles(dir, prefix + ".bcstm").FirstOrDefault()
+                              ?? Directory.EnumerateFiles(dir, prefix + ".dspadpcm.bcstm").FirstOrDefault();
+                    if (hit != null) return hit;
+                }
             return null;
         }
 
@@ -72,7 +86,7 @@ namespace Lycoris
         public static void Play(YokaiDatabase db, string model, string nn)
         {
             string file = FindFile(db, model, nn);
-            if (file == null) throw new FileNotFoundException($"No voice pv_{model}_{nn} found in snd/product/stream.");
+            if (file == null) throw new FileNotFoundException($"No voice voice_{model}_{nn} found in snd/product/stream.");
             byte[] wav = Bcstm.ToWav(File.ReadAllBytes(file));
             Stop();
             _player = new SoundPlayer(new MemoryStream(wav));

@@ -53,7 +53,7 @@ namespace Lycoris.Npc
             // top of previously-added NPCs; fall back to the base/vanilla map for anything not yet in the mod.
             string npcPckPath = PickFile(mergeMapDir, mapDir, "npc.pck");
             string mapPckPath = PickFile(mergeMapDir, mapDir, npc.MapID + ".pck");
-            string npcSetPath = PickByPrefix(mergeMapDir, mapDir, npc.MapID + "_npc_set");
+            string npcSetPath = PickMainNpcSet(mergeMapDir, mapDir, npc.MapID);   // MAIN npc_set (skip "_race" etc.)
             string talkPath = PickByPrefix(mergeMapDir, mapDir, npc.MapID + "_npc_base_talk_" + npc.ChapterCode);
             foreach (var (p, label) in new[] { (npcPckPath, "npc.pck"), (mapPckPath, npc.MapID + ".pck") })
                 if (p == null || !File.Exists(p)) throw new InvalidOperationException($"Required file missing: {label}");
@@ -201,8 +201,9 @@ namespace Lycoris.Npc
         /// </summary>
         public static Result CompileWarpNpc(string mapId, string mapFolder, string outRoot, string mergeMapDir,
             double mx, double my, double mz, double mrot, byte[] mirrorFull, byte[] mirrorSimple,
-            string flagConfigSrc = null, string flagConfigDst = null)
+            string flagConfigSrc = null, string flagConfigDst = null, int regionFlag = 0, string mirrorModel = "y130000")
         {
+            if (string.IsNullOrWhiteSpace(mirrorModel)) mirrorModel = "y130000";
             if (mirrorFull == null || mirrorSimple == null) throw new InvalidOperationException("Mirror npcbin templates not available.");
             // A warp id may carry a point suffix (_02, _03…) — the warp id uses the FULL id, but the actual map
             // (folder, npc_set, npc.pck) is the BASE map. Multiple warp points thus share one map's npc_set.
@@ -214,7 +215,7 @@ namespace Lycoris.Npc
                 mapDir = mergeMapDir;
             if (mapDir == null) throw new InvalidOperationException($"Map folder not found for \"{baseMap}\" — no npc.pck in the reference or the mod (<mod>/include/data/res/map/{baseMap}/).");
             string npcPckPath = PickFile(mergeMapDir, mapDir, "npc.pck");
-            string npcSetPath = PickByPrefix(mergeMapDir, mapDir, baseMap + "_npc_set");
+            string npcSetPath = PickMainNpcSet(mergeMapDir, mapDir, baseMap);   // the MAIN npc_set, not "_race"/etc.
             string npcTalkPath = PickByPrefix(mergeMapDir, mapDir, baseMap + "_npc_talk_0.01");
             if (npcPckPath == null || !File.Exists(npcPckPath)) throw new InvalidOperationException("Required file missing: npc.pck");
             if (npcSetPath == null) throw new InvalidOperationException($"Required file missing: {baseMap}_npc_set*");
@@ -222,7 +223,7 @@ namespace Lycoris.Npc
 
             var res = new Result();
             int warpId = unchecked((int)Crc32.Standard(Encoding.UTF8.GetBytes("warp_" + mapId)));
-            int model = unchecked((int)Crc32.Standard(Encoding.UTF8.GetBytes("y130000")));   // Mirapo yo-kai model
+            int model = unchecked((int)Crc32.Standard(Encoding.UTF8.GetBytes(mirrorModel)));   // mirror yo-kai model (default y130000 Mirapo; e.g. y252000 Miradox — same rig/p90)
             res.NpcId = warpId;
 
             var npcSet = T2bReader.Read(File.ReadAllBytes(npcSetPath));
@@ -244,7 +245,7 @@ namespace Lycoris.Npc
             // "mirapo enabled" flag + GetGlobalBitFlag(warpId) (the warp being unlocked → awakened). Copy those
             // conds from an EXISTING type-9 mirapo in this map (so the region flag is correct) and remap its warp
             // id → ours. Fallback "0" (always visible but stuck dormant) when the map has no other mirapo.
-            FindMirrorConds(npcSet, warpId, out string condFull, out string condSimple);
+            FindMirrorConds(npcSet, warpId, regionFlag, out string condFull, out string condSimple);
 
             // NPC_APPEAR ×2: the two mirrors (full + simple companion), consecutive.
             int appearIndex = GroupCount(npcSet, "NPC_APPEAR_BEGIN");
@@ -259,8 +260,8 @@ namespace Lycoris.Npc
             AddToGroup(npcSet, "NPC_PRESET_BEGIN", "NPC_PRESET_END", presetE);
 
             // Both mirror npcbins at the SAME position (mirA = full model, mirB = simple companion).
-            byte[] binA = MakeMirrorBin(mirrorFull, mx, my, mz, mrot);
-            byte[] binB = MakeMirrorBin(mirrorSimple, mx, my, mz, mrot);
+            byte[] binA = MakeMirrorBin(mirrorFull, mirrorModel, mx, my, mz, mrot);
+            byte[] binB = MakeMirrorBin(mirrorSimple, mirrorModel, mx, my, mz, mrot);
             Xpck.AddOrReplace(npcPck, mirA + ".npcbin", binA);
             Xpck.AddOrReplace(npcPck, mirB + ".npcbin", binB);
             byte[] npcPckOut = Xpck.Write(npcPck);
@@ -352,12 +353,23 @@ namespace Lycoris.Npc
         // Springdale's mirapo flag is set very early, so it works as a fallback for custom maps.
         private const string SpringdaleCondFull = "AAAAADALNSo9RUMACgEoAAYCNKg8qf8yAAAAAXg1Kj1FQwAKASgABgI0WmQAWDIAAAABeY8=";
         private const string SpringdaleCondSimple = "AAAAABgFNSo9RUMACgEoAAYCNKg8qf8yAAAAAXg=";
+        private const int MirapoSpringdaleRegion = unchecked((int)0xA83CA9FF);   // region flag embedded in the templates above
 
         // Appear condition blobs (full + simple mirror) that drive the dormant/awakened pose (region flag + warp
-        // flag). Prefer copying from an EXISTING type-9 mirapo in this map (correct region flag) and remapping its
-        // warp id → ours; fall back to the Springdale conds (early-unlock flag) for a custom map with no mirapo.
-        private static void FindMirrorConds(T2bFile npcSet, int warpId, out string condFull, out string condSimple)
+        // flag). Priority: (1) an explicit regionFlag the caller passes (a flag KNOWN to be set when the player is
+        // in this map) → build the dormant/awakened cond; (2) copy from an EXISTING type-9 mirapo in this map
+        // (correct region flag) + remap its warp id; (3) fall back to "0" (always visible, but stuck dormant).
+        // NB: a region flag that ISN'T set on the save gates the mirror OUT entirely (invisible) — hence "0" as the
+        // safe default for standalone custom maps rather than assuming Springdale's flag.
+        private static void FindMirrorConds(T2bFile npcSet, int warpId, int regionFlag, out string condFull, out string condSimple)
         {
+            if (regionFlag != 0)
+            {
+                // Springdale template (region 0xA83CA9FF, warp 0x5A640058) → remap both to the caller's values.
+                condFull = YwCond.RemapBase64(YwCond.RemapBase64(SpringdaleCondFull, MirapoSpringdaleRegion, regionFlag), MirapoVanillaWarpId, warpId);
+                condSimple = YwCond.RemapBase64(SpringdaleCondSimple, MirapoSpringdaleRegion, regionFlag);
+                return;
+            }
             var exBase = npcSet.Records("NPC_BASE").FirstOrDefault(e => (e.GetInt(4) ?? 0) == 9 && (e.GetInt(0) ?? 0) != warpId);
             if (exBase != null)
             {
@@ -374,15 +386,20 @@ namespace Lycoris.Npc
                     return;
                 }
             }
-            // Custom map (no other mirapo): reuse the Springdale conds, remapping the warp id in the full one.
+            // Custom map (no explicit flag, no other mirapo): reuse Springdale's region flag 0xA83CA9FF (set very
+            // early, so it's on in a progressed save) → the dormant→awakened pose. If it's NOT set on the save, the
+            // mirror is invisible — enter a different flag in the dialog, or the map needs its own region flag set.
             condFull = YwCond.RemapBase64(SpringdaleCondFull, MirapoVanillaWarpId, warpId);
             condSimple = SpringdaleCondSimple;
         }
 
-        // Build a mirror npcbin from a template, placed at (x,y,z,rot).
-        private static byte[] MakeMirrorBin(byte[] template, double x, double y, double z, double rot)
+        // Build a mirror npcbin from a template, retargeted to <model> and placed at (x,y,z,rot).
+        private static byte[] MakeMirrorBin(byte[] template, string model, double x, double y, double z, double rot)
         {
             var bin = T2bReader.Read(template);
+            var lm = bin.Records("LOAD_MOTION").FirstOrDefault();   // e.g. "y130000/y130000_p90" → "<model>/<model>_p90"
+            if (lm != null && lm.Values.Count > 0 && lm.Values[0].Type == VT.String)
+                lm.Values[0].Value = model + "/" + model + "_p90";
             SetPointCoords(bin, x, y, z, rot);
             return T2bWriter.Write(bin);
         }
@@ -570,6 +587,20 @@ namespace Lycoris.Npc
 
         private static string PickByPrefix(string modDir, string baseDir, string prefix) =>
             FindByPrefix(modDir, prefix) ?? FindByPrefix(baseDir, prefix);
+
+        /// <summary>The MAIN npc_set (<c>&lt;map&gt;_npc_set_&lt;version&gt;.cfg.bin</c>, version starting with a
+        /// digit) — NOT variants like <c>&lt;map&gt;_npc_set_race_…</c> (a minigame's separate NPC list). Using the
+        /// generic prefix + descending sort wrongly picks "_race" (r &gt; digit), so the NPC lands in the wrong list.</summary>
+        private static string PickMainNpcSet(string modDir, string baseDir, string mapId)
+        {
+            string tag = mapId + "_npc_set_";
+            string Find(string dir) => dir != null && Directory.Exists(dir)
+                ? Directory.EnumerateFiles(dir, tag + "*.cfg.bin")
+                    .Where(f => { string rest = Path.GetFileName(f).Substring(tag.Length); return rest.Length > 0 && char.IsDigit(rest[0]); })
+                    .OrderByDescending(Path.GetFileName, StringComparer.OrdinalIgnoreCase).FirstOrDefault()
+                : null;
+            return Find(modDir) ?? Find(baseDir);
+        }
 
         /// <summary>Choose a proper placed-NPC template (npc_* with an ACT_TYPE group), not an ambient object.</summary>
         private static XpckFile PickNpcbinTemplate(List<XpckFile> pck)

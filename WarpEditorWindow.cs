@@ -246,7 +246,7 @@ namespace Lycoris
 
             // Same coordinate convention as the daily-fight NPC editor: X, Y (2D horizontal), Z (height).
             // The warp spawn stores [X, height, depth]; present it in that convention (Y=depth, Z=height).
-            var c = CoordsDialog.Ask(this, $"Mirapo mirror position in {_sel.MapId}", _sel.X, _sel.Z, _sel.Y, _sel.Rotation);
+            var c = CoordsDialog.Ask(this, $"Mirapo mirror position in {_sel.MapId}", _sel.X, _sel.Z, _sel.Y, _sel.Rotation, _db);
             if (c == null) return;
             try
             {
@@ -258,8 +258,9 @@ namespace Lycoris
                 string flagSrc = File.Exists(flagDst) ? flagDst
                     : FirstExisting(new[] { IncBase != null ? Path.Combine(IncBase, "data", "res", "sys", "flag_config_0.01r.cfg.bin") : null }
                         .Concat(RefCandidates("data", "res", "sys", "flag_config_0.01r.cfg.bin")));
+                // regionFlag 0 → automatic (copy the map's existing mirapo flag, else Springdale fallback).
                 var res = NpcCompiler.CompileWarpNpc(_sel.MapId, mapFolder, outRoot, mergeMapDir,
-                    c.Value.x, c.Value.y, c.Value.z, (int)c.Value.rot, full, simple, flagSrc, flagDst);
+                    c.Value.x, c.Value.y, c.Value.z, (int)c.Value.rot, full, simple, flagSrc, flagDst, 0, c.Value.model);
                 _preview.Source = LoadPreview(_sel.MapId);
                 _status.Text = $"Mirapo NPC placed in {_sel.MapId} ({res.NpcIdHex}) — merged into the mod.";
                 DarkMessage.Show($"Mirapo warp NPC added to {_sel.MapId}:\n" +
@@ -373,18 +374,19 @@ namespace Lycoris
         }
     }
 
-    /// <summary>Modal asking for X/Y/Z/rotation (the Mirapo mirror's placement in the map).</summary>
+    /// <summary>Modal asking for the Mirapo mirror's X/Y/Z/rotation + the mirror yo-kai model (picked from the list,
+    /// Mirapo y130000 by default). The region flag is handled automatically (Springdale fallback).</summary>
     internal static class CoordsDialog
     {
-        public static (double x, double y, double z, double rot)? Ask(Window owner, string title, double x, double y, double z, double rot)
+        public static (double x, double y, double z, double rot, string model)? Ask(Window owner, string title, double x, double y, double z, double rot, Lycoris.Yokai.YokaiDatabase db)
         {
-            var win = new Window { Owner = owner, Title = title, Width = 340, SizeToContent = SizeToContent.Height, WindowStartupLocation = WindowStartupLocation.CenterOwner };
-            TextBox Fx(double v) => new TextBox { Text = v.ToString(System.Globalization.CultureInfo.InvariantCulture), Width = 150, FontFamily = new FontFamily("Consolas") };
+            var win = new Window { Owner = owner, Title = title, Width = 400, SizeToContent = SizeToContent.Height, WindowStartupLocation = WindowStartupLocation.CenterOwner };
+            TextBox Fx(double v) => new TextBox { Text = v.ToString(System.Globalization.CultureInfo.InvariantCulture), Width = 160, FontFamily = new FontFamily("Consolas") };
             var bx = Fx(x); var by = Fx(y); var bz = Fx(z); var br = Fx(rot);
-            StackPanel R(string l, TextBox tb)
+            StackPanel R(string l, UIElement tb)
             {
                 var sp = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 6) };
-                sp.Children.Add(new TextBlock { Text = l, Width = 110, VerticalAlignment = VerticalAlignment.Center, Foreground = Theme.FgMuted });
+                sp.Children.Add(new TextBlock { Text = l, Width = 120, VerticalAlignment = VerticalAlignment.Center, Foreground = Theme.FgMuted });
                 sp.Children.Add(tb); return sp;
             }
             var panel = new StackPanel { Margin = new Thickness(14) };
@@ -393,7 +395,28 @@ namespace Lycoris
             panel.Children.Add(R("Mirror Y (2D)", by));
             panel.Children.Add(R("Mirror Z (height)", bz));
             panel.Children.Add(R("Rotation (°)", br));
-            (double x, double y, double z, double rot)? result = null;
+
+            // Mirror yo-kai model — picked from the yo-kai list; default Mirapo (y130000).
+            string model = "y130000";
+            var modelLabel = new TextBlock { Text = "Mirapo (y130000)", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 0, 0) };
+            var pickBtn = new Button { Content = "yo-kai…", Padding = new Thickness(9, 4, 9, 4) };
+            pickBtn.Click += (s, e) =>
+            {
+                var pd = new PickYokaiDialog(win, db) { Owner = win };
+                if (pd.ShowDialog() == true && pd.Picked != null && !string.IsNullOrEmpty(pd.Picked.ModelName))
+                {
+                    model = pd.Picked.ModelName;
+                    modelLabel.Text = (pd.Picked.Name != null ? pd.Picked.Name + " (" + model + ")" : model);
+                }
+            };
+            var modelRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 4) };
+            modelRow.Children.Add(new TextBlock { Text = "Mirror yo-kai", Width = 120, VerticalAlignment = VerticalAlignment.Center, Foreground = Theme.FgMuted });
+            modelRow.Children.Add(pickBtn);
+            modelRow.Children.Add(modelLabel);
+            panel.Children.Add(modelRow);
+            panel.Children.Add(new TextBlock { Foreground = Theme.FgMuted, FontSize = 11, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(120, 0, 0, 8), Text = "The mirror model + its dialogue bustup. Default Mirapo (y130000). Pick e.g. Miradox (y252000). Must share Mirapo's rig/p90 motion (Mirapo evolutions do)." });
+
+            (double x, double y, double z, double rot, string model)? result = null;
             var ok = new Button { Content = "Place", Width = 90, Margin = new Thickness(0, 0, 6, 0), IsDefault = true };
             var cancel = new Button { Content = "Cancel", Width = 90, IsCancel = true };
             ok.Click += (s, e) =>
@@ -402,7 +425,7 @@ namespace Lycoris
                     double.TryParse(by.Text, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out double ry) &&
                     double.TryParse(bz.Text, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out double rz) &&
                     double.TryParse(br.Text, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out double rr))
-                { result = (rx, ry, rz, rr); win.DialogResult = true; }
+                { result = (rx, ry, rz, rr, model); win.DialogResult = true; }
                 else DarkMessage.Show("Enter numeric coordinates.", "Mirapo NPC");
             };
             var btns = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 8, 0, 0) };

@@ -34,18 +34,19 @@ namespace Lycoris.Formats
             for (int i = 0; i < fileCount; i++)
             {
                 int e = 0x14 + i * 0x0C;
-                int offsetTmp = U16(xf, e + 6);
-                int fileSizeTmp = U16(xf, e + 8);
-                int multiplier = U16(xf, e + 10);
-                offs[i] = offsetTmp * 4;
-                sizes[i] = fileSizeTmp + (multiplier / 256) * 0x10000 + (multiplier % 256);
+                int foLow = U16(xf, e + 6);
+                int fsLow = U16(xf, e + 8);
+                int foHigh = xf[e + 10];
+                int fsHigh = xf[e + 11];
+                offs[i] = ((foHigh << 16) | foLow) << 2;   // full offset/size (high byte included) — matches Xpck.Read
+                sizes[i] = (fsHigh << 16) | fsLow;
             }
 
             // --- file 0 = XI texture, file 1 = fnt.bin (right after the texture + 4 padding) ---
             byte[] xi = Slice(xf, dataOffset + offs[0], sizes[0]);
             _tex = Imgc.Decode(xi);
 
-            int fntStart = dataOffset + sizes[0] + 4;
+            int fntStart = dataOffset + offs[1];      // use the entry table's offset (robust to XPCK re-padding)
             byte[] fnt = Slice(xf, fntStart, sizes[1]);
 
             // --- fnt.bin: three Level-5 blocks from 0x28, each 4-aligned ---
@@ -79,6 +80,12 @@ namespace Lycoris.Formats
                 };
             }
         }
+
+        /// <summary>The character codes present in the large/small glyph maps (for inspecting a font's coverage).</summary>
+        public ICollection<char> LargeChars => _large.Keys;
+        public ICollection<char> SmallChars => _small.Keys;
+        public int TexWidth => _tex.Width;
+        public int TexHeight => _tex.Height;
 
         /// <summary>The advance width of a character (before the game's -0.85 kerning tweak).</summary>
         public int CharWidth(char c, bool small) => Lookup(c, small).Width;
