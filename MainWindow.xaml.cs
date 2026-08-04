@@ -240,9 +240,12 @@ namespace Lycoris
         {
             var y = Selector.SelectedItem as YokaiInfo;
             if (y == null) return;
-            int power = (int)Math.Round(PowerSlider.Value);
-            StatCurve.Apply(y, power);
-            StatusText.Text = $"Stats of {y.DisplayName} set to power {power}/10.";
+            if (!StatCurve.ApplyByRank(y))
+            {
+                StatusText.Text = $"{y.DisplayName} is Unranked — set a rank (E→Z) first to apply consistent stats.";
+                return;
+            }
+            StatusText.Text = $"Stats of {y.DisplayName} set to be consistent for rank {YokaiEnums.Rank(y.Rank)}.";
         }
 
         private void ApplyProfile_Click(object sender, RoutedEventArgs e)
@@ -250,10 +253,10 @@ namespace Lycoris
             var y = Selector.SelectedItem as YokaiInfo;
             if (y == null) return;
             int element = ProfileElementCombo.SelectedValue is int el ? el : (y.Resistance ?? 0);
-            int power = (int)Math.Round(PowerSlider.Value);
-            string summary = AttackProfile.Apply(_db, y, element, power, ProfileBtCheck.IsChecked == true);
+            int tier = StatCurve.TierOfRank(y.Rank) ?? 3; // Unranked → mid tier (B)
+            string summary = AttackProfile.Apply(_db, y, element, tier, ProfileBtCheck.IsChecked == true);
             BindMoveCombos(y); // refresh the (non-two-way) move dropdowns to show the new moves
-            StatusText.Text = $"Profile {YokaiEnums.Attribute(element)} / power {power} → {summary}";
+            StatusText.Text = $"Profile {YokaiEnums.Attribute(element)} / rank {YokaiEnums.Rank(y.Rank)} → {summary}";
         }
 
         private void MorphoSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)

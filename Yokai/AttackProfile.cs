@@ -5,38 +5,52 @@ using System.Linq;
 namespace Lycoris.Yokai
 {
     /// <summary>
-    /// Builds a coherent moveset for a yo-kai from its element and power level, using the real
-    /// skill_config pools (skills grouped by element with a power value). The power level (1–10,
-    /// shared with StatCurve) selects how strong the picked moves are.
-    ///  - Attack     = a physical move (element 8 = Strong Attack) at the power tier.
-    ///  - Technique  = an element move (the chosen element) at the power tier.
-    ///  - Soultimate = the strongest move of the element.
+    /// Builds a coherent, full moveset for a yo-kai from its element and rank tier, using the real
+    /// skill_config pools grouped by <b>SkillType category</b> (the ground-truth mapping, validated
+    /// against how real chara_param records reference each slot):
+    ///   0 = Guard · 1 = Attack · 3 = Technique · 4 = Soultimate · 5 = Inspirit.
+    /// Every battle slot is filled at the rank tier (E→Z ⇒ weak→strong along each category pool):
+    ///   - Attack     = a generic physical move (Punch/Kick-style) at the tier.
+    ///   - Technique  = a Technique move of the chosen element at the tier.
+    ///   - Inspirit   = an Inspirit move (element-matched when possible).
+    ///   - Guard      = a Guard move at the tier.
+    ///   - Soultimate = the element's strongest Soultimate (falls back to the tier).
     /// Blaster T (optional) is filled best-effort by matching the chosen move NAMES against the
     /// hackslash technic names (those configs carry no element/power, only names).
     /// </summary>
     public static class AttackProfile
     {
-        private const int Physical = 8; // Attributes: Strong Attack
+        private const int CatGuard = 0, CatAttack = 1, CatTechnique = 3, CatSoultimate = 4, CatInspirit = 5;
 
         // Generic basic-attack name markers, so the Attack slot gets a Punch/Kick-style move
-        // (the escalating basic line) rather than a strong named special at high power.
+        // (the escalating basic line) rather than a strong named special at high tier.
         private static readonly string[] BasicKeywords =
         {
             "Punch", "Kick", "Bite", "Claw", "Paw", "Slash", "Scratch", "Peck", "Slap",
             "Tackle", "Headbutt", "Fist", "Chomp", "Fang", "Chop", "Stab", "Strike", "Jab"
         };
 
-        public static string Apply(YokaiDatabase db, YokaiInfo y, int element, int power, bool blasterT)
+        /// <param name="tier">0..6 = E,D,C,B,A,S,Z (from <see cref="StatCurve.TierOfRank"/>).</param>
+        public static string Apply(YokaiDatabase db, YokaiInfo y, int element, int tier, bool blasterT)
         {
+            double pos = Math.Max(0, Math.Min(6, tier)) / 6.0;
             var parts = new List<string>();
 
-            var attack = PickBasic(db, power) ?? Pick(db, Physical, power);
-            var technique = Pick(db, element, power) ?? Pick(db, Physical, power);
-            var soul = Strongest(db, element) ?? Strongest(db, Physical);
+            var attack = PickBasic(db, pos) ?? PickCat(db, CatAttack, element, pos, preferElement: false);
+            var technique = PickCat(db, CatTechnique, element, pos) ?? PickCat(db, CatAttack, element, pos, false);
+            var inspirit = PickCat(db, CatInspirit, element, pos);
+            var guard = PickCat(db, CatGuard, element, pos, preferElement: false);
+            var soul = Strongest(db, CatSoultimate, element) ?? PickCat(db, CatSoultimate, element, pos);
 
-            if (attack.HasValue) { y.AttackHash = attack.Value.Hash; parts.Add("Atk=" + attack.Value.Name); }
-            if (technique.HasValue) { y.TechniqueHash = technique.Value.Hash; parts.Add("Tech=" + technique.Value.Name); }
-            if (soul.HasValue) { y.SoultimateHash = soul.Value.Hash; parts.Add("Soul=" + soul.Value.Name); }
+            SetSlot(y, attack, h => y.AttackHash = h, n => y.AttackName = n,
+                    () => { if ((y.AttackPct ?? 0) == 0) y.AttackPct = 100; }, parts, "Atk");
+            SetSlot(y, technique, h => y.TechniqueHash = h, n => y.TechniqueName = n,
+                    () => { if ((y.TechniquePct ?? 0) == 0) y.TechniquePct = 100; }, parts, "Tech");
+            SetSlot(y, inspirit, h => y.InspiritHash = h, n => y.InspiritName = n,
+                    () => { if ((y.InspiritPct ?? 0) == 0) y.InspiritPct = 50; }, parts, "Insp");
+            SetSlot(y, guard, h => y.GuardHash = h, n => y.GuardName = n,
+                    () => { if ((y.GuardPct ?? 0) == 0) y.GuardPct = 50; }, parts, "Guard");
+            SetSlot(y, soul, h => y.SoultimateHash = h, n => y.SoultimateName = n, null, parts, "Soul");
 
             if (blasterT && y.HasBlasterT)
             {
@@ -46,35 +60,53 @@ namespace Lycoris.Yokai
                 bt += SetBt(db, n => y.BtSoultimateHash = n, soul);
                 parts.Add($"BlasterT: {bt}/3 par nom");
             }
-            return parts.Count > 0 ? string.Join(", ", parts) : "no skill for this element";
+            return parts.Count > 0 ? string.Join(", ", parts) : "no skill pools loaded";
         }
 
-        private static YokaiDatabase.SkillMove? Pick(YokaiDatabase db, int element, int power)
+        private static void SetSlot(YokaiInfo y, YokaiDatabase.SkillMove? move, Action<int> setHash,
+            Action<string> setName, Action setPctIfEmpty, List<string> parts, string label)
         {
-            if (!db.SkillsByElement.TryGetValue(element, out var list) || list.Count == 0) return null;
-            return AtTier(list, power);
+            if (!move.HasValue) return;
+            setHash(move.Value.Hash);
+            setName(move.Value.Name);
+            setPctIfEmpty?.Invoke();
+            parts.Add(label + "=" + move.Value.Name);
         }
 
-        /// <summary>Physical pool filtered to generic basic attacks (Punch/Kick/…), picked at the power tier.</summary>
-        private static YokaiDatabase.SkillMove? PickBasic(YokaiDatabase db, int power)
+        /// <summary>Pick from a category pool at the tier position, preferring the chosen element when asked.</summary>
+        private static YokaiDatabase.SkillMove? PickCat(YokaiDatabase db, int cat, int element, double pos,
+            bool preferElement = true)
         {
-            if (!db.SkillsByElement.TryGetValue(Physical, out var all) || all.Count == 0) return null;
-            var basics = all.Where(m => m.Power > 0 &&
-                BasicKeywords.Any(k => m.Name.IndexOf(k, StringComparison.OrdinalIgnoreCase) >= 0)).ToList();
-            return AtTier(basics.Count > 0 ? basics : all, power);
+            if (!db.SkillsByCategory.TryGetValue(cat, out var all) || all.Count == 0) return null;
+            List<YokaiDatabase.SkillMove> pool = all;
+            if (preferElement)
+            {
+                var el = all.Where(m => m.Element == element).ToList();
+                if (el.Count > 0) pool = el;
+            }
+            return AtPos(pool, pos);
         }
 
-        private static YokaiDatabase.SkillMove AtTier(List<YokaiDatabase.SkillMove> sorted, int power)
+        /// <summary>Attack pool filtered to generic basic attacks (Punch/Kick/…), picked at the tier position.</summary>
+        private static YokaiDatabase.SkillMove? PickBasic(YokaiDatabase db, double pos)
         {
-            int p = Math.Max(1, Math.Min(10, power));
-            int idx = (int)Math.Round((sorted.Count - 1) * (p - 1) / 9.0);
+            if (!db.SkillsByCategory.TryGetValue(CatAttack, out var all) || all.Count == 0) return null;
+            var basics = all.Where(m => BasicKeywords.Any(k => m.Name.IndexOf(k, StringComparison.OrdinalIgnoreCase) >= 0)).ToList();
+            return AtPos(basics.Count > 0 ? basics : all, pos);
+        }
+
+        private static YokaiDatabase.SkillMove AtPos(List<YokaiDatabase.SkillMove> sorted, double pos)
+        {
+            int idx = (int)Math.Round((sorted.Count - 1) * Math.Max(0, Math.Min(1, pos)));
             return sorted[idx];
         }
 
-        private static YokaiDatabase.SkillMove? Strongest(YokaiDatabase db, int element)
+        private static YokaiDatabase.SkillMove? Strongest(YokaiDatabase db, int cat, int element)
         {
-            if (!db.SkillsByElement.TryGetValue(element, out var list) || list.Count == 0) return null;
-            return list[list.Count - 1]; // sorted ascending by power
+            if (!db.SkillsByCategory.TryGetValue(cat, out var all) || all.Count == 0) return null;
+            var el = all.Where(m => m.Element == element).ToList();
+            var pool = el.Count > 0 ? el : all;
+            return pool[pool.Count - 1]; // sorted ascending by power
         }
 
         private static int SetBt(YokaiDatabase db, Action<int> set, YokaiDatabase.SkillMove? move)

@@ -50,11 +50,15 @@ namespace Lycoris.Yokai
 
         public struct SkillMove
         {
-            public int Hash; public string Name; public int Power;
-            public SkillMove(int h, string n, int p) { Hash = h; Name = n; Power = p; }
+            public int Hash; public string Name; public int Power; public int Element; public int Category;
+            public SkillMove(int h, string n, int p, int elem = 0, int cat = -1)
+            { Hash = h; Name = n; Power = p; Element = elem; Category = cat; }
         }
         /// <summary>skill_config moves grouped by element (Attributes 0-9), sorted by power. For attack profiles.</summary>
         public Dictionary<int, List<SkillMove>> SkillsByElement { get; private set; } = new Dictionary<int, List<SkillMove>>();
+        /// <summary>skill_config moves grouped by SkillType category (0=Guard 1=Attack 3=Technique 4=Soultimate
+        /// 5=Inspirit), sorted by power. Ground-truth mapping validated against real chara_param slot references.</summary>
+        public Dictionary<int, List<SkillMove>> SkillsByCategory { get; private set; } = new Dictionary<int, List<SkillMove>>();
         /// <summary>Blaster-T technic name -&gt; hash, for name-matched Blaster-T profile assignment.</summary>
         public Dictionary<string, int> TechnicByName { get; private set; } = new Dictionary<string, int>();
 
@@ -1896,21 +1900,31 @@ namespace Lycoris.Yokai
         private Dictionary<int, List<SkillMove>> BuildSkillPools()
         {
             var pools = new Dictionary<int, List<SkillMove>>();
-            if (SkillConfigData == null) return pools;
+            var byCat = new Dictionary<int, List<SkillMove>>();
+            if (SkillConfigData == null) { SkillsByCategory = byCat; return pools; }
             var seen = new HashSet<int>();
             foreach (var e in SkillConfigData.Records(Schema.SkillConfigRecord))
             {
                 int? hash = e.GetInt(0);
                 int? elem = e.GetInt(Schema.Skill_ElementIndex);
                 int? power = e.GetInt(Schema.Skill_PowerIndex);
+                int? cat = e.GetInt(Schema.Skill_TypeIndex);
                 int? nameHash = e.GetInt(Schema.Skill_NameHashIndex);
                 if (!hash.HasValue || !elem.HasValue || !nameHash.HasValue) continue;
                 if (!SkillNames.TryGetValue(nameHash.Value, out string name) || string.IsNullOrEmpty(name)) continue;
                 if (!seen.Add(hash.Value)) continue;
+                var mv = new SkillMove(hash.Value, name, power ?? 0, elem.Value, cat ?? -1);
                 if (!pools.TryGetValue(elem.Value, out var list)) pools[elem.Value] = list = new List<SkillMove>();
-                list.Add(new SkillMove(hash.Value, name, power ?? 0));
+                list.Add(mv);
+                if (cat.HasValue)
+                {
+                    if (!byCat.TryGetValue(cat.Value, out var clist)) byCat[cat.Value] = clist = new List<SkillMove>();
+                    clist.Add(mv);
+                }
             }
             foreach (var list in pools.Values) list.Sort((a, b) => a.Power.CompareTo(b.Power));
+            foreach (var list in byCat.Values) list.Sort((a, b) => a.Power.CompareTo(b.Power));
+            SkillsByCategory = byCat;
             return pools;
         }
 
