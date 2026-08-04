@@ -1,6 +1,7 @@
 using System;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 using Lycoris.Yokai;
 
@@ -40,11 +41,25 @@ namespace Lycoris
         public HomeWindow()
         {
             Title = "Lycoris — Yo-kai Watch 3 Editor";
-            Width = 460; Height = 1130;
+            Width = 600;
+            SizeToContent = SizeToContent.Height;   // fit the grouped content height exactly
+            ResizeMode = ResizeMode.CanMinimize;
             WindowStartupLocation = WindowStartupLocation.CenterScreen;
             Background = Theme.WindowBg;
 
-            var root = new StackPanel { Margin = new Thickness(24) };
+            // A raised "card" over the darker window background gives the launcher some depth.
+            var card = new Border
+            {
+                Background = Theme.PanelBg,
+                BorderBrush = Theme.Border,
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(12),
+                Margin = new Thickness(16),
+                Padding = new Thickness(24, 20, 24, 20)
+            };
+            var root = new StackPanel();
+            card.Child = root;
+            Content = card;
 
             root.Children.Add(new TextBlock
             {
@@ -54,66 +69,74 @@ namespace Lycoris
             root.Children.Add(new TextBlock
             {
                 Text = "Yo-kai Watch 3 mod editor",
-                FontSize = 13, Foreground = Theme.FgMuted, Margin = new Thickness(0, 0, 0, 18)
+                FontSize = 12, Foreground = Theme.FgMuted, Margin = new Thickness(1, 1, 0, 16)
             });
 
-            var open = new Button { Content = "📂  Open a folder (extracted mod)…", Padding = new Thickness(12, 8, 12, 8), FontSize = 14 };
+            var open = new Button
+            {
+                Content = "Open a folder…",
+                Padding = new Thickness(12, 9, 12, 9), FontSize = 14, FontWeight = FontWeights.SemiBold
+            };
             open.Click += (s, e) => OpenFolder();
             root.Children.Add(open);
 
-            _yokaiBtn = BigButton("👹  Yo-kai Editor", "Stats, moves, evolutions, Blaster T, drops, charabase, portraits…", OpenYokaiEditor);
-            _itemBtn = BigButton("🎁  Item Editor", "Name, description, price, inventory order, atlas icon…", OpenItemEditor);
-            _skillBtn = BigButton("⚔  Skill Editor", "Type, element, power, hits, Soultimate range… (add/delete)", OpenSkillEditor);
-            _npcBtn = BigButton("🧍  NPC Editor", "NPCMake config (TOML) editable in the GUI, import/export .toml.", OpenNpcEditor);
-            _mapBtn = BigButton("🗺  Map Editor", "map_config: add/edit map entries (MapID, name, ShowMapCard…).", OpenMapEditor);
-            _warpBtn = BigButton("🌀  Warp Editor (Mirapo)", "warp_config: edit/add Mirapo warps (destination, spawn X/Y/Z, preview).", OpenWarpEditor);
-            _eventBtn = BigButton("🎬  Event Editor", "event_set_config: generate « Daily Fight » events (.xq + registration).", OpenEventEditor);
-            _dialogueBtn = BigButton("💬  Dialogue Editor", "Edit event/story dialogue lines and the speaker name-box (ev/en).", OpenDialogueEditor);
-            _battleBtn = BigButton("⚔  Battle Editor", "common_enc: edit event/story battles (yo-kai slots, BattleScript).", OpenBattleEditor);
-            _saveBtn = BigButton("💾  Save Editor", "Add yo-kai (incl. your modded ones) into a game{N}.yw save file.", OpenSaveEditor);
-            _checkBtn = BigButton("🩺  Check integrity", "Detects broken references (missing move/drop/evolution) and duplicates.", OpenIntegrity);
-            _yokaiBtn.IsEnabled = false;
-            _itemBtn.IsEnabled = false;
-            _skillBtn.IsEnabled = false;
-            _npcBtn.IsEnabled = false;
-            _mapBtn.IsEnabled = false;
-            _warpBtn.IsEnabled = false;
-            _eventBtn.IsEnabled = false;
-            _dialogueBtn.IsEnabled = false;
-            _battleBtn.IsEnabled = false;
-            _saveBtn.IsEnabled = false;
-            _checkBtn.IsEnabled = false;
-            root.Children.Add(_yokaiBtn);
-            root.Children.Add(_itemBtn);
-            root.Children.Add(_skillBtn);
-            root.Children.Add(_npcBtn);
-            root.Children.Add(_mapBtn);
-            root.Children.Add(_warpBtn);
-            root.Children.Add(_eventBtn);
-            root.Children.Add(_dialogueBtn);
-            root.Children.Add(_battleBtn);
-            root.Children.Add(_saveBtn);
-            root.Children.Add(_checkBtn);
+            _yokaiBtn = EditorButton("Yo-kai Editor", OpenYokaiEditor);
+            _itemBtn = EditorButton("Item Editor", OpenItemEditor);
+            _skillBtn = EditorButton("Skill Editor", OpenSkillEditor);
+            _npcBtn = EditorButton("NPC Editor", OpenNpcEditor);
+            _mapBtn = EditorButton("Map Editor", OpenMapEditor);
+            _warpBtn = EditorButton("Warp Editor", OpenWarpEditor);
+            _eventBtn = EditorButton("Event Editor", OpenEventEditor);
+            _dialogueBtn = EditorButton("Dialogue Editor", OpenDialogueEditor);
+            _battleBtn = EditorButton("Battle Editor", OpenBattleEditor);
+            _saveBtn = EditorButton("Save Editor", OpenSaveEditor);
+            _checkBtn = EditorButton("Check integrity", OpenIntegrity);
 
-            root.Children.Add(_status);
+            AddSection(root, "Characters", _yokaiBtn, _itemBtn, _skillBtn);
+            AddSection(root, "World", _npcBtn, _mapBtn, _warpBtn, _eventBtn, _dialogueBtn, _battleBtn);
+            AddSection(root, "Save & Tools", _saveBtn, _checkBtn);
+
+            foreach (var b in new[] { _yokaiBtn, _itemBtn, _skillBtn, _npcBtn, _mapBtn, _warpBtn,
+                                      _eventBtn, _dialogueBtn, _battleBtn, _saveBtn, _checkBtn })
+                b.IsEnabled = false;
+
+            _status.Margin = new Thickness(1, 20, 0, 0);
             _status.Text = _referenceFolder != null
-                ? "Tip: open your extracted mod folder (YWML). The “cfg” folder serves as a reference for missing names."
+                ? "Open your extracted mod folder (YWML). The “cfg” folder is used as a reference for missing names."
                 : "Open your extracted mod folder (YWML).";
-
-            Content = root;
+            root.Children.Add(_status);
         }
 
-        private Button BigButton(string title, string subtitle, Action onClick)
+        /// <summary>A titled group: a small caption + a hairline rule, then its buttons in a 3-column grid.</summary>
+        private static void AddSection(Panel root, string title, params Button[] buttons)
         {
-            var sp = new StackPanel();
-            sp.Children.Add(new TextBlock { Text = title, FontSize = 15, FontWeight = FontWeights.SemiBold });
-            sp.Children.Add(new TextBlock { Text = subtitle, FontSize = 11, Foreground = Theme.FgMuted, TextWrapping = TextWrapping.Wrap });
+            var caption = new DockPanel { Margin = new Thickness(1, 18, 1, 8) };
+            var label = new TextBlock
+            {
+                Text = title.ToUpperInvariant(),
+                FontSize = 11, FontWeight = FontWeights.SemiBold, Foreground = Theme.FgMuted,
+                Margin = new Thickness(0, 0, 10, 0), VerticalAlignment = VerticalAlignment.Center
+            };
+            DockPanel.SetDock(label, Dock.Left);
+            caption.Children.Add(label);
+            caption.Children.Add(new Border { Height = 1, Background = Theme.Border, VerticalAlignment = VerticalAlignment.Center });
+            root.Children.Add(caption);
+
+            var grid = new UniformGrid { Columns = 3, Margin = new Thickness(-5, 0, -5, 0) };
+            foreach (var b in buttons) grid.Children.Add(b);
+            root.Children.Add(grid);
+        }
+
+        private Button EditorButton(string text, Action onClick)
+        {
             var b = new Button
             {
-                Content = sp,
-                Padding = new Thickness(14, 10, 14, 10),
-                Margin = new Thickness(0, 12, 0, 0),
-                HorizontalContentAlignment = HorizontalAlignment.Left
+                Content = text,
+                FontSize = 14,
+                Margin = new Thickness(5),
+                MinHeight = 50,
+                HorizontalContentAlignment = HorizontalAlignment.Center,
+                VerticalContentAlignment = VerticalAlignment.Center
             };
             b.Click += (s, e) => onClick();
             return b;
@@ -150,8 +173,7 @@ namespace Lycoris
                 _checkBtn.IsEnabled = _db.ParamFile != null;
 
                 string moves = _db.MoveOptions.Count > 0 ? $"named moves {_db.MoveNameCount}" : "unnamed moves";
-                _status.Text = $"Loaded — {_db.Yokai.Count} yo-kai, {_db.Items.Count} items, {_db.Skills.Count} skills, {_db.Maps.Count} maps  ({moves}).\n" +
-                               "Choose an editor above.";
+                _status.Text = $"Loaded — {_db.Yokai.Count} yo-kai, {_db.Items.Count} items, {_db.Skills.Count} skills, {_db.Maps.Count} maps  ({moves}).";
             }
             catch (Exception ex)
             {
