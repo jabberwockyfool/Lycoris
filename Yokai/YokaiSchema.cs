@@ -73,6 +73,46 @@ namespace Lycoris.Yokai
         public int B_Drop2Index = 7;
         public int B_Drop2RateIndex = 8;
 
+        // --- Fusion / evolution recipes (combine_config — COMBINE_INFO): Base + Material → Result ---
+        public string CombineConfigFilePrefix = "combine_config";
+        public string CombineRecord = "COMBINE_INFO";
+        public string CombineGroupBegin = "COMBINE_INFO_LIST_BEG";
+        public string CombineGroupEnd = "COMBINE_INFO_LIST_END";
+        public int Cmb_BaseIsItemIndex = 0;     // 0 = base is a yo-kai (ParamID), 1 = an item
+        public int Cmb_BaseIdIndex = 1;         // yo-kai ParamHash or item ID
+        public int Cmb_MaterialIsItemIndex = 2;
+        public int Cmb_MaterialIdIndex = 3;
+        public int Cmb_ResultIsItemIndex = 4;
+        public int Cmb_ResultIdIndex = 5;
+        public int Cmb_FlagIdIndex = 6;         // GlobalBitFlagID: story flag that must be set to unlock
+        public int Cmb_TypeIndex = 7;           // FusionType (observed: 0,1,3,6)
+
+        // --- Shops (per-shop shop_shp*.cfg.bin): item list + per-item valid conditions ---
+        public string ShopFilePrefix = "shop_shp";
+        public string ShopConfigRecord = "SHOP_CONFIG_INFO";
+        public string ShopConfigBegin = "SHOP_CONFIG_INFO_BEGIN";
+        public string ShopConfigEnd = "SHOP_CONFIG_INFO_END";
+        public int ShopConfigCountIndex = 1;    // BEGIN[1] = item count ([0] = the shop's hash)
+        public string ShopCondRecord = "SHOP_VALID_CONDITION";
+        public string ShopCondBegin = "SHOP_VALID_CONDITION_BEGIN";
+        public string ShopCondEnd = "SHOP_VALID_CONDITION_END";
+        public int ShopCondCountIndex = 0;      // BEGIN[0] = condition count
+        public int Shop_SlotIdIndex = 0;        // ShopSlotID (hash, unique per row)
+        public int Shop_ItemIdIndex = 1;        // ItemID sold
+        public int Shop_MaxStockIndex = 2;      // MaxLimitedStockCount
+        public int Shop_HasStockIndex = 3;      // HasLimitedStock (0/1)
+        public int Shop_CondStartIndex = 9;     // ShopValidConditionStartPos (index into SHOP_VALID_CONDITION)
+        public int Shop_CondLenIndex = 10;      // ShopValidConditionLength
+        public int Cond_PriceIndex = 0;         // ExplicitPrice (-1 = use the item's default price)
+        public int Cond_CondIndex = 1;          // Cond (availability condition)
+        // def_shoplist — master registry of shop IDs. Count is at BEGIN[0] (generic insert works).
+        public string DefShoplistFilePrefix = "def_shoplist";
+        public string ShopListRecord = "SHOP_LIST_INFO";
+        public string ShopListBegin = "SHOP_LIST_BEGIN";
+        public string ShopListEnd = "SHOP_LIST_END";
+        public int ShopList_IdIndex = 0;        // ShopID (= Crc32.Standard(code))
+        public int ShopList_FlagIndex = 1;
+
         // --- Items (drop names + the standalone item editor) ---
         public string ItemConfigFilePrefix = "item_config";
         public string ItemTextFilePrefix = "item_text";

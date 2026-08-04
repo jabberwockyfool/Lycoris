@@ -33,6 +33,13 @@ namespace Lycoris.Yokai
         public T2bFile SkillConfigData { get; private set; }
         public T2bFile HackslashData { get; private set; }           // editable
         public T2bFile BattleData { get; private set; }              // editable
+        public T2bFile CombineData { get; private set; }             // editable (fusion recipes)
+        public string CombineFile { get; private set; }
+        public List<CombineRecipe> Combines { get; private set; } = new List<CombineRecipe>();
+        public List<ShopFile> Shops { get; private set; } = new List<ShopFile>();
+        public T2bFile DefShoplistData { get; private set; }   // master shop registry (def_shoplist)
+        public string DefShoplistFile { get; private set; }
+        private bool _defShoplistDirty;
         private T2bFile _hsTechnicData, _hsTechnicTextData, _hsAbilityData, _hsAbilityTextData, _itemConfigData, _itemTextData;
         public string HackslashFile { get; private set; }
         public string BattleFile { get; private set; }
@@ -150,6 +157,8 @@ namespace Lycoris.Yokai
             // Editable Blaster-T / drops files (mod preferred; reference = read-only display).
             HackslashFile = FindResolver(folder, referenceFolder, Schema.HackslashParamFilePrefix, null);
             BattleFile = FindResolver(folder, referenceFolder, Schema.BattleParamFilePrefix, null);
+            CombineFile = FindResolver(folder, referenceFolder, Schema.CombineConfigFilePrefix, null);
+            DefShoplistFile = FindResolver(folder, referenceFolder, Schema.DefShoplistFilePrefix, null);
             // Blaster-T / item name resolvers (read-only).
             _hsTechnicFile = FindResolver(folder, referenceFolder, Schema.HackslashTechnicFilePrefix, "text,menu");
             _hsTechnicTextFile = FindResolver(folder, referenceFolder, Schema.HackslashTechnicTextFilePrefix, null);
@@ -400,7 +409,7 @@ namespace Lycoris.Yokai
             BaseFile = TextFile = DescFile = ScaleFile = SkillTextFile = SkillDescTextFile = null;
             MapConfigFile = SystemTextFile = null;
             AbilityFile = AbilityTextFile = SkillConfigFile = null;
-            HackslashFile = BattleFile = _hsTechnicFile = _hsTechnicTextFile = null;
+            HackslashFile = BattleFile = CombineFile = DefShoplistFile = _hsTechnicFile = _hsTechnicTextFile = null;
             _hsAbilityFile = _hsAbilityTextFile = _itemConfigFile = _itemTextFile = null;
             _modFolder = System.IO.Path.GetDirectoryName(paramFilePath);
             LoadAll();
@@ -425,6 +434,9 @@ namespace Lycoris.Yokai
             SkillConfigData = SkillConfigFile != null ? T2bReader.ReadFile(SkillConfigFile) : null;
             HackslashData = HackslashFile != null ? T2bReader.ReadFile(HackslashFile) : null;
             BattleData = BattleFile != null ? T2bReader.ReadFile(BattleFile) : null;
+            CombineData = CombineFile != null ? T2bReader.ReadFile(CombineFile) : null;
+            DefShoplistData = DefShoplistFile != null ? T2bReader.ReadFile(DefShoplistFile) : null;
+            _defShoplistDirty = false;
             _hsTechnicData = _hsTechnicFile != null ? T2bReader.ReadFile(_hsTechnicFile) : null;
             _hsTechnicTextData = _hsTechnicTextFile != null ? T2bReader.ReadFile(_hsTechnicTextFile) : null;
             _hsAbilityData = _hsAbilityFile != null ? T2bReader.ReadFile(_hsAbilityFile) : null;
@@ -605,8 +617,358 @@ namespace Lycoris.Yokai
             LoadItems();
             LoadSkills();
             LoadMaps();
+            LoadCombines();
+            LoadShops();
             BuildSkillSlotOptions();
             SnapshotIntegrityBaseline();
+        }
+
+        private void LoadCombines()
+        {
+            Combines = new List<CombineRecipe>();
+            if (CombineData == null) return;
+            var ctx = new CombineContext(YokaiOptions, ItemOptions);
+            foreach (var e in CombineData.Records(Schema.CombineRecord))
+            {
+                if (e.Values.Count <= Schema.Cmb_TypeIndex) continue;
+                var r = new CombineRecipe(ctx)
+                {
+                    Source = e,
+                    BaseIsItem = (e.GetInt(Schema.Cmb_BaseIsItemIndex) ?? 0) != 0,
+                    BaseId = e.GetInt(Schema.Cmb_BaseIdIndex) ?? 0,
+                    MaterialIsItem = (e.GetInt(Schema.Cmb_MaterialIsItemIndex) ?? 0) != 0,
+                    MaterialId = e.GetInt(Schema.Cmb_MaterialIdIndex) ?? 0,
+                    ResultIsItem = (e.GetInt(Schema.Cmb_ResultIsItemIndex) ?? 0) != 0,
+                    ResultId = e.GetInt(Schema.Cmb_ResultIdIndex) ?? 0,
+                    FlagId = e.GetInt(Schema.Cmb_FlagIdIndex) ?? 0,
+                    FusionType = e.GetInt(Schema.Cmb_TypeIndex) ?? 0,
+                };
+                r.IsDirty = false;
+                Combines.Add(r);
+            }
+        }
+
+        /// <summary>Write recipe edits back into combine_config (mirrored into the mod). Returns values changed.</summary>
+        public int SaveCombines()
+        {
+            if (CombineData == null) return 0;
+            int changed = 0;
+            foreach (var r in Combines.Where(r => r.Source != null))
+            {
+                changed += SetInt(r.Source, Schema.Cmb_BaseIsItemIndex, r.BaseIsItem ? 1 : 0);
+                changed += SetInt(r.Source, Schema.Cmb_BaseIdIndex, r.BaseId);
+                changed += SetInt(r.Source, Schema.Cmb_MaterialIsItemIndex, r.MaterialIsItem ? 1 : 0);
+                changed += SetInt(r.Source, Schema.Cmb_MaterialIdIndex, r.MaterialId);
+                changed += SetInt(r.Source, Schema.Cmb_ResultIsItemIndex, r.ResultIsItem ? 1 : 0);
+                changed += SetInt(r.Source, Schema.Cmb_ResultIdIndex, r.ResultId);
+                changed += SetInt(r.Source, Schema.Cmb_FlagIdIndex, r.FlagId);
+                changed += SetInt(r.Source, Schema.Cmb_TypeIndex, r.FusionType);
+                r.IsDirty = false;
+            }
+            if (!IsUnderMod(CombineFile)) CombineFile = MirrorToMod(CombineFile);
+            T2bWriter.WriteFile(CombineData, CombineFile);
+            return changed;
+        }
+
+        /// <summary>Append a new recipe (cloned from an existing COMBINE_INFO record as a valid template).</summary>
+        public CombineRecipe AddCombine()
+        {
+            if (CombineData == null) throw new InvalidOperationException("combine_config not loaded.");
+            var tpl = CombineData.Records(Schema.CombineRecord).FirstOrDefault();
+            if (tpl == null) throw new InvalidOperationException("No template recipe in combine_config.");
+            var entry = tpl.Clone();
+            InsertIntoGroup(CombineData, Schema.CombineGroupBegin, Schema.CombineGroupEnd, entry);
+            var ctx = new CombineContext(YokaiOptions, ItemOptions);
+            var r = new CombineRecipe(ctx) { Source = entry, IsNew = true };
+            r.IsDirty = true;
+            Combines.Add(r);
+            return r;
+        }
+
+        /// <summary>Delete a recipe's COMBINE_INFO record and drop it from the list.</summary>
+        public void RemoveCombine(CombineRecipe r)
+        {
+            if (r?.Source == null || CombineData == null) return;
+            RemoveEntry(CombineData, r.Source, Schema.CombineGroupBegin);
+            Combines.Remove(r);
+        }
+
+        // ============================ Shops ============================
+
+        private void LoadShops()
+        {
+            Shops = new List<ShopFile>();
+            if (_modFolder == null) return;
+            var ctx = new ShopContext(ItemOptions);
+
+            // Gather shop_shp*.cfg.bin from the mod (and reference as fallback), newest per code.
+            var byCode = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            void Scan(string root)
+            {
+                if (root == null || !Directory.Exists(root)) return;
+                foreach (var p in Directory.EnumerateFiles(root, Schema.ShopFilePrefix + "*.cfg.bin", SearchOption.AllDirectories))
+                {
+                    string code = ShopCodeFromPath(p);
+                    if (!byCode.TryGetValue(code, out var cur) ||
+                        string.Compare(Path.GetFileName(p), Path.GetFileName(cur), StringComparison.OrdinalIgnoreCase) > 0)
+                        byCode[code] = p;
+                }
+            }
+            Scan(_modFolder);
+            // Only pull a shop from the reference if the mod doesn't ship that code at all.
+            var modCodes = new HashSet<string>(byCode.Keys, StringComparer.OrdinalIgnoreCase);
+            if (_referenceFolder != null)
+                foreach (var p in SafeEnumerate(_referenceFolder, Schema.ShopFilePrefix + "*.cfg.bin"))
+                {
+                    string code = ShopCodeFromPath(p);
+                    if (modCodes.Contains(code)) continue;
+                    if (!byCode.TryGetValue(code, out var cur) ||
+                        string.Compare(Path.GetFileName(p), Path.GetFileName(cur), StringComparison.OrdinalIgnoreCase) > 0)
+                        byCode[code] = p;
+                }
+
+            foreach (var kv in byCode.OrderBy(k => k.Key, StringComparer.OrdinalIgnoreCase))
+            {
+                ShopFile shop;
+                try { shop = LoadShopFile(kv.Value, kv.Key, ctx); }
+                catch { continue; }
+                if (shop != null) Shops.Add(shop);
+            }
+        }
+
+        private static IEnumerable<string> SafeEnumerate(string root, string pattern)
+        {
+            try { return Directory.EnumerateFiles(root, pattern, SearchOption.AllDirectories); }
+            catch { return Array.Empty<string>(); }
+        }
+
+        private static string ShopCodeFromPath(string path)
+        {
+            string fn = Path.GetFileName(path);
+            if (fn.EndsWith(".cfg.bin", StringComparison.OrdinalIgnoreCase)) fn = fn.Substring(0, fn.Length - 8);
+            if (fn.StartsWith("shop_", StringComparison.OrdinalIgnoreCase)) fn = fn.Substring(5);
+            return System.Text.RegularExpressions.Regex.Replace(fn, @"_\d+(\.\d+)*$", "");
+        }
+
+        private ShopFile LoadShopFile(string path, string code, ShopContext ctx)
+        {
+            var data = T2bReader.ReadFile(path);
+            var shop = new ShopFile { FilePath = path, Code = code, Data = data };
+
+            var begin = data.Entries.FirstOrDefault(e => e.Name == Schema.ShopConfigBegin);
+            if (begin != null && begin.Values.Count > 0 && begin.Values[0].Value is int h) shop.ShopHash = h;
+
+            var conds = data.Records(Schema.ShopCondRecord).ToList();
+            foreach (var cfg in data.Records(Schema.ShopConfigRecord))
+            {
+                if (cfg.Values.Count <= Schema.Shop_CondLenIndex) continue;
+                int start = cfg.GetInt(Schema.Shop_CondStartIndex) ?? -1;
+                int len = cfg.GetInt(Schema.Shop_CondLenIndex) ?? 0;
+                T2bEntry cond = (len >= 1 && start >= 0 && start < conds.Count) ? conds[start] : null;
+
+                var it = new ShopItem(ctx)
+                {
+                    Config = cfg,
+                    Condition = cond,
+                    ItemId = cfg.GetInt(Schema.Shop_ItemIdIndex) ?? 0,
+                    MaxStock = cfg.GetInt(Schema.Shop_MaxStockIndex) ?? 0,
+                    HasLimitedStock = (cfg.GetInt(Schema.Shop_HasStockIndex) ?? 0) != 0,
+                    Price = cond != null ? (cond.GetInt(Schema.Cond_PriceIndex) ?? -1) : -1,
+                    Cond = cond != null ? (cond.GetInt(Schema.Cond_CondIndex) ?? 0) : 0,
+                };
+                it.MarkDirty = () => shop.Dirty = true;
+                shop.Items.Add(it);
+            }
+            return shop;
+        }
+
+        /// <summary>Write every modified shop file back into the mod. Returns how many files were written.</summary>
+        public int SaveShops()
+        {
+            int files = 0;
+            foreach (var shop in Shops.Where(s => s.Dirty))
+            {
+                foreach (var it in shop.Items)
+                {
+                    SetInt(it.Config, Schema.Shop_ItemIdIndex, it.ItemId);
+                    SetInt(it.Config, Schema.Shop_MaxStockIndex, it.MaxStock);
+                    SetInt(it.Config, Schema.Shop_HasStockIndex, it.HasLimitedStock ? 1 : 0);
+                    if (it.Condition != null)
+                    {
+                        SetInt(it.Condition, Schema.Cond_PriceIndex, it.Price);
+                        SetInt(it.Condition, Schema.Cond_CondIndex, it.Cond);
+                    }
+                }
+                if (!IsUnderMod(shop.FilePath)) shop.FilePath = MirrorToMod(shop.FilePath) ?? shop.FilePath;
+                Directory.CreateDirectory(Path.GetDirectoryName(shop.FilePath));
+                T2bWriter.WriteFile(shop.Data, shop.FilePath);
+                shop.Dirty = false;
+                files++;
+            }
+            if (_defShoplistDirty && DefShoplistData != null)
+            {
+                if (!IsUnderMod(DefShoplistFile)) DefShoplistFile = MirrorToMod(DefShoplistFile) ?? DefShoplistFile;
+                T2bWriter.WriteFile(DefShoplistData, DefShoplistFile);
+                _defShoplistDirty = false;
+                files++;
+            }
+            return files;
+        }
+
+        /// <summary>Append a new item line to a shop (clones a config + condition record as templates).</summary>
+        public ShopItem AddShopItem(ShopFile shop)
+        {
+            if (shop?.Data == null) return null;
+            var cfgTpl = shop.Data.Records(Schema.ShopConfigRecord).FirstOrDefault();
+            var condTpl = shop.Data.Records(Schema.ShopCondRecord).FirstOrDefault();
+            if (cfgTpl == null || condTpl == null)
+                throw new InvalidOperationException("This shop has no existing entry to use as a template.");
+
+            int newCondIndex = shop.Data.Records(Schema.ShopCondRecord).Count();
+            var cond = condTpl.Clone();
+            SetIntForce(cond, Schema.Cond_PriceIndex, -1);   // default price
+            SetIntForce(cond, Schema.Cond_CondIndex, 0);
+            ShopInsert(shop.Data, Schema.ShopCondEnd, Schema.ShopCondBegin, Schema.ShopCondCountIndex, cond);
+
+            var cfg = cfgTpl.Clone();
+            int slot = unchecked((int)Crc32.Standard(System.Text.Encoding.UTF8.GetBytes($"{shop.Code}_slot_{newCondIndex}")));
+            SetIntForce(cfg, Schema.Shop_SlotIdIndex, slot);
+            SetIntForce(cfg, Schema.Shop_ItemIdIndex, 0);
+            SetIntForce(cfg, Schema.Shop_MaxStockIndex, 0);
+            SetIntForce(cfg, Schema.Shop_HasStockIndex, 0);
+            SetIntForce(cfg, Schema.Shop_CondStartIndex, newCondIndex);
+            SetIntForce(cfg, Schema.Shop_CondLenIndex, 1);
+            ShopInsert(shop.Data, Schema.ShopConfigEnd, Schema.ShopConfigBegin, Schema.ShopConfigCountIndex, cfg);
+
+            var ctx = new ShopContext(ItemOptions);
+            var it = new ShopItem(ctx) { Config = cfg, Condition = cond, ItemId = 0, Price = -1 };
+            it.MarkDirty = () => shop.Dirty = true;
+            shop.Items.Add(it);
+            shop.Dirty = true;
+            return it;
+        }
+
+        /// <summary>Remove an item line from a shop (keeps its orphan condition so other rows' indices stay valid).</summary>
+        public void RemoveShopItem(ShopFile shop, ShopItem it)
+        {
+            if (shop?.Data == null || it?.Config == null) return;
+            ShopRemoveConfig(shop.Data, it.Config);
+            shop.Items.Remove(it);
+            shop.Dirty = true;
+        }
+
+        /// <summary>Is <paramref name="code"/> already used by a loaded shop? (case-insensitive)</summary>
+        public bool ShopCodeExists(string code) =>
+            Shops.Any(s => string.Equals(s.Code, code, StringComparison.OrdinalIgnoreCase));
+
+        /// <summary>
+        /// Create a brand-new shop: a fresh shop_&lt;code&gt;.cfg.bin (cloned structure, one blank line), the shop
+        /// hash = CRC32(code), registered in def_shoplist. Written to the mod on the next SaveShops.
+        /// </summary>
+        public ShopFile AddShop(string code)
+        {
+            if (_modFolder == null) throw new InvalidOperationException("No mod folder loaded.");
+            code = SanitizeShopCode(code);
+            if (string.IsNullOrEmpty(code)) throw new InvalidOperationException("Enter a shop code (letters/digits).");
+            if (ShopCodeExists(code)) throw new InvalidOperationException($"A shop with code “{code}” already exists.");
+
+            var template = Shops.FirstOrDefault(s => s.Data != null);
+            if (template == null) throw new InvalidOperationException("Need at least one existing shop to use as a template.");
+
+            int hash = unchecked((int)Crc32.Standard(System.Text.Encoding.UTF8.GetBytes(code)));
+
+            // Independent copy of a valid shop structure, then trim to a single blank line.
+            var data = T2bReader.ReadFile(template.FilePath);
+            var begin = data.Entries.FirstOrDefault(e => e.Name == Schema.ShopConfigBegin);
+            if (begin != null && begin.Values.Count > 0) begin.Values[0].Value = hash;
+
+            var cfgs = data.Records(Schema.ShopConfigRecord).ToList();
+            var conds = data.Records(Schema.ShopCondRecord).ToList();
+            for (int i = cfgs.Count - 1; i >= 1; i--) ShopRemoveConfig(data, cfgs[i]);
+            for (int i = conds.Count - 1; i >= 1; i--) ShopRemoveCond(data, conds[i]);
+
+            var cfg0 = data.Records(Schema.ShopConfigRecord).FirstOrDefault();
+            var cond0 = data.Records(Schema.ShopCondRecord).FirstOrDefault();
+            if (cfg0 == null || cond0 == null) throw new InvalidDataException("Template shop had no rows to seed from.");
+            int slot = unchecked((int)Crc32.Standard(System.Text.Encoding.UTF8.GetBytes(code + "_slot_0")));
+            SetIntForce(cfg0, Schema.Shop_SlotIdIndex, slot);
+            SetIntForce(cfg0, Schema.Shop_ItemIdIndex, 0);
+            SetIntForce(cfg0, Schema.Shop_MaxStockIndex, 0);
+            SetIntForce(cfg0, Schema.Shop_HasStockIndex, 0);
+            SetIntForce(cfg0, Schema.Shop_CondStartIndex, 0);
+            SetIntForce(cfg0, Schema.Shop_CondLenIndex, 1);
+            SetIntForce(cond0, Schema.Cond_PriceIndex, -1);
+            SetIntForce(cond0, Schema.Cond_CondIndex, 0);
+
+            // New file path: the mod's shop folder (reuse an existing mod shop's dir, else mirror one).
+            string modShop = Shops.Select(s => s.FilePath).FirstOrDefault(IsUnderMod);
+            string dir = modShop != null ? Path.GetDirectoryName(modShop)
+                       : Path.GetDirectoryName(MirrorToMod(template.FilePath) ?? template.FilePath);
+            string path = Path.Combine(dir, $"shop_{code}_0.01.cfg.bin");
+
+            var ctx = new ShopContext(ItemOptions);
+            var shop = new ShopFile { FilePath = path, Code = code, ShopHash = hash, Data = data, Dirty = true };
+            var it = new ShopItem(ctx) { Config = cfg0, Condition = cond0, ItemId = 0, Price = -1 };
+            it.MarkDirty = () => shop.Dirty = true;
+            shop.Items.Add(it);
+            Shops.Add(shop);
+
+            RegisterShopInList(hash);
+            return shop;
+        }
+
+        /// <summary>Add the shop's hash to def_shoplist if not already present.</summary>
+        private void RegisterShopInList(int hash)
+        {
+            if (DefShoplistData == null) return;
+            bool present = DefShoplistData.Records(Schema.ShopListRecord)
+                .Any(e => (e.GetInt(Schema.ShopList_IdIndex) ?? 0) == hash);
+            if (present) return;
+            var tpl = DefShoplistData.Records(Schema.ShopListRecord).FirstOrDefault();
+            if (tpl == null) return;
+            var rec = tpl.Clone();
+            SetIntForce(rec, Schema.ShopList_IdIndex, hash);
+            if (rec.Values.Count > Schema.ShopList_FlagIndex) SetIntForce(rec, Schema.ShopList_FlagIndex, -1);
+            InsertIntoGroup(DefShoplistData, Schema.ShopListBegin, Schema.ShopListEnd, rec);
+            _defShoplistDirty = true;
+        }
+
+        private static string SanitizeShopCode(string code)
+        {
+            if (code == null) return null;
+            var sb = new System.Text.StringBuilder();
+            foreach (char c in code.Trim())
+                if (char.IsLetterOrDigit(c)) sb.Append(c);
+            return sb.ToString();
+        }
+
+        private void ShopRemoveCond(T2bFile file, T2bEntry entry)
+        {
+            if (!file.Entries.Remove(entry)) return;
+            var begin = file.Entries.FirstOrDefault(e => e.Name == Schema.ShopCondBegin);
+            if (begin != null && begin.Values.Count > Schema.ShopCondCountIndex &&
+                begin.Values[Schema.ShopCondCountIndex].Value is int c)
+                begin.Values[Schema.ShopCondCountIndex].Value = c - 1;
+        }
+
+        // Shop groups keep their child count at a record-specific index (not always [0]).
+        private static void ShopInsert(T2bFile file, string endName, string beginName, int countIdx, T2bEntry entry)
+        {
+            int endIdx = file.Entries.FindIndex(e => e.Name == endName);
+            if (endIdx < 0) throw new InvalidDataException($"Group end '{endName}' not found.");
+            file.Entries.Insert(endIdx, entry);
+            var begin = file.Entries.FirstOrDefault(e => e.Name == beginName);
+            if (begin != null && begin.Values.Count > countIdx && begin.Values[countIdx].Value is int c)
+                begin.Values[countIdx].Value = c + 1;
+        }
+
+        private void ShopRemoveConfig(T2bFile file, T2bEntry entry)
+        {
+            if (!file.Entries.Remove(entry)) return;
+            var begin = file.Entries.FirstOrDefault(e => e.Name == Schema.ShopConfigBegin);
+            if (begin != null && begin.Values.Count > Schema.ShopConfigCountIndex &&
+                begin.Values[Schema.ShopConfigCountIndex].Value is int c)
+                begin.Values[Schema.ShopConfigCountIndex].Value = c - 1;
         }
 
         private void LoadMaps()

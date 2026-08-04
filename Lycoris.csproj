@@ -79,6 +79,8 @@
     <Compile Include="Yokai\YokaiModels.cs" />
     <Compile Include="Yokai\ItemInfo.cs" />
     <Compile Include="Yokai\SkillInfo.cs" />
+    <Compile Include="Yokai\CombineModels.cs" />
+    <Compile Include="Yokai\ShopModels.cs" />
     <Compile Include="Yokai\MapInfo.cs" />
     <Compile Include="Yokai\EncounterModels.cs" />
     <Compile Include="Yokai\EventSet.cs" />
@@ -95,6 +97,8 @@
     <Compile Include="Yokai\YokaiDatabase.cs" />
     <Compile Include="ItemEditorWindow.cs" />
     <Compile Include="SkillEditorWindow.cs" />
+    <Compile Include="CombineEditorWindow.cs" />
+    <Compile Include="ShopEditorWindow.cs" />
     <Compile Include="IntegrityWindow.cs" />
     <Compile Include="NpcEditorWindow.cs" />
     <Compile Include="MapEditorWindow.cs" />
@@ -119,6 +123,7 @@
     <Compile Include="DarkMessage.cs" />
     <Compile Include="ChangeBaseIdDialog.cs" />
     <Compile Include="FolderPicker.cs" />
+    <Compile Include="Project.cs" />
     <Compile Include="App.xaml.cs">
       <DependentUpon>App.xaml</DependentUpon>
       <SubType>Code</SubType>

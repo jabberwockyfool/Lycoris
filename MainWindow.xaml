@@ -281,7 +281,7 @@
                                     <ComboBox Width="90" ItemsSource="{x:Static yk:YokaiEnums.InspiritEvasions}"
                                               SelectedValuePath="Key" DisplayMemberPath="Name"
                                               SelectedValue="{Binding InspiritEvasion}"/>
-                                    <TextBlock Text="Chance to dodge an inspirit"
+                                    <TextBlock Text="Chance of getting inspirited"
                                                VerticalAlignment="Center" Margin="10,0,0,0" Opacity="0.6"/>
                                 </StackPanel>
                                 <GroupBox Header="Drop 1">
