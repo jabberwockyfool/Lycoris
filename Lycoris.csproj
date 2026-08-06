@@ -78,6 +78,7 @@
     <Compile Include="Yokai\AttackProfile.cs" />
     <Compile Include="Yokai\YokaiModels.cs" />
     <Compile Include="Yokai\ItemInfo.cs" />
+    <Compile Include="Yokai\BossPort.cs" />
     <Compile Include="Yokai\SkillInfo.cs" />
     <Compile Include="Yokai\CombineModels.cs" />
     <Compile Include="Yokai\ShopModels.cs" />
@@ -99,6 +100,7 @@
     <Compile Include="SkillEditorWindow.cs" />
     <Compile Include="CombineEditorWindow.cs" />
     <Compile Include="ShopEditorWindow.cs" />
+    <Compile Include="BossEditorWindow.cs" />
     <Compile Include="IntegrityWindow.cs" />
     <Compile Include="NpcEditorWindow.cs" />
     <Compile Include="MapEditorWindow.cs" />

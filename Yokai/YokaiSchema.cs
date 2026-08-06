@@ -73,6 +73,45 @@ namespace Lycoris.Yokai
         public int B_Drop2Index = 7;
         public int B_Drop2RateIndex = 8;
 
+        // --- Boss editor / YW2 port ---
+        // BOSS_PARTS_INFO lives in battle_chara_param (YW3). [5..12]=skill ids, [21]=phase config id.
+        public string BossPartsRecord = "BOSS_PARTS_INFO";
+        public string BossPartsGroupBegin = "BOSS_PARTS_INFO_LIST_BEG";
+        public string BossPartsGroupEnd = "BOSS_PARTS_INFO_LIST_END";
+        public int BP_ParamIndex = 0;
+        public int BP_Cmd0Index = 5;      // 8 attack (skill) ids at [5]..[12]
+        public int BP_CmdCount = 8;
+        public int BP_PhaseIndex = 21;    // BOSS_PHASE_INFO id (battle_boss_config)
+        // battle_command (YW3: 12 fields — [3]=anim clip id, [5]=SkillConfigID it plays, [1]=type).
+        public string BattleCommandFilePrefix = "battle_command";
+        public string BattleCommandRecord = "BATTLE_COMMAND_INFO";
+        public string BattleCommandGroupBegin = "BATTLE_COMMAND_INFO_BEGIN";
+        public string BattleCommandGroupEndMarker = "BATTLE_COMMAND_STEFF_INFO_BEGIN"; // insert before this
+        public int Cmd_IdIndex = 0;
+        public int Cmd_TypeIndex = 1;
+        public int Cmd_AnimIndex = 3;
+        public int Cmd_SkillIndex = 5;
+        // YW2 battle_command (19 fields): TextID at [1], SkillConfigID at [10].
+        public int Yw2Cmd_TextIndex = 1;
+        public int Yw2Cmd_SkillIndex = 10;
+        // YW2 chara_param (53 fields): stats baseA at [2..6]; BOSS_PARTS commands are battle_command ids.
+        public int Yw2P_HpIndex = 2, Yw2P_StrIndex = 3, Yw2P_SprIndex = 4, Yw2P_DefIndex = 5, Yw2P_SpdIndex = 6;
+        public int Yw2P_MoneyIndex = 33, Yw2P_ExpIndex = 34;
+        // YW2 skill_config (9 fields): TextID at [2], BasePower at [5], Element at [6].
+        public int Yw2Skill_TextIndex = 2, Yw2Skill_PowerIndex = 5, Yw2Skill_ElementIndex = 6;
+        // common_enc (encounter): a boss battle event "edy_<model>_NN" → CRC32 → ENCOUNT_TABLE id.
+        public string EncountFilePrefix = "common_enc";
+        public string EncountTableRecord = "ENCOUNT_TABLE";
+        public string EncountTableGroupBegin = "ENCOUNT_TABLE_BEGIN";
+        public string EncountTableGroupEnd = "ENCOUNT_TABLE_END";
+        public string EncountCharaRecord = "ENCOUNT_CHARA";
+        public string EncountCharaGroupBegin = "ENCOUNT_CHARA_BEGIN";
+        public string EncountCharaGroupEnd = "ENCOUNT_CHARA_END";
+        public int EncTable_IdIndex = 0;
+        public int EncTable_Off1Index = 1;   // first ENCOUNT_CHARA index (slots [1]..[6])
+        public int Enc_ParamIndex = 0;
+        public int Enc_LevelIndex = 1;
+
         // --- Fusion / evolution recipes (combine_config — COMBINE_INFO): Base + Material → Result ---
         public string CombineConfigFilePrefix = "combine_config";
         public string CombineRecord = "COMBINE_INFO";

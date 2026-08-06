@@ -26,6 +26,7 @@ namespace Lycoris
         private readonly Button _itemBtn;
         private readonly Button _skillBtn;
         private readonly Button _combineBtn;
+        private readonly Button _bossBtn;
         private readonly Button _npcBtn;
         private readonly Button _mapBtn;
         private readonly Button _shopBtn;
@@ -43,6 +44,7 @@ namespace Lycoris
         private NpcEditorWindow _npcWindow;
         private MapEditorWindow _mapWindow;
         private ShopEditorWindow _shopWindow;
+        private BossEditorWindow _bossWindow;
         private SaveEditorWindow _saveWindow;
         private EventEditorWindow _eventWindow;
 
@@ -99,6 +101,7 @@ namespace Lycoris
             _itemBtn = EditorButton("Item Editor", OpenItemEditor);
             _skillBtn = EditorButton("Skill Editor", OpenSkillEditor);
             _combineBtn = EditorButton("Fusion Editor", OpenCombineEditor);
+            _bossBtn = EditorButton("Boss Editor", OpenBossEditor);
             _npcBtn = EditorButton("NPC Editor", OpenNpcEditor);
             _mapBtn = EditorButton("Map Editor", OpenMapEditor);
             _shopBtn = EditorButton("Shop Editor", OpenShopEditor);
@@ -109,11 +112,11 @@ namespace Lycoris
             _saveBtn = EditorButton("Save Editor", OpenSaveEditor);
             _checkBtn = EditorButton("Check integrity", OpenIntegrity);
 
-            AddSection(root, "Characters", _yokaiBtn, _itemBtn, _skillBtn, _combineBtn);
+            AddSection(root, "Characters", _yokaiBtn, _itemBtn, _skillBtn, _combineBtn, _bossBtn);
             AddSection(root, "World", _npcBtn, _mapBtn, _shopBtn, _warpBtn, _eventBtn, _dialogueBtn, _battleBtn);
             AddSection(root, "Save & Tools", _saveBtn, _checkBtn);
 
-            foreach (var b in new[] { _yokaiBtn, _itemBtn, _skillBtn, _combineBtn, _npcBtn, _mapBtn, _shopBtn, _warpBtn,
+            foreach (var b in new[] { _yokaiBtn, _itemBtn, _skillBtn, _combineBtn, _bossBtn, _npcBtn, _mapBtn, _shopBtn, _warpBtn,
                                       _eventBtn, _dialogueBtn, _battleBtn, _saveBtn, _checkBtn })
                 b.IsEnabled = false;
 
@@ -245,6 +248,7 @@ namespace Lycoris
                 _npcWindow?.Close(); _npcWindow = null;
                 _mapWindow?.Close(); _mapWindow = null;
                 _shopWindow?.Close(); _shopWindow = null;
+                _bossWindow?.Close(); _bossWindow = null;
                 _saveWindow?.Close(); _saveWindow = null;
                 _eventWindow?.Close(); _eventWindow = null;
 
@@ -255,6 +259,7 @@ namespace Lycoris
                 _npcBtn.IsEnabled = _db.ParamFile != null;
                 _mapBtn.IsEnabled = _db.Maps.Count > 0;
                 _shopBtn.IsEnabled = _db.Shops.Count > 0;
+                _bossBtn.IsEnabled = _db.BattleData != null;   // boss port needs battle_chara_param loaded
                 _warpBtn.IsEnabled = _referenceFolder != null || _db.ModFolder != null;
                 _eventBtn.IsEnabled = _referenceFolder != null || _db.ModFolder != null;
                 _dialogueBtn.IsEnabled = _referenceFolder != null || _db.ModFolder != null;
@@ -356,6 +361,15 @@ namespace Lycoris
             _mapWindow = new MapEditorWindow(this, _db) { Owner = this };
             _mapWindow.Closed += (s, e) => _mapWindow = null;
             _mapWindow.Show();
+        }
+
+        private void OpenBossEditor()
+        {
+            if (_db.ParamFile == null) return;
+            if (_bossWindow != null && _bossWindow.IsLoaded) { _bossWindow.Activate(); return; }
+            _bossWindow = new BossEditorWindow(this, _db) { Owner = this };
+            _bossWindow.Closed += (s, e) => _bossWindow = null;
+            _bossWindow.Show();
         }
 
         private void OpenShopEditor()
