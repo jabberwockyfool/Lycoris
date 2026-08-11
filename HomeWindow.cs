@@ -36,15 +36,18 @@ namespace Lycoris
         private readonly Button _battleBtn;
         private readonly Button _saveBtn;
         private readonly Button _checkBtn;
+        private readonly Button _mergeBtn;
+        private readonly Button _minfBtn;
+        private readonly Button _modelBtn;
 
         private MainWindow _yokaiWindow;
         private ItemEditorWindow _itemWindow;
         private SkillEditorWindow _skillWindow;
         private CombineEditorWindow _combineWindow;
+        private BossEditorWindow _bossWindow;
         private NpcEditorWindow _npcWindow;
         private MapEditorWindow _mapWindow;
         private ShopEditorWindow _shopWindow;
-        private BossEditorWindow _bossWindow;
         private SaveEditorWindow _saveWindow;
         private EventEditorWindow _eventWindow;
 
@@ -111,10 +114,13 @@ namespace Lycoris
             _battleBtn = EditorButton("Battle Editor", OpenBattleEditor);
             _saveBtn = EditorButton("Save Editor", OpenSaveEditor);
             _checkBtn = EditorButton("Check integrity", OpenIntegrity);
+            _mergeBtn = EditorButton("Mod Merger", OpenModMerger);   // standalone: works without a loaded project
+            _minfBtn = EditorButton("Minf Editor (.xc)", OpenMinfEditor);   // standalone: opens a .xc directly
+            _modelBtn = EditorButton("Model Editor (.bin→.xc)", OpenModelEditor);   // standalone: ports a model .bin
 
             AddSection(root, "Characters", _yokaiBtn, _itemBtn, _skillBtn, _combineBtn, _bossBtn);
             AddSection(root, "World", _npcBtn, _mapBtn, _shopBtn, _warpBtn, _eventBtn, _dialogueBtn, _battleBtn);
-            AddSection(root, "Save & Tools", _saveBtn, _checkBtn);
+            AddSection(root, "Save & Tools", _saveBtn, _checkBtn, _mergeBtn, _minfBtn, _modelBtn);
 
             foreach (var b in new[] { _yokaiBtn, _itemBtn, _skillBtn, _combineBtn, _bossBtn, _npcBtn, _mapBtn, _shopBtn, _warpBtn,
                                       _eventBtn, _dialogueBtn, _battleBtn, _saveBtn, _checkBtn })
@@ -245,10 +251,10 @@ namespace Lycoris
                 _itemWindow?.Close(); _itemWindow = null;
                 _skillWindow?.Close(); _skillWindow = null;
                 _combineWindow?.Close(); _combineWindow = null;
+                _bossWindow?.Close(); _bossWindow = null;
                 _npcWindow?.Close(); _npcWindow = null;
                 _mapWindow?.Close(); _mapWindow = null;
                 _shopWindow?.Close(); _shopWindow = null;
-                _bossWindow?.Close(); _bossWindow = null;
                 _saveWindow?.Close(); _saveWindow = null;
                 _eventWindow?.Close(); _eventWindow = null;
 
@@ -256,10 +262,10 @@ namespace Lycoris
                 _itemBtn.IsEnabled = _db.Items.Count > 0;
                 _skillBtn.IsEnabled = _db.Skills.Count > 0;
                 _combineBtn.IsEnabled = _db.Combines.Count > 0;
+                _bossBtn.IsEnabled = _db.BattleData != null;   // boss port needs battle_chara_param loaded
                 _npcBtn.IsEnabled = _db.ParamFile != null;
                 _mapBtn.IsEnabled = _db.Maps.Count > 0;
                 _shopBtn.IsEnabled = _db.Shops.Count > 0;
-                _bossBtn.IsEnabled = _db.BattleData != null;   // boss port needs battle_chara_param loaded
                 _warpBtn.IsEnabled = _referenceFolder != null || _db.ModFolder != null;
                 _eventBtn.IsEnabled = _referenceFolder != null || _db.ModFolder != null;
                 _dialogueBtn.IsEnabled = _referenceFolder != null || _db.ModFolder != null;
@@ -345,6 +351,15 @@ namespace Lycoris
             _combineWindow.Show();
         }
 
+        private void OpenBossEditor()
+        {
+            if (_db.BattleData == null) return;
+            if (_bossWindow != null && _bossWindow.IsLoaded) { _bossWindow.Activate(); return; }
+            _bossWindow = new BossEditorWindow(this, _db) { Owner = this };
+            _bossWindow.Closed += (s, e) => _bossWindow = null;
+            _bossWindow.Show();
+        }
+
         private void OpenNpcEditor()
         {
             if (_db.ParamFile == null) return;
@@ -361,15 +376,6 @@ namespace Lycoris
             _mapWindow = new MapEditorWindow(this, _db) { Owner = this };
             _mapWindow.Closed += (s, e) => _mapWindow = null;
             _mapWindow.Show();
-        }
-
-        private void OpenBossEditor()
-        {
-            if (_db.ParamFile == null) return;
-            if (_bossWindow != null && _bossWindow.IsLoaded) { _bossWindow.Activate(); return; }
-            _bossWindow = new BossEditorWindow(this, _db) { Owner = this };
-            _bossWindow.Closed += (s, e) => _bossWindow = null;
-            _bossWindow.Show();
         }
 
         private void OpenShopEditor()
@@ -421,6 +427,21 @@ namespace Lycoris
         {
             if (_db.ParamFile == null) return;
             new IntegrityWindow(this, _db) { Owner = this }.Show();
+        }
+
+        private void OpenModMerger()
+        {
+            new ModMergerWindow(this, _referenceFolder) { Owner = this }.Show();
+        }
+
+        private void OpenMinfEditor()
+        {
+            new MinfEditorWindow(this) { Owner = this }.Show();
+        }
+
+        private void OpenModelEditor()
+        {
+            new ModelEditorWindow(this) { Owner = this }.Show();
         }
     }
 

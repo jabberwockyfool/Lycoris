@@ -427,8 +427,11 @@ namespace Lycoris
         {
             var y = Selector.SelectedItem as YokaiInfo;
             CommitEdits();
-            if (y == null || !y.MedalPosX.HasValue || !y.MedalPosY.HasValue) return;
+            if (y == null) return;
+            if (!y.MedalPosX.HasValue || !y.MedalPosY.HasValue)
+            { DarkMessage.Show("Pick this yo-kai's medal position first (\"Choose in the atlas…\").", "Medal"); return; }
             if (CurrentAtlasPath() == null) { DarkMessage.Show("face_icon.xi atlas not found.", "Medal"); return; }
+            if (_db.ModFaceAtlasWriteTarget == null) { DarkMessage.Show("Open a mod folder first — the atlas is written into the mod.", "Medal"); return; }
 
             var dlg = new Microsoft.Win32.OpenFileDialog { Filter = "PNG images|*.png", Title = "Mini-medal — PNG (32×32)" };
             if (dlg.ShowDialog() != true) return;
@@ -442,11 +445,13 @@ namespace Lycoris
                 for (int ry = 0; ry < MedalCell; ry++)
                     Array.Copy(cell, ry * MedalCell * 4, atlas.Bgra, ((y0 + ry) * atlas.Width + x) * 4, MedalCell * 4);
 
-                string target = _db.MirrorToMod(CurrentAtlasPath());
+                // Write the whole atlas (all vanilla medals + this new cell) to a mod-owned face_icon.xi
+                // at the same face_icon path the working per-yo-kai icons use, so the game reads it.
+                string target = _db.ModFaceAtlasWriteTarget;
                 System.IO.File.WriteAllBytes(target, Imgc.EncodeXi(atlas.Bgra, atlas.Width, atlas.Height));
                 _moddedAtlasPath = target;
                 MedalAtlasImage.Source = CropAtlasMedal(y);
-                StatusText.Text = $"Medal inserted into the atlas at ({y.MedalPosX},{y.MedalPosY}) → {System.IO.Path.GetFileName(target)}";
+                StatusText.Text = $"Medal inserted into the atlas at ({y.MedalPosX},{y.MedalPosY}) → {target}";
             }
             catch (Exception ex) { DarkMessage.Show(ex.Message, "Medal atlas error", MessageBoxButton.OK, MessageBoxImage.Error); }
         }
@@ -620,18 +625,77 @@ namespace Lycoris
 
         private void AddButton_Click(object sender, RoutedEventArgs e)
         {
-            var dlg = new AddYokaiDialog(this);
+            // Decode the face_icon.xi atlas (if any) so the dialog can offer the atlas picker for the medal.
+            BitmapSource atlasBmp = null;
+            try
+            {
+                string ap = CurrentAtlasPath();
+                if (ap != null) { var img = Imgc.Decode(System.IO.File.ReadAllBytes(ap)); atlasBmp = ToBitmap(img.Bgra, img.Width, img.Height); }
+            }
+            catch { /* atlas optional */ }
+
+            var dlg = new AddYokaiDialog(this, atlas: atlasBmp, atlasCell: MedalCell);
             if (dlg.ShowDialog() != true) return;
             try
             {
                 var y = _db.AddYokai(dlg.YokaiName, dlg.Description, dlg.Tribe, dlg.Rank, model: dlg.Model);
+
+                // Optional creation assets, all written into the mod (override the blank icons AddYokai made).
+                if (dlg.AtlasX.HasValue) y.MedalPosX = dlg.AtlasX;
+                if (dlg.AtlasY.HasValue) y.MedalPosY = dlg.AtlasY;
+                if (dlg.FaceIconPng != null) ReplaceIcon(y, dlg.FaceIconPng);
+                if (dlg.MedalIconPng != null) WriteMedalIcon(y, dlg.MedalIconPng);
+                if (!string.IsNullOrEmpty(dlg.ModelFolder)) CopyModelFolder(y, dlg.ModelFolder);
+
                 RebuildView();
                 Selector.SelectedItem = y;
                 StatusText.Text = $"Added: {y.Name} ({y.ParamIdHex}). Edit its fields then Save the mod.";
+
+                // "Add model .bin": open the Model Editor pre-filled to port it into the mod's character folder.
+                if (dlg.ModelBin != null)
+                {
+                    string model = y.ModelName;
+                    string outXc = null;
+                    if (!string.IsNullOrEmpty(model) && _db.ModIncludeBase != null)
+                    {
+                        string dir = System.IO.Path.Combine(_db.ModIncludeBase, "data", "character", model);
+                        System.IO.Directory.CreateDirectory(dir);
+                        outXc = System.IO.Path.Combine(dir, model + "_p00.xc");
+                    }
+                    new ModelEditorWindow(this, dlg.ModelBin, outXc) { Owner = this }.Show();
+                }
             }
             catch (Exception ex)
             {
                 DarkMessage.Show(ex.Message, "Cannot add", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+        }
+
+        /// <summary>Encode a PNG as the yo-kai's medal_icon .xi into the mod's medal_icon folder.</summary>
+        private void WriteMedalIcon(YokaiInfo y, string pngPath)
+        {
+            string baseName = y.IconBaseName ?? y.ModelName;
+            string dir = _db.ModMedalIconWriteDir;
+            if (baseName == null || dir == null) return;
+            System.IO.Directory.CreateDirectory(dir);
+            string target = System.IO.Path.Combine(dir, baseName + ".xi");
+            System.IO.File.WriteAllBytes(target, Imgc.EncodeXi(PngToBgra(pngPath, 64, 64), 64, 64));
+            y.MedalIconFile = target;
+        }
+
+        /// <summary>Copy a model folder's files into the mod at include/data/character/&lt;model&gt;.</summary>
+        private void CopyModelFolder(YokaiInfo y, string srcFolder)
+        {
+            string model = y.ModelName;
+            if (string.IsNullOrEmpty(model) || _db.ModIncludeBase == null || !System.IO.Directory.Exists(srcFolder)) return;
+            string dest = System.IO.Path.Combine(_db.ModIncludeBase, "data", "character", model);
+            System.IO.Directory.CreateDirectory(dest);
+            foreach (var f in System.IO.Directory.GetFiles(srcFolder, "*", System.IO.SearchOption.AllDirectories))
+            {
+                string rel = f.Substring(srcFolder.Length).TrimStart('\\', '/');
+                string tp = System.IO.Path.Combine(dest, rel);
+                System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(tp));
+                System.IO.File.Copy(f, tp, true);
             }
         }
 

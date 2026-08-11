@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media.Imaging;
 using Lycoris.Yokai;
 
 namespace Lycoris
@@ -8,6 +9,9 @@ namespace Lycoris
     /// Modal dialog to collect the fields for creating (or duplicating) a yo-kai: name, description,
     /// tribe/rank as named dropdowns, and the model (e.g. "y152000"). The model drives the BaseID
     /// (CRC32 of the model) and the creation of blank face_icon / medal_icon to replace later.
+    /// Creation also accepts optional assets that are written straight into the mod: a model folder
+    /// (copied to data/character/&lt;model&gt;), a face_icon PNG, a medal_icon PNG, and the medal's
+    /// position in the face_icon.xi atlas (X/Y — pickable when the atlas is passed in).
     /// The same dialog is reused for Duplicate, pre-filled with the source's values.
     /// </summary>
     public sealed class AddYokaiDialog : Window
@@ -37,21 +41,46 @@ namespace Lycoris
             SelectedValuePath = "Key",
         };
 
+        private readonly TextBox _modelBin = new TextBox { Margin = new Thickness(0, 2, 0, 0), IsReadOnly = true };
+        private readonly TextBox _modelFolder = new TextBox { Margin = new Thickness(0, 2, 0, 0), IsReadOnly = true };
+        private readonly TextBox _faceIcon = new TextBox { Margin = new Thickness(0, 2, 0, 0), IsReadOnly = true };
+        private readonly TextBox _medalIcon = new TextBox { Margin = new Thickness(0, 2, 0, 0), IsReadOnly = true };
+        private readonly TextBox _atlasX = new TextBox { Width = 50 };
+        private readonly TextBox _atlasY = new TextBox { Width = 50 };
+        private readonly BitmapSource _atlas;
+        private readonly int _atlasCell;
+
         public string YokaiName => _name.Text;
         public string Description => _desc.Text;
         public string Model => _model.Text.Trim();
         public int Tribe => _tribe.SelectedValue is int t ? t : 0;
         public int Rank => _rank.SelectedValue is int r ? r : 0;
 
+        /// <summary>Folder of model files to copy into the mod (data/character/&lt;model&gt;), or "" if none.</summary>
+        /// <summary>A Pokémon *_model.bin to port to a _p00.xc (opens the Model Editor after create), or null.</summary>
+        public string ModelBin => string.IsNullOrWhiteSpace(_modelBin.Text) ? null : _modelBin.Text.Trim();
+        public string ModelFolder => _modelFolder.Text.Trim();
+        /// <summary>PNG to write as the yo-kai's face_icon, or null.</summary>
+        public string FaceIconPng => string.IsNullOrWhiteSpace(_faceIcon.Text) ? null : _faceIcon.Text.Trim();
+        /// <summary>PNG to write as the yo-kai's medal_icon, or null.</summary>
+        public string MedalIconPng => string.IsNullOrWhiteSpace(_medalIcon.Text) ? null : _medalIcon.Text.Trim();
+        /// <summary>Medal X position in the face_icon.xi atlas, or null.</summary>
+        public int? AtlasX => int.TryParse(_atlasX.Text, out int v) ? (int?)v : null;
+        /// <summary>Medal Y position in the face_icon.xi atlas, or null.</summary>
+        public int? AtlasY => int.TryParse(_atlasY.Text, out int v) ? (int?)v : null;
+
         public AddYokaiDialog(Window owner, string title = "Add a Yo-kai",
-            string name = "", string desc = "", int tribe = 0, int rank = 0, string model = "")
+            string name = "", string desc = "", int tribe = 0, int rank = 0, string model = "",
+            BitmapSource atlas = null, int atlasCell = 32)
         {
             Owner = owner;
             Title = title;
-            Width = 420;
+            Width = 460;
             SizeToContent = SizeToContent.Height;
             WindowStartupLocation = WindowStartupLocation.CenterOwner;
             ResizeMode = ResizeMode.NoResize;
+            _atlas = atlas;
+            _atlasCell = atlasCell;
 
             _name.Text = name ?? "";
             _desc.Text = desc ?? "";
@@ -82,12 +111,38 @@ namespace Lycoris
             panel.Children.Add(_model);
             panel.Children.Add(new TextBlock
             {
-                Text = "e.g. y152000 — sets the BaseID to CRC32(model) and creates a blank face_icon " +
-                       "and medal_icon in the mod (data/menu/face_icon, data/menu/medal_icon) to replace later.",
+                Text = "e.g. y152000 — sets the BaseID to CRC32(model) and names the face_icon / medal_icon.",
                 TextWrapping = TextWrapping.Wrap,
                 Foreground = Theme.FgMuted,
                 Margin = new Thickness(0, 2, 0, 8)
             });
+
+            // --- optional creation assets, all written straight into the mod ---
+            panel.Children.Add(Section("Add model .bin (optional) — Sun/Moon *_model.bin, ported to a _p00.xc"));
+            panel.Children.Add(PathRow(_modelBin, "Bin…", (s, e) => BrowseBin(_modelBin)));
+
+            panel.Children.Add(Section("Model folder (optional) — copied to data/character/<model>"));
+            panel.Children.Add(PathRow(_modelFolder, "Folder…", (s, e) => BrowseFolder(_modelFolder)));
+
+            panel.Children.Add(Section("face_icon PNG (optional, ideally 64×64)"));
+            panel.Children.Add(PathRow(_faceIcon, "PNG…", (s, e) => BrowsePng(_faceIcon)));
+
+            panel.Children.Add(Section("medal_icon PNG (optional, ideally 64×64)"));
+            panel.Children.Add(PathRow(_medalIcon, "PNG…", (s, e) => BrowsePng(_medalIcon)));
+
+            panel.Children.Add(Section("Medal position in the face_icon.xi atlas (optional)"));
+            var atlasRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 2, 0, 8) };
+            atlasRow.Children.Add(new TextBlock { Text = "X", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 4, 0) });
+            atlasRow.Children.Add(_atlasX);
+            atlasRow.Children.Add(new TextBlock { Text = "Y", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 4, 0) });
+            atlasRow.Children.Add(_atlasY);
+            if (_atlas != null)
+            {
+                var pick = new Button { Content = "Choose in the atlas…", Padding = new Thickness(8, 2, 8, 2), Margin = new Thickness(10, 0, 0, 0) };
+                pick.Click += (s, e) => PickAtlas();
+                atlasRow.Children.Add(pick);
+            }
+            panel.Children.Add(atlasRow);
 
             panel.Children.Add(new TextBlock
             {
@@ -113,6 +168,12 @@ namespace Lycoris
                     DarkMessage.Show("Model must be a 7-char name like y152000 (or left empty).", Title);
                     return;
                 }
+                if ((FaceIconPng != null || MedalIconPng != null || !string.IsNullOrEmpty(ModelFolder) ||
+                     AtlasX.HasValue || AtlasY.HasValue) && string.IsNullOrWhiteSpace(_model.Text))
+                {
+                    DarkMessage.Show("Set the Model first — the icons / model files are named after it.", Title);
+                    return;
+                }
                 DialogResult = true;
             };
             buttons.Children.Add(ok);
@@ -121,6 +182,59 @@ namespace Lycoris
 
             Content = panel;
             _name.Focus();
+        }
+
+        private static TextBlock Section(string text) => new TextBlock
+        {
+            Text = text,
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = Theme.FgMuted,
+            Margin = new Thickness(0, 4, 0, 0)
+        };
+
+        private static FrameworkElement PathRow(TextBox tb, string browseText, RoutedEventHandler onBrowse)
+        {
+            var g = new Grid { Margin = new Thickness(0, 2, 0, 8) };
+            g.ColumnDefinitions.Add(new ColumnDefinition());
+            g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            Grid.SetColumn(tb, 0);
+            var b = new Button { Content = browseText, Padding = new Thickness(10, 2, 10, 2), Margin = new Thickness(6, 0, 0, 0) };
+            b.Click += onBrowse;
+            Grid.SetColumn(b, 1);
+            g.Children.Add(tb);
+            g.Children.Add(b);
+            return g;
+        }
+
+        private void BrowseFolder(TextBox target)
+        {
+            using (var d = new System.Windows.Forms.FolderBrowserDialog { Description = "Choose the model folder" })
+                if (d.ShowDialog() == System.Windows.Forms.DialogResult.OK) target.Text = d.SelectedPath;
+        }
+
+        private void BrowsePng(TextBox target)
+        {
+            var d = new Microsoft.Win32.OpenFileDialog { Filter = "PNG images|*.png", Title = "Choose a PNG" };
+            if (d.ShowDialog() == true) target.Text = d.FileName;
+        }
+
+        private void BrowseBin(TextBox target)
+        {
+            var d = new Microsoft.Win32.OpenFileDialog { Filter = "Pokemon model|*_model.bin;*.bin|All files|*.*", Title = "Choose a Sun/Moon *_model.bin" };
+            if (d.ShowDialog() == true) target.Text = d.FileName;
+        }
+
+        private void PickAtlas()
+        {
+            if (_atlas == null) return;
+            int cx = int.TryParse(_atlasX.Text, out int x) ? x : 0;
+            int cy = int.TryParse(_atlasY.Text, out int y) ? y : 0;
+            var p = new AtlasPickerWindow(this, _atlas, _atlasCell, cx, cy);
+            if (p.ShowDialog() == true)
+            {
+                _atlasX.Text = p.PickedX.ToString();
+                _atlasY.Text = p.PickedY.ToString();
+            }
         }
     }
 }

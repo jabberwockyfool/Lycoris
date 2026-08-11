@@ -66,9 +66,11 @@
     <Compile Include="Formats\T2bWriter.cs" />
     <Compile Include="Formats\T2bTree.cs" />
     <Compile Include="Formats\T2bEntryExtensions.cs" />
+    <Compile Include="Formats\CfgBinMerge.cs" />
     <Compile Include="Formats\Imgc.cs" />
     <Compile Include="Formats\XfFont.cs" />
     <Compile Include="Formats\Xpck.cs" />
+    <Compile Include="Formats\Res.cs" />
     <Compile Include="Formats\YwSave.cs" />
     <Compile Include="Yokai\IconNaming.cs" />
     <Compile Include="Yokai\YokaiSchema.cs" />
@@ -126,6 +128,10 @@
     <Compile Include="ChangeBaseIdDialog.cs" />
     <Compile Include="FolderPicker.cs" />
     <Compile Include="Project.cs" />
+    <Compile Include="ModMerger.cs" />
+    <Compile Include="ModMergerWindow.cs" />
+    <Compile Include="MinfEditorWindow.cs" />
+    <Compile Include="ModelEditorWindow.cs" />
     <Compile Include="App.xaml.cs">
       <DependentUpon>App.xaml</DependentUpon>
       <SubType>Code</SubType>

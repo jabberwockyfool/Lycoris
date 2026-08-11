@@ -102,6 +102,7 @@ namespace Lycoris
             toolbar.Children.Add(ToolButton("Import TOML…", ImportToml));
             toolbar.Children.Add(ToolButton("Export TOML…", ExportToml));
             toolbar.Children.Add(ToolButton("Compile…", CompileNpc));
+            toolbar.Children.Add(ToolButton("Get save's location", GetSaveLocation));
             DockPanel.SetDock(toolbar, Dock.Top);
 
             var left = new DockPanel { Width = 220, Margin = new Thickness(6) };
@@ -332,6 +333,51 @@ namespace Lycoris
         // ---------- actions ----------
 
         private NpcModel Selected => _list.SelectedItem as NpcModel;
+
+        /// <summary>Read the player's position from a save and drop it on the selected NPC. Asks whether to
+        /// use Nate's (male) or Hailey's (female) coordinates; remembers the save used (YwSave.Last*Path).</summary>
+        private void GetSaveLocation()
+        {
+            var npc = Selected;
+            if (npc == null) { DarkMessage.Show("Select an NPC first.", "Get save's location"); return; }
+
+            var who = DarkMessage.Show("Whose location from the save?\n\nYes = Nate (male)\nNo = Hailey (female)",
+                "Get save's location", MessageBoxButton.YesNoCancel);
+            if (who == MessageBoxResult.Cancel || who == MessageBoxResult.None) return;
+            bool female = who == MessageBoxResult.No;
+
+            string game = Formats.YwSave.LastGamePath;
+            if (string.IsNullOrEmpty(game) || !System.IO.File.Exists(game))
+            {
+                var dlg = new Microsoft.Win32.OpenFileDialog { Filter = "Yo-kai Watch save|*.yw|All files|*.*", Title = "Open a game{N}.yw save" };
+                if (dlg.ShowDialog() != true) return;
+                game = dlg.FileName;
+            }
+            string head = Formats.YwSave.LastHeadPath;
+            if (string.IsNullOrEmpty(head) || !System.IO.File.Exists(head))
+            {
+                string sib = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(game) ?? "", "head.yw");
+                if (System.IO.File.Exists(sib)) head = sib;
+                else
+                {
+                    var hd = new Microsoft.Win32.OpenFileDialog { Filter = "head.yw|head.yw|All files|*.*", Title = "Select head.yw" };
+                    if (hd.ShowDialog() != true) return;
+                    head = hd.FileName;
+                }
+            }
+            try
+            {
+                var save = Formats.YwSave.Load(game, head);
+                if (!save.TryReadPlayerLocation(female, out float c0, out float c1, out float c2))
+                { DarkMessage.Show("Could not read the player position (section 242) from this save.", "Get save's location"); return; }
+                npc.NpcX = c0; npc.NpcZ = c1; npc.NpcY = c2;   // POINT (X, height, horizontalZ) -> NpcX/NpcZ/NpcY
+                _status.Text = $"{(female ? "Hailey" : "Nate")}'s location → X={c0:0.##}  Z(height)={c1:0.##}  Y={c2:0.##}  (from {System.IO.Path.GetFileName(game)})";
+            }
+            catch (Exception ex)
+            {
+                DarkMessage.Show(ex.Message, "Get save's location", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
 
         private void CommitEdits()
         {

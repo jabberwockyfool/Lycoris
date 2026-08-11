@@ -43,6 +43,7 @@ namespace Lycoris.Formats
             var inner = new Ccm(key).Decrypt(game, 0x10, game.Length - 0x10, s.Nonce);
             s.Body = InnerProc(inner, false);
             s.LocateBox();
+            LastGamePath = gamePath; LastHeadPath = headPath;   // remember for other tools
             return s;
         }
 
@@ -167,6 +168,44 @@ namespace Lycoris.Formats
         }
 
         // ---------------------------------------------------------------- container walk
+
+        /// <summary>Last opened save paths (session-remembered so tools can re-use them).</summary>
+        public static string LastGamePath, LastHeadPath;
+
+        /// <summary>Read the player's stored location from section 0xF2 (242): the three consecutive
+        /// floats POINT = (X, height, horizontalZ) at 0x118 (Nate/male) or 0x178 (Hailey/female).
+        /// Offsets from Yo-kai Editor 3 (section242tab). Map to an NPC as NpcX=c0, NpcZ=c1, NpcY=c2.</summary>
+        public bool TryReadPlayerLocation(bool female, out float c0, out float c1, out float c2)
+        {
+            c0 = c1 = c2 = 0;
+            if (!TryFind0xF2(Body, out int off)) return false;
+            int b = off + (female ? 0x178 : 0x118);
+            if (b + 12 > Body.Length) return false;
+            c0 = BitConverter.ToSingle(Body, b);       // X          (POINT[0])
+            c1 = BitConverter.ToSingle(Body, b + 4);   // height     (POINT[1])  0x11C / 0x17C
+            c2 = BitConverter.ToSingle(Body, b + 8);   // horizontalZ(POINT[2])  0x120 / 0x180
+            return true;
+        }
+
+        /// <summary>Locate the top-level 0xF2 (242) section's data start (holds the player position).</summary>
+        private static bool TryFind0xF2(byte[] input, out int dataOff)
+        {
+            dataOff = 0;
+            int length = input.Length - 8;
+            int pos = 8;
+            while (pos + 8 <= length)
+            {
+                uint a = U16u(input, pos), b = U32(input, pos + 4);
+                pos += 8;
+                if (pos >= length) break;
+                if ((a & 0xFFFF) != 0xFFFE) return false;
+                int type = (int)(b & 0xFF), size = (int)(b >> 8);
+                if (type == 0xF2) { dataOff = pos; return true; }
+                if (type == 0xF3) { pos += size; }     // skip the sub-section group
+                else return false;
+            }
+            return false;
+        }
 
         private static bool TryFindSection(byte[] input, int wantType, out int dataOff, out int dataSize)
         {
