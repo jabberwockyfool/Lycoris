@@ -98,6 +98,11 @@ namespace Lycoris
                 _selected = BossPort.Read(_yw2Path.Text.Trim(), b.ModelId, _schema);
                 var sb = new System.Text.StringBuilder();
                 sb.AppendLine($"{_selected.Name}   (model {_selected.ModelId})");
+                var existingBoss = BossPort.FindExistingBoss(_db, _schema, _selected.ModelId);
+                if (existingBoss != null)
+                    sb.AppendLine($"↻ An existing boss (param 0x{(uint)existingBoss.ParamHash:X8}) uses this model — the port will OVERWRITE it in place, so the game's existing fight uses the new boss (no encounter re-wiring).");
+                else if (BossPort.ModelExistsInYw3(_db, _selected.ModelId, _schema))
+                    sb.AppendLine("⚠ This model already exists in YW3 — the port will REUSE its base (no duplicate).");
                 sb.AppendLine($"HP {_selected.Hp}   Str {_selected.Str}   Spr {_selected.Spr}   Def {_selected.Def}   Spd {_selected.Spd}");
                 sb.AppendLine($"Money {_selected.Money}   Exp {_selected.Exp}");
                 sb.AppendLine();
@@ -107,8 +112,8 @@ namespace Lycoris
                     sb.AppendLine($"   {a.Name,-24} {(a.Yw3Type < type.Length ? type[a.Yw3Type] : a.Yw3Type.ToString()),-10} power {a.Power}");
                 sb.AppendLine();
                 sb.AppendLine("Port will: create the yo-kai (Boss tribe, Unrank), copy the YW2 model, make each");
-                sb.AppendLine("attack a skill+command with the model's own animation, set BOSS_PARTS + a common_enc");
-                sb.AppendLine($"encounter (edy_{_selected.ModelId}_01). Refine skill types/animations afterwards if needed.");
+                sb.AppendLine("attack a skill+command with the model's own animation, set BOSS_PARTS ([21]=0, own");
+                sb.AppendLine($"moveset) + a common_enc encounter (edy_{_selected.ModelId}_01).");
                 _preview.Text = sb.ToString();
                 _portBtn.IsEnabled = true;
             }
