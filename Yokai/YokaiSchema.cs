@@ -82,6 +82,10 @@ namespace Lycoris.Yokai
         public int BP_Cmd0Index = 5;      // 8 attack (skill) ids at [5]..[12]
         public int BP_CmdCount = 8;
         public int BP_PhaseIndex = 21;    // BOSS_PHASE_INFO id (battle_boss_config)
+        // battle_boss_config: BOSS_PHASE_INFO (keyed by the id in BP_PhaseIndex) with per-phase children.
+        public string BossConfigFilePrefix = "battle_boss_config";
+        public string BossPhaseRecord = "BOSS_PHASE_INFO";
+        public string BossPhaseChildRecord = "BOSS_PHASE_INFO_PAHSE";
         // battle_command (YW3: 12 fields — [3]=anim clip id, [5]=SkillConfigID it plays, [1]=type).
         public string BattleCommandFilePrefix = "battle_command";
         public string BattleCommandRecord = "BATTLE_COMMAND_INFO";
