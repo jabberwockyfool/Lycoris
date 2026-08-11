@@ -39,6 +39,7 @@ namespace Lycoris
         private readonly Button _mergeBtn;
         private readonly Button _minfBtn;
         private readonly Button _modelBtn;
+        private readonly Button _transBtn;
 
         private MainWindow _yokaiWindow;
         private ItemEditorWindow _itemWindow;
@@ -117,10 +118,11 @@ namespace Lycoris
             _mergeBtn = EditorButton("Mod Merger", OpenModMerger);   // standalone: works without a loaded project
             _minfBtn = EditorButton("Minf Editor (.xc)", OpenMinfEditor);   // standalone: opens a .xc directly
             _modelBtn = EditorButton("Model Editor (.bin→.xc)", OpenModelEditor);   // standalone: ports a model .bin
+            _transBtn = EditorButton("Translation Helper", OpenTranslationHelper);   // standalone: diff vanilla vs mod text
 
             AddSection(root, "Characters", _yokaiBtn, _itemBtn, _skillBtn, _combineBtn, _bossBtn);
             AddSection(root, "World", _npcBtn, _mapBtn, _shopBtn, _warpBtn, _eventBtn, _dialogueBtn, _battleBtn);
-            AddSection(root, "Save & Tools", _saveBtn, _checkBtn, _mergeBtn, _minfBtn, _modelBtn);
+            AddSection(root, "Save & Tools", _saveBtn, _checkBtn, _mergeBtn, _minfBtn, _modelBtn, _transBtn);
 
             foreach (var b in new[] { _yokaiBtn, _itemBtn, _skillBtn, _combineBtn, _bossBtn, _npcBtn, _mapBtn, _shopBtn, _warpBtn,
                                       _eventBtn, _dialogueBtn, _battleBtn, _saveBtn, _checkBtn })
@@ -442,6 +444,11 @@ namespace Lycoris
         private void OpenModelEditor()
         {
             new ModelEditorWindow(this) { Owner = this }.Show();
+        }
+
+        private void OpenTranslationHelper()
+        {
+            new TranslationHelperWindow(this) { Owner = this }.Show();
         }
     }
 

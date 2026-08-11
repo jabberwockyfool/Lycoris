@@ -71,6 +71,7 @@
     <Compile Include="Formats\XfFont.cs" />
     <Compile Include="Formats\Xpck.cs" />
     <Compile Include="Formats\Res.cs" />
+    <Compile Include="Formats\ArabicShaper.cs" />
     <Compile Include="Formats\YwSave.cs" />
     <Compile Include="Yokai\IconNaming.cs" />
     <Compile Include="Yokai\YokaiSchema.cs" />
@@ -132,6 +133,7 @@
     <Compile Include="ModMergerWindow.cs" />
     <Compile Include="MinfEditorWindow.cs" />
     <Compile Include="ModelEditorWindow.cs" />
+    <Compile Include="TranslationHelperWindow.cs" />
     <Compile Include="App.xaml.cs">
       <DependentUpon>App.xaml</DependentUpon>
       <SubType>Code</SubType>
