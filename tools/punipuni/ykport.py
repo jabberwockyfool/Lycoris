@@ -199,8 +199,35 @@ def _relabel_res(se, res_bytes, id_remap):
     return _l5_store(bytes(dec))
 
 
+def _trim_res_mtninf(se, res_bytes, keep_ids):
+    """Keep only the RES MTNINF (type 400) split entries whose 4-byte id is in keep_ids,
+    reordered to the front in keep_ids order, and set the section Count to len(kept) so the
+    game registers ONLY those animations. Size-preserving: the trailing (now-ignored) entries
+    stay in place, so no offset in the RES needs recomputing. Re-emits uncompressed."""
+    MTNINF_TYPE = 400
+    dec = bytearray(se.xpck.compressor.decompress(res_bytes))
+    # ResHeader lives at offset 8: <H h H H H H> = strOff, unk, matOff, matCnt, nodeOff, nodeCnt
+    _so, _unk, _mto, _mtc, node_off_raw, node_cnt = struct.unpack_from("<HhHHHH", dec, 8)
+    node_off = node_off_raw << 2
+    for i in range(node_cnt):
+        pos = node_off + i * 8
+        data_off_raw, count, typ, length = struct.unpack_from("<HHHH", dec, pos)
+        if typ != MTNINF_TYPE:
+            continue
+        data_off = data_off_raw << 2
+        entries = [bytes(dec[data_off + j * length: data_off + j * length + length]) for j in range(count)]
+        keep_set = set(keep_ids)
+        kept = [e for kid in keep_ids for e in entries if e[:4] == kid]
+        rest = [e for e in entries if e[:4] not in keep_set]
+        blob = b"".join(kept + rest)
+        dec[data_off: data_off + len(blob)] = blob            # same length, reordered
+        struct.pack_into("<H", dec, pos + 2, len(kept))       # Count -> kept only
+        break
+    return _l5_store(bytes(dec))
+
+
 def package_xc(se, donor_path, combined_mtn2, slot_ranges, fallback_range, out_path,
-               id_remap=None):
+               id_remap=None, keep_slots=None):
     """
     Donor-template packaging: open a vanilla _pXX.xc, swap in our combined mtn2,
     and repoint every .mtninf's frame range to OUR timeline. RES.bin and .cmn are
@@ -211,15 +238,22 @@ def package_xc(se, donor_path, combined_mtn2, slot_ranges, fallback_range, out_p
     id_remap: optional {old 4-byte id -> new 4-byte id}. When set, each donor
       mtninf's split id is rewritten and the RES ids are relabelled too — this is
       how a p84 is made from a p20 donor ("same archive, different hex ids").
+    keep_slots: optional ordered list of 4-byte slot ids. When set, ONLY the mtninf
+      whose (post-remap) id is in this list are kept — the donor's extra splits (e.g. a
+      p20 donor that also carries p10/p21 slots) are dropped, the kept mtninf are
+      renumbered 000.., and the RES MTNINF section is trimmed to match. This makes a
+      clean _p20 that contains only the real P20 action animations.
     Returns (n_matched, n_fallback, list_of_unmatched_slot_hex).
     """
     files = dict(se.xpck.open_file(donor_path))
     mkey = _mtn2_key(files)
     files[mkey] = combined_mtn2  # our combined animation, named like the donor's
 
-    matched = fallback = 0
+    keep_set = set(keep_slots) if keep_slots else None
+    matched = fallback = dropped = 0
     unmatched = []
-    for k in list(files.keys()):
+    kept_mtninf = []   # (original_name, patched_bytes, sid) in donor order, only those we keep
+    for k in sorted(files.keys()):
         if not k.lower().endswith(".mtninf"):
             continue
         rec = bytearray(files[k])
@@ -227,6 +261,10 @@ def package_xc(se, donor_path, combined_mtn2, slot_ranges, fallback_range, out_p
         new_sid = id_remap.get(sid, sid) if id_remap else sid
         if new_sid != sid:
             rec[MINF_SPLIT_ID:MINF_SPLIT_ID + 4] = new_sid
+        if keep_set is not None and new_sid not in keep_set:
+            del files[k]                 # drop non-P20 splits (p10 / p21 the donor carried)
+            dropped += 1
+            continue
         rng = slot_ranges.get(new_sid) or slot_ranges.get(sid)
         if rng is None:
             rng = fallback_range
@@ -239,11 +277,21 @@ def package_xc(se, donor_path, combined_mtn2, slot_ranges, fallback_range, out_p
         struct.pack_into("<i", rec, MINF_FEND, int(end))
         struct.pack_into("<f", rec, MINF_SPEED, float(speed))
         files[k] = bytes(rec)
+        kept_mtninf.append((k, bytes(rec), new_sid))
 
-    if id_remap:
-        res_key = next((k for k in files if k.lower() == "res.bin"), None)
-        if res_key:
-            files[res_key] = _relabel_res(se, files[res_key], id_remap)
+    # Renumber the kept mtninf sequentially (000.mtninf..) so the archive looks native.
+    if keep_set is not None:
+        for k, _, _ in kept_mtninf:
+            del files[k]
+        for i, (_, rec, _) in enumerate(kept_mtninf):
+            files["%03d.mtninf" % i] = rec
+
+    res_key = next((k for k in files if k.lower() == "res.bin"), None)
+    if res_key and id_remap:
+        files[res_key] = _relabel_res(se, files[res_key], id_remap)
+    if res_key and keep_set is not None:
+        # keep RES MTNINF order aligned with the kept mtninf files (donor order)
+        files[res_key] = _trim_res_mtninf(se, files[res_key], [sid for _, _, sid in kept_mtninf])
 
     se.xpck.pack_archive(files, out_path)
     return matched, fallback, unmatched
