@@ -25,6 +25,10 @@ namespace Lycoris
         private readonly TextBox _donor = Field();
         private readonly TextBox _out = Field();
         private readonly TextBox _seRoot = Field();
+        private readonly TextBox _basic = Field();
+        private readonly TextBox _fight = Field();
+        private readonly TextBox _txt = Field();
+        private readonly TextBox _mid = Field();
         private readonly ObservableCollection<MeshRow> _meshes = new ObservableCollection<MeshRow>();
         private readonly DataGrid _grid;
         private readonly TextBox _log = new TextBox
@@ -47,8 +51,8 @@ namespace Lycoris
 
             _script = FindScript("tools\\pkmnport\\lycoris_model.py");
             _seRoot.Text = @"E:\Yo-kai watch Mods\studio_eleven";
-            if (modelBin != null) { _model.Text = modelBin; AutoFillFromModel(); }
             if (outXc != null) _out.Text = outXc;
+            if (modelBin != null) { _model.Text = modelBin; AutoFillFromModel(); }
 
             var root = new DockPanel { Margin = new Thickness(14) };
 
@@ -63,6 +67,16 @@ namespace Lycoris
             scanBar.Children.Add(Btn("Scan meshes", Scan));
             scanBar.Children.Add(Btn("Build .xc", Build, 12));
             top.Children.Add(scanBar);
+
+            top.Children.Add(SectionLabel("Animations (optional) — from *_anim.bin → p10 / p20"));
+            top.Children.Add(FileRow("basic_anim .bin (→ p10)", _basic, "Anim|*.bin|All files|*.*", null));
+            top.Children.Add(FileRow("fight_anim .bin (→ p20)", _fight, "Anim|*.bin|All files|*.*", null));
+            top.Children.Add(FileRow("p20 mtninf TXT (optional)", _txt, "Text|*.txt|All files|*.*", null));
+            top.Children.Add(Row("Model ID (e.g. y152000)", _mid));
+            var animBar = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 6, 0, 6) };
+            animBar.Children.Add(Btn("Build animations", BuildAnim));
+            top.Children.Add(animBar);
+
             DockPanel.SetDock(top, Dock.Top);
             root.Children.Add(top);
 
@@ -99,7 +113,19 @@ namespace Lycoris
             }
             if (string.IsNullOrWhiteSpace(_out.Text))
                 _out.Text = Path.Combine(Path.GetDirectoryName(m) ?? "", Path.GetFileNameWithoutExtension(m).Replace("_model", "") + "_p00.xc");
+            if (string.IsNullOrWhiteSpace(_mid.Text))
+            {
+                // Model ID from the output filename (…_p00.xc) if it already looks like a YW3 id.
+                string stem = Path.GetFileNameWithoutExtension(_out.Text).Replace("_p00", "");
+                if (stem.Length > 0) _mid.Text = stem;
+            }
         }
+
+        private static FrameworkElement SectionLabel(string text) => new TextBlock
+        {
+            Text = text, Foreground = Theme.FgMuted, FontWeight = FontWeights.SemiBold,
+            Margin = new Thickness(0, 10, 0, 2),
+        };
 
         private void Scan()
         {
@@ -136,6 +162,30 @@ namespace Lycoris
             Log("Building…");
             var r = RunPy(sb.ToString());
             Log(r.code == 0 ? "✔ " + r.outp.Trim() : "✖ Build failed:\n" + (r.err.Length > 0 ? r.err : r.outp));
+        }
+
+        private void BuildAnim()
+        {
+            if (_script == null) { Log("lycoris_model.py not found."); return; }
+            if (string.IsNullOrWhiteSpace(_model.Text) || !File.Exists(_model.Text.Trim())) { Log("Set a valid Model .bin (skeleton for the anims)."); return; }
+            if (string.IsNullOrWhiteSpace(_basic.Text) && string.IsNullOrWhiteSpace(_fight.Text)) { Log("Set basic_anim and/or fight_anim .bin."); return; }
+            string mid = _mid.Text.Trim();
+            if (mid.Length == 0) { Log("Set the Model ID (e.g. y152000)."); return; }
+            string outDir = !string.IsNullOrWhiteSpace(_out.Text)
+                ? Path.GetDirectoryName(_out.Text.Trim())
+                : (Path.GetDirectoryName(_model.Text.Trim()) ?? "");
+            if (string.IsNullOrWhiteSpace(outDir)) { Log("Set an Output .xc (its folder holds the anims)."); return; }
+
+            var sb = new StringBuilder();
+            sb.Append("--anim --model \"").Append(_model.Text.Trim()).Append("\"");
+            if (!string.IsNullOrWhiteSpace(_basic.Text)) sb.Append(" --basic \"").Append(_basic.Text.Trim()).Append("\"");
+            if (!string.IsNullOrWhiteSpace(_fight.Text)) sb.Append(" --fight \"").Append(_fight.Text.Trim()).Append("\"");
+            if (!string.IsNullOrWhiteSpace(_txt.Text)) sb.Append(" --txt \"").Append(_txt.Text.Trim()).Append("\"");
+            sb.Append(" --out-dir \"").Append(outDir).Append("\" --mid ").Append(mid);
+            if (!string.IsNullOrWhiteSpace(_seRoot.Text)) sb.Append(" --se-root \"").Append(_seRoot.Text.Trim()).Append("\"");
+            Log("Building animations…");
+            var r = RunPy(sb.ToString());
+            Log(r.code == 0 ? "✔ " + r.outp.Trim() : "✖ Anim build failed:\n" + (r.err.Length > 0 ? r.err : r.outp));
         }
 
         private bool Preflight(bool needDonor)
