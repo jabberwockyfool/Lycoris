@@ -195,7 +195,7 @@ namespace Lycoris
             if (mapId.Length == 0) { DarkMessage.Show("Enter a map id.", "Add warp"); return; }
             try
             {
-                var w = _ws.AddWarp(mapId, 0, 0, 0, 0);
+                var w = _ws.AddWarp(mapId, 0, 0, 0, 180);   // mirapo faces the player by default
                 _view.Refresh();
                 _list.SelectedItem = w;
                 _list.ScrollIntoView(w);
