@@ -144,7 +144,10 @@ namespace Lycoris.Yokai
             TextFile = FindNewest(folder, Schema.TextFilePrefix);
             DescFile = FindNewest(folder, Schema.DescFilePrefix);
             AddmemberTextFile = FindNewest(folder, Schema.AddmemberTextFilePrefix);
-            ScaleFile = FindNewest(folder, Schema.ScaleFilePrefix);
+            // chara_scale is editable, but resolve from the reference too: a mod that ships no
+            // chara_scale still gets the game's scale records loaded, and SaveAll mirrors the file
+            // into the mod (and creates a record) the moment a scale curve is actually edited.
+            ScaleFile = FindResolver(folder, referenceFolder, Schema.ScaleFilePrefix, null);
 
             // Read-only resolvers: mod folder, else reference folder.
             SkillTextFile = FindResolver(folder, referenceFolder, Schema.SkillTextFilePrefix, "desc");
@@ -250,6 +253,23 @@ namespace Lycoris.Yokai
         /// medals). Preferred as the working atlas so the mod's medals are shown/edited, not the reference.</summary>
         public string ModFaceAtlasFile =>
             _faceIconDirs.Where(IsUnderMod).Select(d => Path.Combine(d, "face_icon.xi")).FirstOrDefault(File.Exists);
+
+        /// <summary>Where the mod's face_icon.xi atlas must be written when a medal is edited: the mod's own
+        /// atlas if it already ships one, else (mod)/include/data/menu/face_icon/face_icon.xi — the same
+        /// face_icon folder the per-yo-kai icons (which work in-game) are written to. Creates the folder.</summary>
+        public string ModFaceAtlasWriteTarget
+        {
+            get
+            {
+                string existing = ModFaceAtlasFile;
+                if (existing != null) return existing;
+                string dir = ModFaceIconWriteDir;
+                if (dir == null) return null;
+                Directory.CreateDirectory(dir);
+                if (!_faceIconDirs.Contains(dir)) _faceIconDirs.Insert(0, dir);
+                return Path.Combine(dir, "face_icon.xi");
+            }
+        }
 
         /// <summary>The item icon atlas (item_icon/item_icon.xi) — mod preferred, else reference — or null.</summary>
         public string ItemAtlasFile =>
@@ -1642,10 +1662,32 @@ namespace Lycoris.Yokai
 
             // Scale records are keyed by BaseHash and can be shared — write only changed values,
             // preserving each slot's original int/float type so unedited files stay byte-identical.
+            // A yo-kai that shipped no CHARA_SCALE_INFO record (humans, newly-created) gets one
+            // created on first scale edit, cloned from an existing record, so the change persists.
             int sv = 0;
-            foreach (var y in Yokai.Where(y => y.ScaleEntry != null))
-                for (int i = 1; i <= 7; i++)
-                    if (y.IsNew || y.ScaleChanged(i)) sv += SetScaleValue(y.ScaleEntry, i, y.GetScale(i));
+            if (ScaleData != null)
+            {
+                var scaleTemplate = ScaleData.Records(Schema.ScaleRecord).FirstOrDefault();
+                foreach (var y in Yokai)
+                {
+                    if (y.ScaleEntry != null)
+                    {
+                        for (int i = 1; i <= 7; i++)
+                            if (y.IsNew || y.ScaleChanged(i)) sv += SetScaleValue(y.ScaleEntry, i, y.GetScale(i));
+                        continue;
+                    }
+                    // No record yet: only create one if a scale value was actually edited.
+                    bool edited = false;
+                    for (int i = 1; i <= 7; i++) if (y.ScaleChanged(i)) { edited = true; break; }
+                    if (!edited || scaleTemplate == null) continue;
+                    var scaleTpl = scaleTemplate.Clone();
+                    SetIntForce(scaleTpl, Schema.Scale_BaseHashIndex, y.BaseHash);
+                    InsertIntoGroup(ScaleData, Schema.ScaleGroupBegin, Schema.ScaleGroupEnd, scaleTpl);
+                    y.ScaleEntry = scaleTpl;
+                    for (int i = 1; i <= 7; i++) sv += SetScaleValue(scaleTpl, i, y.GetScale(i));
+                    sv++;   // ensure the file is flushed even if every slot equalled the template
+                }
+            }
 
             // Evolution records live in chara_param; write only rows that changed theirs.
             int ev = 0;
@@ -1701,7 +1743,11 @@ namespace Lycoris.Yokai
             if (TextData != null) T2bWriter.WriteFile(TextData, TextFile);
             if (DescData != null) T2bWriter.WriteFile(DescData, DescFile);
             if (bfv > 0 && AddmemberTextData != null && IsUnderMod(AddmemberTextFile)) T2bWriter.WriteFile(AddmemberTextData, AddmemberTextFile);
-            if (ScaleData != null) T2bWriter.WriteFile(ScaleData, ScaleFile);
+            if (sv > 0 && ScaleData != null)
+            {
+                if (!IsUnderMod(ScaleFile)) ScaleFile = MirrorToMod(ScaleFile);
+                if (ScaleFile != null) T2bWriter.WriteFile(ScaleData, ScaleFile);
+            }
             if (hsSave) T2bWriter.WriteFile(HackslashData, HackslashFile);
             if (btSave) T2bWriter.WriteFile(BattleData, BattleFile);
 
@@ -1761,7 +1807,7 @@ namespace Lycoris.Yokai
         /// persisted on the next <see cref="SaveAll"/>. Returns the created <see cref="YokaiInfo"/>.
         /// </summary>
         public YokaiInfo AddYokai(string name, string description, int tribe = 0, int rank = 0,
-            YokaiInfo statsTemplate = null, string model = null)
+            YokaiInfo statsTemplate = null, string model = null, bool reuseExistingBase = false)
         {
             if (BaseData == null || TextData == null || DescData == null)
                 throw new InvalidOperationException(
@@ -1786,32 +1832,53 @@ namespace Lycoris.Yokai
             SetIntForce(paramTpl, Schema.Param_BaseHashIndex, baseHash);
             InsertIntoGroup(ParamData, Schema.ParamGroupBegin, Schema.ParamGroupEnd, paramTpl);
 
-            // --- base record ---
-            var baseTpl = BaseData.Records(Schema.BaseYokaiRecord).First().Clone();
-            SetIntForce(baseTpl, Schema.Base_BaseHashIndex, baseHash);
-            SetIntForce(baseTpl, Schema.Base_NameHashIndex, nameHash);
-            SetIntForce(baseTpl, Schema.Base_DescriptionHashIndex, descHash);
-            SetIntForce(baseTpl, Schema.Base_RankIndex, rank);
-            SetIntForce(baseTpl, Schema.Base_TribeIndex, tribe);
-            if (hasModel)
+            // --- base record: reuse the model's existing base (no duplicate BaseID) when asked and present ---
+            T2bEntry existingBase = (reuseExistingBase && hasModel)
+                ? BaseData.Records(Schema.BaseYokaiRecord).FirstOrDefault(e => (e.GetInt(Schema.Base_BaseHashIndex) ?? 0) == baseHash)
+                : null;
+            T2bEntry baseTpl, nounTpl, textTpl;
+            if (existingBase != null)
             {
-                SetIntForce(baseTpl, Schema.Base_FileNamePrefixIndex, mp);
-                SetIntForce(baseTpl, Schema.Base_FileNameNumberIndex, mn);
-                SetIntForce(baseTpl, Schema.Base_FileNameVariantIndex, mv);
+                // Share the existing base + its name/description; the new param already points at this baseHash.
+                baseTpl = existingBase;
+                nameHash = existingBase.GetInt(Schema.Base_NameHashIndex) ?? nameHash;
+                descHash = existingBase.GetInt(Schema.Base_DescriptionHashIndex) ?? descHash;
+                rank = existingBase.GetInt(Schema.Base_RankIndex) ?? rank;
+                tribe = existingBase.GetInt(Schema.Base_TribeIndex) ?? tribe;
+                mp = existingBase.GetInt(Schema.Base_FileNamePrefixIndex) ?? mp;
+                mn = existingBase.GetInt(Schema.Base_FileNameNumberIndex) ?? mn;
+                mv = existingBase.GetInt(Schema.Base_FileNameVariantIndex) ?? mv;
+                nounTpl = TextData.Records(Schema.NounRecord).FirstOrDefault(e => (e.FirstIntKey() ?? 0) == nameHash);
+                textTpl = DescData.Records(Schema.DescRecord).FirstOrDefault(e => (e.FirstIntKey() ?? 0) == descHash);
+                name = nounTpl?.FirstText() ?? name;
+                description = textTpl?.FirstText() ?? description;
             }
-            InsertIntoGroup(BaseData, Schema.BaseGroupBegin, Schema.BaseGroupEnd, baseTpl);
+            else
+            {
+                baseTpl = BaseData.Records(Schema.BaseYokaiRecord).First().Clone();
+                SetIntForce(baseTpl, Schema.Base_BaseHashIndex, baseHash);
+                SetIntForce(baseTpl, Schema.Base_NameHashIndex, nameHash);
+                SetIntForce(baseTpl, Schema.Base_DescriptionHashIndex, descHash);
+                SetIntForce(baseTpl, Schema.Base_RankIndex, rank);
+                SetIntForce(baseTpl, Schema.Base_TribeIndex, tribe);
+                if (hasModel)
+                {
+                    SetIntForce(baseTpl, Schema.Base_FileNamePrefixIndex, mp);
+                    SetIntForce(baseTpl, Schema.Base_FileNameNumberIndex, mn);
+                    SetIntForce(baseTpl, Schema.Base_FileNameVariantIndex, mv);
+                }
+                InsertIntoGroup(BaseData, Schema.BaseGroupBegin, Schema.BaseGroupEnd, baseTpl);
 
-            // --- name record (NOUN_INFO) ---
-            var nounTpl = TextData.Records(Schema.NounRecord).First().Clone();
-            SetIntForce(nounTpl, Schema.NounKeyIndex, nameHash);
-            SetText(nounTpl, Schema.NounTextIndex, name);
-            InsertIntoGroup(TextData, Schema.NounGroupBegin, Schema.NounGroupEnd, nounTpl);
+                nounTpl = TextData.Records(Schema.NounRecord).First().Clone();
+                SetIntForce(nounTpl, Schema.NounKeyIndex, nameHash);
+                SetText(nounTpl, Schema.NounTextIndex, name);
+                InsertIntoGroup(TextData, Schema.NounGroupBegin, Schema.NounGroupEnd, nounTpl);
 
-            // --- description record (TEXT_INFO) ---
-            var textTpl = DescData.Records(Schema.DescRecord).First().Clone();
-            SetIntForce(textTpl, Schema.DescKeyIndex, descHash);
-            SetText(textTpl, Schema.DescTextIndex, description ?? "");
-            InsertIntoGroup(DescData, Schema.DescGroupBegin, Schema.DescGroupEnd, textTpl);
+                textTpl = DescData.Records(Schema.DescRecord).First().Clone();
+                SetIntForce(textTpl, Schema.DescKeyIndex, descHash);
+                SetText(textTpl, Schema.DescTextIndex, description ?? "");
+                InsertIntoGroup(DescData, Schema.DescGroupBegin, Schema.DescGroupEnd, textTpl);
+            }
 
             var y = new YokaiInfo
             {
