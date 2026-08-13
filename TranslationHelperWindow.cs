@@ -23,9 +23,22 @@ namespace Lycoris
     {
         private readonly TextBox _vanilla = Field();
         private readonly TextBox _mod = Field();
+        private readonly ComboBox _lang = new ComboBox { Margin = new Thickness(0, 2, 6, 2) };
         private readonly ObservableCollection<TransRow> _rows = new ObservableCollection<TransRow>();
         private readonly Dictionary<string, T2bFile> _modFiles = new Dictionary<string, T2bFile>();  // path -> parsed
         private readonly CheckBox _shape;
+
+        /// <summary>YW3 per-language cfg.bin suffixes. Arabic is a custom locale that ships over the English
+        /// files, so it maps to "_en" and turns on shaping.</summary>
+        private static readonly (string Label, string Suffix, bool Arabic)[] Langs =
+        {
+            ("Français  (_fr)", "_fr", false),
+            ("English  (_en)", "_en", false),
+            ("Deutsch  (_de)", "_de", false),
+            ("Español  (_es)", "_es", false),
+            ("Italiano  (_it)", "_it", false),
+            ("العربية Arabic  (custom → _en)", "_en", true),
+        };
         private readonly DataGrid _grid;
         private readonly TextBlock _status = new TextBlock { Foreground = Theme.FgMuted, Margin = new Thickness(0, 8, 0, 0), TextWrapping = TextWrapping.Wrap };
 
@@ -42,13 +55,18 @@ namespace Lycoris
             var top = new StackPanel();
             top.Children.Add(new TextBlock
             {
-                Text = "Compare a mod against a vanilla YW3 dump — every string the mod added/changed shows up to translate.",
+                Text = "Compare a mod against a vanilla YW3 dump — every string the mod added/changed shows up to translate. Point both at the game's \"data\" folder; pick the language whose cfg.bin you're translating.",
                 Foreground = Theme.FgMuted, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 8),
             });
-            top.Children.Add(FolderRow("Vanilla YW3 dump", _vanilla));
-            top.Children.Add(FolderRow("Mod folder", _mod));
+            top.Children.Add(FolderRow("Vanilla \"data\" folder", _vanilla));
+            top.Children.Add(FolderRow("Mod \"data\" folder", _mod));
 
-            _shape = new CheckBox { Content = "Shape Arabic on Apply (logical → presentation forms + RTL)", Foreground = Theme.Fg, IsChecked = true, Margin = new Thickness(0, 8, 0, 0) };
+            foreach (var l in Langs) _lang.Items.Add(l.Label);
+            _lang.SelectedIndex = 0;
+            _lang.SelectionChanged += (s, e) => { if (Langs[_lang.SelectedIndex].Arabic) _shape.IsChecked = true; };
+            top.Children.Add(LabeledRow("Language", _lang));
+
+            _shape = new CheckBox { Content = "Shape Arabic on Apply (logical → presentation forms + RTL)", Foreground = Theme.Fg, IsChecked = false, Margin = new Thickness(0, 8, 0, 0) };
             top.Children.Add(_shape);
 
             var bar = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 8, 0, 6) };
@@ -77,7 +95,7 @@ namespace Lycoris
             root.Children.Add(_grid);
 
             Content = root;
-            _status.Text = "Pick a vanilla dump + a mod folder, then Compare.";
+            _status.Text = "Pick the vanilla + mod \"data\" folders and a language, then Compare.";
         }
 
         private void Compare()
@@ -86,13 +104,16 @@ namespace Lycoris
             string modRoot = _mod.Text.Trim(), vanRoot = _vanilla.Text.Trim();
             if (!Directory.Exists(modRoot) || !Directory.Exists(vanRoot)) { _status.Text = "Set both folders (they must exist)."; return; }
 
+            var lang = Langs[_lang.SelectedIndex < 0 ? 0 : _lang.SelectedIndex];
             int scanned = 0, added = 0;
             foreach (var mf in Directory.EnumerateFiles(modRoot, "*.cfg.bin", SearchOption.AllDirectories))
             {
+                string rel = mf.Substring(modRoot.Length).TrimStart('\\', '/');
+                if (!IsUnderData(modRoot, rel)) continue;               // only game text under a "data" folder
+                if (!MatchesLang(mf, lang.Suffix)) continue;            // only this language's localized cfg.bin
                 T2bFile mod;
                 try { mod = T2bReader.ReadFile(mf); } catch { continue; }
                 scanned++;
-                string rel = mf.Substring(modRoot.Length).TrimStart('\\', '/');
                 string vf = Path.Combine(vanRoot, rel);
                 var vanStrings = new HashSet<string>(StringComparer.Ordinal);
                 if (File.Exists(vf))
@@ -116,7 +137,27 @@ namespace Lycoris
                         added++;
                     }
             }
-            _status.Text = $"Scanned {scanned} .cfg.bin — {added} added/changed string(s). Fill Translation, then Apply.";
+            _status.Text = scanned == 0
+                ? $"No {lang.Suffix}.cfg.bin found under a \"data\" folder. Check the folder and language."
+                : $"Scanned {scanned} {lang.Suffix}.cfg.bin — {added} added/changed string(s). Fill Translation, then Apply.";
+        }
+
+        /// <summary>True if the file lives under a "data" folder (the selected root is that folder, or a
+        /// "data" segment appears in its relative path).</summary>
+        private static bool IsUnderData(string root, string rel)
+        {
+            if (Path.GetFileName(root.TrimEnd('\\', '/')).Equals("data", StringComparison.OrdinalIgnoreCase)) return true;
+            foreach (var seg in rel.Split('\\', '/'))
+                if (seg.Equals("data", StringComparison.OrdinalIgnoreCase)) return true;
+            return false;
+        }
+
+        /// <summary>True if the cfg.bin's name carries this language suffix (e.g. foo_fr.cfg.bin for "_fr").</summary>
+        private static bool MatchesLang(string path, string suffix)
+        {
+            string name = Path.GetFileName(path);
+            if (name.EndsWith(".cfg.bin", StringComparison.OrdinalIgnoreCase)) name = name.Substring(0, name.Length - ".cfg.bin".Length);
+            return name.EndsWith(suffix, StringComparison.OrdinalIgnoreCase);
         }
 
         private void Apply()
@@ -237,6 +278,16 @@ namespace Lycoris
             var b = new Button { Content = text, MinWidth = 110, MinHeight = 30, Margin = new Thickness(left, 0, 0, 0) };
             b.Click += (s, e) => onClick();
             return b;
+        }
+        private FrameworkElement LabeledRow(string label, FrameworkElement control)
+        {
+            var g = new Grid { Margin = new Thickness(0, 6, 0, 0) };
+            g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(150) });
+            g.ColumnDefinitions.Add(new ColumnDefinition());
+            var lbl = new TextBlock { Text = label, Foreground = Theme.FgMuted, VerticalAlignment = VerticalAlignment.Center };
+            Grid.SetColumn(lbl, 0); Grid.SetColumn(control, 1);
+            g.Children.Add(lbl); g.Children.Add(control);
+            return g;
         }
         private FrameworkElement FolderRow(string label, TextBox box)
         {
