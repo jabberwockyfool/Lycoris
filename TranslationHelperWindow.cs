@@ -1,35 +1,35 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.ComponentModel;
 using System.IO;
 using System.Linq;
-using System.Text;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Data;
-using System.Windows.Media;
 using Lycoris.Formats;
+using Lycoris.Yokai;
 
 namespace Lycoris
 {
     /// <summary>
-    /// Translation Helper — diffs a mod's text against a vanilla YW3 dump and surfaces every string the mod
-    /// ADDED or CHANGED (per .cfg.bin, by relative path), so you translate only the new content. Optional
-    /// Arabic shaping (logical → presentation forms + RTL, via <see cref="ArabicShaper"/>) is applied on write.
-    /// Standalone (no loaded project). Font-glyph injection (the .xf side) is a separate step.
+    /// Translation Helper — diffs a mod's text against a vanilla YW3 dump and lists every cfg.bin the mod ADDED
+    /// or CHANGED strings in (per file, matched by relative path), for the chosen ORIGINAL language. Click a file
+    /// to open it in the Dialogue Editor with only those added/changed lines, translate them, and Save — which
+    /// writes the TRANSLATION language's cfg.bin (Arabic is a custom locale that ships over _en and is shaped).
+    /// Point both fields at the game's "data" folder. Standalone (no loaded project).
     /// </summary>
     public sealed class TranslationHelperWindow : Window
     {
         private readonly TextBox _vanilla = Field();
         private readonly TextBox _mod = Field();
-        private readonly ComboBox _lang = new ComboBox { Margin = new Thickness(0, 2, 6, 2) };
-        private readonly ObservableCollection<TransRow> _rows = new ObservableCollection<TransRow>();
-        private readonly Dictionary<string, T2bFile> _modFiles = new Dictionary<string, T2bFile>();  // path -> parsed
-        private readonly CheckBox _shape;
+        private readonly TextBox _out = Field();
+        private readonly ComboBox _origLang = new ComboBox { Margin = new Thickness(0, 2, 6, 2) };
+        private readonly ComboBox _transLang = new ComboBox { Margin = new Thickness(0, 2, 6, 2) };
+        private readonly ObservableCollection<FileEntry> _files = new ObservableCollection<FileEntry>();
+        private readonly ListBox _list;
+        private readonly TextBlock _status = new TextBlock { Foreground = Theme.FgMuted, Margin = new Thickness(0, 8, 0, 0), TextWrapping = TextWrapping.Wrap };
 
         /// <summary>YW3 per-language cfg.bin suffixes. Arabic is a custom locale that ships over the English
-        /// files, so it maps to "_en" and turns on shaping.</summary>
+        /// files, so as a TRANSLATION target it maps to "_en" and turns on shaping.</summary>
         private static readonly (string Label, string Suffix, bool Arabic)[] Langs =
         {
             ("Français  (_fr)", "_fr", false),
@@ -39,14 +39,12 @@ namespace Lycoris
             ("Italiano  (_it)", "_it", false),
             ("العربية Arabic  (custom → _en)", "_en", true),
         };
-        private readonly DataGrid _grid;
-        private readonly TextBlock _status = new TextBlock { Foreground = Theme.FgMuted, Margin = new Thickness(0, 8, 0, 0), TextWrapping = TextWrapping.Wrap };
 
         public TranslationHelperWindow(Window owner)
         {
             Owner = owner;
             Title = "Lycoris — Translation Helper";
-            Width = 940; Height = 660;
+            Width = 860; Height = 620;
             Background = Theme.WindowBg;
             WindowStartupLocation = WindowStartupLocation.CenterOwner;
 
@@ -55,26 +53,24 @@ namespace Lycoris
             var top = new StackPanel();
             top.Children.Add(new TextBlock
             {
-                Text = "Compare a mod against a vanilla YW3 dump — every string the mod added/changed shows up to translate. Point both at the game's \"data\" folder; pick the language whose cfg.bin you're translating.",
+                Text = "Compare a mod against a vanilla YW3 dump — every cfg.bin the mod added/changed text in shows up. " +
+                       "Point both at the game's \"data\" folder, pick the Original (what you're translating from) and Translation languages, then Compare. Click a file to translate its added lines in the Dialogue Editor.",
                 Foreground = Theme.FgMuted, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 8),
             });
             top.Children.Add(FolderRow("Vanilla \"data\" folder", _vanilla));
             top.Children.Add(FolderRow("Mod \"data\" folder", _mod));
+            top.Children.Add(FolderRow("Translated mod (output)", _out));
 
-            foreach (var l in Langs) _lang.Items.Add(l.Label);
-            _lang.SelectedIndex = 0;
-            _lang.SelectionChanged += (s, e) => { if (Langs[_lang.SelectedIndex].Arabic) _shape.IsChecked = true; };
-            top.Children.Add(LabeledRow("Language", _lang));
-
-            _shape = new CheckBox { Content = "Shape Arabic on Apply (logical → presentation forms + RTL)", Foreground = Theme.Fg, IsChecked = false, Margin = new Thickness(0, 8, 0, 0) };
-            top.Children.Add(_shape);
+            foreach (var l in Langs) { _origLang.Items.Add(l.Label); _transLang.Items.Add(l.Label); }
+            _origLang.SelectedIndex = 1;   // English by default (mods usually add English text)
+            _transLang.SelectedIndex = 0;  // French by default
+            top.Children.Add(LabeledRow("Original language", _origLang));
+            top.Children.Add(LabeledRow("Translation language", _transLang));
 
             var bar = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 8, 0, 6) };
             bar.Children.Add(Btn("Compare", Compare));
-            bar.Children.Add(Btn("Apply to mod", Apply, 8));
-            bar.Children.Add(Btn("Install Arabic font", InstallFont, 8));
-            bar.Children.Add(Btn("Export TSV…", ExportTsv, 20));
-            bar.Children.Add(Btn("Import TSV…", ImportTsv, 8));
+            bar.Children.Add(Btn("Open in Dialogue Editor", OpenSelected, 8));
+            bar.Children.Add(Btn("Install Arabic font", InstallFont, 20));
             top.Children.Add(bar);
             DockPanel.SetDock(top, Dock.Top);
             root.Children.Add(top);
@@ -82,68 +78,178 @@ namespace Lycoris
             DockPanel.SetDock(_status, Dock.Bottom);
             root.Children.Add(_status);
 
-            _grid = new DataGrid
-            {
-                AutoGenerateColumns = false, CanUserAddRows = false, CanUserDeleteRows = false,
-                HeadersVisibility = DataGridHeadersVisibility.Column,
-                Background = Theme.FieldBg, Foreground = Theme.Fg, RowBackground = Theme.FieldBg,
-                ItemsSource = _rows,
-            };
-            _grid.Columns.Add(new DataGridTextColumn { Header = "File", Binding = Bind(nameof(TransRow.File)), Width = 190, IsReadOnly = true });
-            _grid.Columns.Add(new DataGridTextColumn { Header = "Original (mod)", Binding = Bind(nameof(TransRow.OriginalDisplay)), Width = 330, IsReadOnly = true });
-            _grid.Columns.Add(new DataGridTextColumn { Header = "Translation", Binding = Bind(nameof(TransRow.Translation)), Width = 330 });
-            root.Children.Add(_grid);
+            _list = new ListBox { Background = Theme.FieldBg, Foreground = Theme.Fg };
+            _list.MouseDoubleClick += (s, e) => OpenSelected();
+            _list.ItemsSource = _files;
+            root.Children.Add(_list);
 
             Content = root;
-            _status.Text = "Pick the vanilla + mod \"data\" folders and a language, then Compare.";
+            _status.Text = "Pick the vanilla + mod \"data\" folders and both languages, then Compare.";
         }
+
+        private const int MaxFiles = 5000;
 
         private void Compare()
         {
-            _rows.Clear(); _modFiles.Clear();
+            _files.Clear();
             string modRoot = _mod.Text.Trim(), vanRoot = _vanilla.Text.Trim();
             if (!Directory.Exists(modRoot) || !Directory.Exists(vanRoot)) { _status.Text = "Set both folders (they must exist)."; return; }
 
-            var lang = Langs[_lang.SelectedIndex < 0 ? 0 : _lang.SelectedIndex];
-            int scanned = 0, added = 0;
-            foreach (var mf in Directory.EnumerateFiles(modRoot, "*.cfg.bin", SearchOption.AllDirectories))
+            var orig = Langs[_origLang.SelectedIndex < 0 ? 1 : _origLang.SelectedIndex];
+            int scanned = 0, strings = 0;
+            try
             {
-                string rel = mf.Substring(modRoot.Length).TrimStart('\\', '/');
-                if (!IsUnderData(modRoot, rel)) continue;               // only game text under a "data" folder
-                if (!MatchesLang(mf, lang.Suffix)) continue;            // only this language's localized cfg.bin
-                T2bFile mod;
-                try { mod = T2bReader.ReadFile(mf); } catch { continue; }
-                scanned++;
-                string vf = Path.Combine(vanRoot, rel);
-                var vanStrings = new HashSet<string>(StringComparer.Ordinal);
-                if (File.Exists(vf))
+                foreach (var mf in SafeEnumCfgBin(modRoot))
                 {
-                    try
+                    if (_files.Count >= MaxFiles) break;
+                    string rel = mf.Substring(modRoot.Length).TrimStart('\\', '/');
+                    if (!IsUnderData(modRoot, rel)) continue;               // only game text under a "data" folder
+                    if (!MatchesLang(mf, orig.Suffix)) continue;            // only the original language's cfg.bin
+                    T2bFile mod;
+                    try { mod = T2bReader.ReadFile(mf); } catch { continue; }
+                    scanned++;
+
+                    var vanStrings = new HashSet<string>(StringComparer.Ordinal);
+                    string vf = Path.Combine(vanRoot, rel);
+                    if (File.Exists(vf))
                     {
-                        foreach (var e in T2bReader.ReadFile(vf).Entries)
-                            foreach (var v in e.Values)
-                                if (v.Type == Lycoris.Formats.ValueType.String && v.Value is string s && s.Length > 0) vanStrings.Add(s);
+                        try
+                        {
+                            foreach (var e in T2bReader.ReadFile(vf).Entries)
+                                foreach (var v in e.Values)
+                                    if (v.Type == Lycoris.Formats.ValueType.String && v.Value is string s && s.Length > 0) vanStrings.Add(s);
+                        }
+                        catch { }
                     }
-                    catch { }
+
+                    var items = new List<TransItem>();
+                    foreach (var e in mod.Entries)
+                        foreach (var v in e.Values)
+                        {
+                            if (v.Type != Lycoris.Formats.ValueType.String || !(v.Value is string s) || s.Length == 0) continue;
+                            if (vanStrings.Contains(s) || !HasLetter(s)) continue;   // unchanged, or a symbol/hash string
+                            items.Add(new TransItem { Value = v, Original = s });
+                        }
+                    if (items.Count > 0)
+                    {
+                        _files.Add(new FileEntry { Rel = rel, ModPath = mf, ModFile = mod, Items = items });
+                        strings += items.Count;
+                    }
                 }
-                bool cached = false;
-                foreach (var e in mod.Entries)
-                    foreach (var v in e.Values)
-                    {
-                        if (v.Type != Lycoris.Formats.ValueType.String || !(v.Value is string s) || s.Length == 0) continue;
-                        if (vanStrings.Contains(s) || !HasLetter(s)) continue;   // unchanged, or a symbol/hash string
-                        if (!cached) { _modFiles[mf] = mod; cached = true; }
-                        _rows.Add(new TransRow { File = rel, FilePath = mf, Value = v, Original = s });
-                        added++;
-                    }
             }
-            _status.Text = scanned == 0
-                ? $"No {lang.Suffix}.cfg.bin found under a \"data\" folder. Check the folder and language."
-                : $"Scanned {scanned} {lang.Suffix}.cfg.bin — {added} added/changed string(s). Fill Translation, then Apply.";
+            catch (Exception ex)
+            {
+                DarkMessage.Show(ex.ToString(), "Translation Helper — compare error", MessageBoxButton.OK, MessageBoxImage.Error);
+                _status.Text = "Compare failed: " + ex.Message;
+                return;
+            }
+
+            _status.Text = _files.Count == 0
+                ? $"No {orig.Suffix}.cfg.bin with added/changed text found under a \"data\" folder. Check the folders and Original language."
+                : $"{_files.Count} file(s) with {strings} added/changed string(s). Click one to translate in the Dialogue Editor.";
         }
 
-        /// <summary>True if the file lives under a "data" folder (the selected root is that folder, or a
-        /// "data" segment appears in its relative path).</summary>
+        private void OpenSelected()
+        {
+            var fe = _list.SelectedItem as FileEntry;
+            if (fe == null) { _status.Text = "Select a file first."; return; }
+            string outRoot = _out.Text.Trim();
+            if (string.IsNullOrEmpty(outRoot)) { _status.Text = "Set the \"Translated mod (output)\" folder first."; return; }
+            var orig = Langs[_origLang.SelectedIndex < 0 ? 1 : _origLang.SelectedIndex];
+            var trans = Langs[_transLang.SelectedIndex < 0 ? 0 : _transLang.SelectedIndex];
+
+            // Base the output on the REAL target-language text: keep the mod file's structure (so it loads and its
+            // added entries are present), but swap every UNCHANGED English string for its vanilla target-language
+            // equivalent (matched by entry CRC + value index). Only the added/changed lines are left for you to
+            // translate. If there's no vanilla target file, unchanged lines stay as the mod's English (fallback).
+            OverlayVanillaTarget(fe, orig.Suffix, trans.Suffix);
+
+            var job = new TranslationJob
+            {
+                Label = fe.Rel,
+                TransLabel = "→ " + trans.Suffix + (trans.Arabic ? " (Arabic)" : ""),
+                OrigPath = fe.ModPath,
+                TransPath = TransPathIn(outRoot, fe.Rel, orig.Suffix, trans.Suffix),
+                File = fe.ModFile,
+                ShapeArabic = trans.Arabic,
+                Items = fe.Items,
+            };
+            new DialogueEditorWindow(this, job).Show();
+        }
+
+        /// <summary>Overlay the vanilla target-language text onto the mod file's unchanged strings (matched by
+        /// entry CRC + value index), leaving the added/changed lines (the <see cref="FileEntry.Items"/>) untouched
+        /// for translation. Mutates <paramref name="fe"/>.ModFile in place. No-op if no vanilla target file exists.</summary>
+        private void OverlayVanillaTarget(FileEntry fe, string origSuffix, string transSuffix)
+        {
+            string vanRoot = _vanilla.Text.Trim();
+            string vanTarget = SwapLangPath(vanRoot, fe.Rel, origSuffix, transSuffix);
+            if (!File.Exists(vanTarget)) return;
+
+            // (CRC, valueIndex) -> target-language string, from the vanilla target file.
+            var map = new Dictionary<(uint, int), string>();
+            try
+            {
+                foreach (var e in T2bReader.ReadFile(vanTarget).Entries)
+                    for (int i = 0; i < e.Values.Count; i++)
+                        if (e.Values[i].Type == Lycoris.Formats.ValueType.String && e.Values[i].Value is string s)
+                            map[(e.Crc, i)] = s;
+            }
+            catch { return; }
+
+            var modified = new HashSet<T2bValue>(fe.Items.Select(it => it.Value));
+            foreach (var e in fe.ModFile.Entries)
+                for (int i = 0; i < e.Values.Count; i++)
+                {
+                    var v = e.Values[i];
+                    if (v.Type != Lycoris.Formats.ValueType.String || modified.Contains(v)) continue;   // leave changed lines to translate
+                    if (map.TryGetValue((e.Crc, i), out var fr)) { v.Value = fr; }                       // real target-language text
+                }
+        }
+
+        /// <summary>A sibling path under a different root with the language folder (…\en\ → …\fr\) and the
+        /// filename suffix (_en → _fr) swapped. Used to locate the vanilla target-language file.</summary>
+        private static string SwapLangPath(string root, string rel, string origSuffix, string transSuffix)
+        {
+            string origCode = origSuffix.TrimStart('_'), transCode = transSuffix.TrimStart('_');
+            string relDir = Path.GetDirectoryName(rel) ?? "";
+            var segs = relDir.Split(new[] { '\\', '/' }, StringSplitOptions.RemoveEmptyEntries);
+            for (int i = 0; i < segs.Length; i++)
+                if (segs[i].Equals(origCode, StringComparison.OrdinalIgnoreCase)) segs[i] = transCode;
+            relDir = string.Join("\\", segs);
+
+            string name = Path.GetFileName(rel);
+            const string ext = ".cfg.bin";
+            string baseName = name.EndsWith(ext, StringComparison.OrdinalIgnoreCase) ? name.Substring(0, name.Length - ext.Length) : name;
+            if (baseName.EndsWith(origSuffix, StringComparison.OrdinalIgnoreCase))
+                baseName = baseName.Substring(0, baseName.Length - origSuffix.Length) + transSuffix;
+            return Path.Combine(root, relDir, baseName + ext);
+        }
+
+        /// <summary>Output path inside the "Translated mod" folder, as a proper YW3 mod tree: rebuild the
+        /// include\data\… prefix (the Mod field points at the "data" folder, so rel omits both), keep the file's
+        /// relative sub-tree — but swap the original-language LANGUAGE FOLDER (e.g. …\en\ → …\fr\) as well as the
+        /// original-language suffix in the file name for the translation ones.</summary>
+        private static string TransPathIn(string outRoot, string rel, string origSuffix, string transSuffix)
+            => SwapLangPath(Path.Combine(outRoot, "include", "data"), rel, origSuffix, transSuffix);
+
+        /// <summary>Walk a tree for *.cfg.bin, swallowing per-folder access errors (game dumps often have
+        /// unreadable subfolders that would otherwise abort the whole enumeration and crash the app).</summary>
+        private static IEnumerable<string> SafeEnumCfgBin(string root)
+        {
+            var stack = new Stack<string>();
+            stack.Push(root);
+            while (stack.Count > 0)
+            {
+                string dir = stack.Pop();
+                string[] files = null, subs = null;
+                try { files = Directory.GetFiles(dir, "*.cfg.bin"); } catch { }
+                if (files != null) foreach (var f in files) yield return f;
+                try { subs = Directory.GetDirectories(dir); } catch { }
+                if (subs != null) foreach (var d in subs) stack.Push(d);
+            }
+        }
+
         private static bool IsUnderData(string root, string rel)
         {
             if (Path.GetFileName(root.TrimEnd('\\', '/')).Equals("data", StringComparison.OrdinalIgnoreCase)) return true;
@@ -152,7 +258,6 @@ namespace Lycoris
             return false;
         }
 
-        /// <summary>True if the cfg.bin's name carries this language suffix (e.g. foo_fr.cfg.bin for "_fr").</summary>
         private static bool MatchesLang(string path, string suffix)
         {
             string name = Path.GetFileName(path);
@@ -160,70 +265,8 @@ namespace Lycoris
             return name.EndsWith(suffix, StringComparison.OrdinalIgnoreCase);
         }
 
-        private void Apply()
-        {
-            if (_rows.Count == 0) return;
-            _grid.CommitEdit(DataGridEditingUnit.Row, true);
-            bool shape = _shape.IsChecked == true;
-            int n = 0; var touched = new HashSet<string>();
-            foreach (var r in _rows)
-            {
-                if (string.IsNullOrWhiteSpace(r.Translation)) continue;
-                string t = r.Translation;
-                if (shape) t = ShapeMultiline(t);
-                r.Value.Value = t;
-                touched.Add(r.FilePath);
-                n++;
-            }
-            try
-            {
-                foreach (var f in touched) if (_modFiles.TryGetValue(f, out var tf)) T2bWriter.WriteFile(tf, f);
-                _status.Text = $"Applied {n} translation(s) to {touched.Count} mod file(s).";
-            }
-            catch (Exception ex) { DarkMessage.Show(ex.Message, "Translation Helper — apply error", MessageBoxButton.OK, MessageBoxImage.Error); }
-        }
-
-        /// <summary>Shape Arabic line-by-line, preserving literal "\n" line-break tokens the game uses.</summary>
-        private static string ShapeMultiline(string s)
-        {
-            if (!ArabicShaper.NeedsShaping(s)) return s;
-            var parts = s.Split(new[] { "\\n" }, StringSplitOptions.None);
-            for (int i = 0; i < parts.Length; i++) parts[i] = ArabicShaper.Shape(parts[i]);
-            return string.Join("\\n", parts);
-        }
-
-        private void ExportTsv()
-        {
-            if (_rows.Count == 0) return;
-            var dlg = new Microsoft.Win32.SaveFileDialog { Filter = "TSV|*.tsv|All files|*.*", FileName = "translation.tsv" };
-            if (dlg.ShowDialog() != true) return;
-            var sb = new StringBuilder("File\tOriginal\tTranslation\n");
-            foreach (var r in _rows)
-                sb.Append(r.File).Append('\t').Append(Esc(r.Original)).Append('\t').Append(Esc(r.Translation ?? "")).Append('\n');
-            File.WriteAllText(dlg.FileName, sb.ToString(), new UTF8Encoding(false));
-            _status.Text = "Exported: " + Path.GetFileName(dlg.FileName);
-        }
-
-        private void ImportTsv()
-        {
-            if (_rows.Count == 0) { _status.Text = "Compare first, then import a TSV of translations."; return; }
-            var dlg = new Microsoft.Win32.OpenFileDialog { Filter = "TSV|*.tsv|All files|*.*" };
-            if (dlg.ShowDialog() != true) return;
-            var map = new Dictionary<string, string>(StringComparer.Ordinal);   // File\tOriginal -> Translation
-            foreach (var raw in File.ReadAllLines(dlg.FileName, Encoding.UTF8))
-            {
-                var p = raw.Split('\t');
-                if (p.Length < 3 || p[0] == "File") continue;
-                map[p[0] + "\t" + Unesc(p[1])] = Unesc(p[2]);
-            }
-            int n = 0;
-            foreach (var r in _rows)
-                if (map.TryGetValue(r.File + "\t" + r.Original, out var t) && t.Length > 0) { r.Translation = t; n++; }
-            _status.Text = $"Imported {n} translation(s). Review, then Apply.";
-        }
-
         /// <summary>Copy the bundled preset Arabic-injected fonts (ft_nrm.xf / ft_sml.xf) into the mod's
-        /// include/fnt so the shaped Arabic renders in-game — the "just use a preset .xf" path.</summary>
+        /// include/fnt so shaped Arabic renders in-game — the "just use a preset .xf" path.</summary>
         private void InstallFont()
         {
             string modRoot = _mod.Text.Trim();
@@ -267,12 +310,9 @@ namespace Lycoris
             foreach (char c in s) if (char.IsLetter(c)) return true;
             return false;
         }
-        private static string Esc(string s) => (s ?? "").Replace("\\", "\\\\").Replace("\t", " ").Replace("\r", "").Replace("\n", "\\n");
-        private static string Unesc(string s) => (s ?? "").Replace("\\n", "\n").Replace("\\\\", "\\");
 
         // --- UI helpers ---
         private static TextBox Field() => new TextBox { Margin = new Thickness(0, 2, 6, 2) };
-        private static Binding Bind(string p) => new Binding(p) { Mode = BindingMode.TwoWay, UpdateSourceTrigger = UpdateSourceTrigger.LostFocus };
         private Button Btn(string text, Action onClick, double left = 0)
         {
             var b = new Button { Content = text, MinWidth = 110, MinHeight = 30, Margin = new Thickness(left, 0, 0, 0) };
@@ -308,17 +348,13 @@ namespace Lycoris
         }
     }
 
-    /// <summary>One added/changed string to translate (references the live T2bValue so Apply writes in place).</summary>
-    public sealed class TransRow : INotifyPropertyChanged
+    /// <summary>One mod cfg.bin (original language) that has added/changed strings vs the vanilla dump.</summary>
+    public sealed class FileEntry
     {
-        private string _translation;
-        public string File { get; set; }         // relative path (display)
-        public string FilePath { get; set; }     // absolute path (write target)
-        public T2bValue Value { get; set; }       // the live value in the parsed mod T2bFile
-        public string Original { get; set; }
-        public string OriginalDisplay => (Original ?? "").Replace("\n", "\\n");
-        public string Translation { get => _translation; set { _translation = value; OnChanged(nameof(Translation)); } }
-        public event PropertyChangedEventHandler PropertyChanged;
-        private void OnChanged(string p) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(p));
+        public string Rel;              // relative path (display)
+        public string ModPath;          // absolute path to the mod's original-language file
+        public T2bFile ModFile;         // parsed original file (its values become the translation targets)
+        public List<TransItem> Items;   // the added/changed strings
+        public override string ToString() => $"{Rel}    ({Items.Count})";
     }
 }

@@ -14,6 +14,8 @@ namespace Lycoris.Yokai
     {
         internal T2bEntry TextEntry;
         internal T2bEntry WashaEntry;     // null if the event has no washamap entry for this line
+        internal T2bValue TransValue;     // translation-mode: the live string value to write on Save (bypasses TEXT_INFO)
+        internal string Original;         // translation-mode: the untranslated source string (reference)
         public int KeyId;
         public int Page;
         public int Variant;
@@ -22,7 +24,7 @@ namespace Lycoris.Yokai
 
         private string _text;
         private int _talker;
-        public string Text { get => _text; set { _text = value; Raise(nameof(Text)); Raise(nameof(Preview)); } }
+        public string Text { get => _text; set { _text = value; Raise(nameof(Text)); Raise(nameof(Preview)); Raise(nameof(TransPreview)); } }
         public int TalkerBaseId { get => _talker; set { _talker = value; Raise(nameof(TalkerHex)); Raise(nameof(SpeakerLabel)); Raise(nameof(Preview)); } }
 
         public string TalkerHex => $"0x{unchecked((uint)_talker):X8}";
@@ -34,6 +36,18 @@ namespace Lycoris.Yokai
                 string t = (_text ?? "").Replace("\r", " ").Replace("\n", " ");
                 if (t.Length > 60) t = t.Substring(0, 60) + "…";
                 return $"{KeyLabel} p{Page}{(Variant > 0 ? "/" + Variant : "")}   [{SpeakerLabel}]  {t}";
+            }
+        }
+
+        /// <summary>Translation-mode list label: a done/todo marker + the original source string.</summary>
+        public string TransPreview
+        {
+            get
+            {
+                string o = (Original ?? "").Replace("\r", " ").Replace("\n", " ");
+                if (o.Length > 60) o = o.Substring(0, 60) + "…";
+                bool done = !string.IsNullOrEmpty(_text) && _text != Original;
+                return (done ? "✔  " : "•  ") + o;
             }
         }
 

@@ -27,6 +27,8 @@ namespace Lycoris
         private DialogueTarget _target;
         private DialogueLineRow _row;
         private bool _suppress;
+        private TranslationJob _job;      // non-null → "translate this cfg.bin" mode (from the Translation Helper)
+        private DockPanel _leftPanel;     // event browser; hidden in translation mode
 
         private readonly ListBox _events = new ListBox();
         private readonly TextBox _search = new TextBox();
@@ -63,7 +65,7 @@ namespace Lycoris
             DockPanel.SetDock(toolbar, Dock.Top);
 
             // left: event list
-            var left = new DockPanel { Width = 240, Margin = new Thickness(6) };
+            var left = _leftPanel = new DockPanel { Width = 240, Margin = new Thickness(6) };
             _search.Margin = new Thickness(0, 0, 0, 4);
             _search.TextChanged += (s, e) => RefreshEvents();
             DockPanel.SetDock(_search, Dock.Top);
@@ -162,6 +164,25 @@ namespace Lycoris
                 : "Select an event to edit its dialogue.";
         }
 
+        /// <summary>Translation mode: opened from the Translation Helper for a single cfg.bin, showing ONLY the
+        /// added/changed strings as editable lines (with the live bubble preview). Save writes the shaped text
+        /// into the translation-language file. No event browsing, no speaker/name-box.</summary>
+        public DialogueEditorWindow(Window owner, TranslationJob job) : this(owner, (YokaiDatabase)null)
+        {
+            _job = job;
+            Title = "Lycoris — Translate  " + job.Label + "   (" + job.TransLabel + ")";
+            _leftPanel.Visibility = Visibility.Collapsed;      // no event browser
+            _nameBoxBtn.Visibility = Visibility.Collapsed;     // no speakers in generic text
+
+            var rows = new List<DialogueLineRow>();
+            foreach (var it in job.Items)
+                rows.Add(new DialogueLineRow { TransValue = it.Value, Original = it.Original, Text = it.Original, KeyLabel = "" });
+            _lines.DisplayMemberPath = "TransPreview";
+            _lines.ItemsSource = rows;
+            _lines.SelectedIndex = rows.Count > 0 ? 0 : -1;
+            _status.Text = rows.Count + " added line(s) to translate — edit the text, then Save mod → " + job.TransPath;
+        }
+
         private readonly StackPanel _detail;
 
         private Button Btn(string text, Action onClick, double leftMargin = 6)
@@ -232,7 +253,7 @@ namespace Lycoris
 
             // "model|Dialogue" shortcut: a leading model-id / 0xHEX before a '|' sets the speaker (creating a
             // name box if the line lacks one) and the rest becomes the text.
-            if (TrySplitSpeaker(_text.Text, out string spk, out string txt))
+            if (_job == null && TrySplitSpeaker(_text.Text, out string spk, out string txt))
             {
                 _row.Text = txt;
                 int id = Resolve(spk);
@@ -441,6 +462,7 @@ namespace Lycoris
         {
             var focused = System.Windows.Input.Keyboard.FocusedElement as UIElement;
             focused?.RaiseEvent(new RoutedEventArgs(LostFocusEvent));
+            if (_job != null) { SaveTranslation(); return; }
             if (_dlg == null || _target == null) return;
             if (DialoguePaths.IncBase(_db) == null || _target.ModTextPath == null) { DarkMessage.Show("Open a mod folder first.", "Save"); return; }
             try
@@ -452,6 +474,38 @@ namespace Lycoris
                 DarkMessage.Show($"Dialogue saved:\n{textOut}" + (_dlg.WashaData != null ? $"\n{washaOut}" : ""), "Saved", MessageBoxButton.OK, MessageBoxImage.Information);
             }
             catch (Exception ex) { DarkMessage.Show(ex.Message, "Save dialogue", MessageBoxButton.OK, MessageBoxImage.Error); }
+        }
+
+        /// <summary>Translation mode: write each (shaped) line into its live string value, then save the whole
+        /// cfg.bin to the translation-language path.</summary>
+        private void SaveTranslation()
+        {
+            try
+            {
+                foreach (var r in (_lines.ItemsSource as IEnumerable<DialogueLineRow>) ?? Enumerable.Empty<DialogueLineRow>())
+                {
+                    if (r.TransValue == null) continue;
+                    string t = r.Text ?? "";
+                    if (_job.ShapeArabic) t = ShapeMultiline(t);
+                    r.TransValue.Type = Lycoris.Formats.ValueType.String;
+                    r.TransValue.Value = t;
+                }
+                Directory.CreateDirectory(Path.GetDirectoryName(_job.TransPath));
+                T2bWriter.WriteFile(_job.File, _job.TransPath);
+                _lines.Items.Refresh();
+                _status.Text = "Saved → " + _job.TransPath;
+                DarkMessage.Show("Saved:\n" + _job.TransPath, "Saved", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            catch (Exception ex) { DarkMessage.Show(ex.Message, "Save translation", MessageBoxButton.OK, MessageBoxImage.Error); }
+        }
+
+        /// <summary>Shape Arabic line-by-line, preserving the literal "\n" line-break tokens the game uses.</summary>
+        private static string ShapeMultiline(string s)
+        {
+            if (!ArabicShaper.NeedsShaping(s)) return s;
+            var parts = s.Split(new[] { "\\n" }, StringSplitOptions.None);
+            for (int i = 0; i < parts.Length; i++) parts[i] = ArabicShaper.Shape(parts[i]);
+            return string.Join("\\n", parts);
         }
 
         private string ResolveHint(string s)
@@ -471,6 +525,26 @@ namespace Lycoris
             if (s.Length == 0) return 0;
             return unchecked((int)Crc32.Standard(Encoding.UTF8.GetBytes(s)));
         }
+    }
+
+    /// <summary>One string to translate: the live cfg.bin value + its original text.</summary>
+    public sealed class TransItem
+    {
+        public T2bValue Value;
+        public string Original;
+    }
+
+    /// <summary>A "translate one cfg.bin" job handed from the Translation Helper to the Dialogue Editor:
+    /// the parsed original file, the added/changed strings, and where/how to write the translation.</summary>
+    public sealed class TranslationJob
+    {
+        public string Label;          // relative path (window title)
+        public string TransLabel;     // e.g. "→ _fr" / "→ _en (Arabic)"
+        public string OrigPath;       // source cfg.bin (original language)
+        public string TransPath;      // where the translated cfg.bin is written
+        public T2bFile File;          // parsed original file (its values are edited in place, then written to TransPath)
+        public bool ShapeArabic;      // shape Arabic on save (translation language is the custom Arabic locale)
+        public List<TransItem> Items = new List<TransItem>();
     }
 
     /// <summary>A modal multiline text prompt (for pasting a whole dialogue block).</summary>
