@@ -493,13 +493,24 @@ namespace Lycoris.Npc
             return begin != null && begin.Values.Count > 0 && begin.Values[0].Value is int c ? c : 0;
         }
 
-        /// <summary>Trigger = DATA_COUNT (count) + flat DATA_ITEM list (no END marker): append + bump count.</summary>
+        /// <summary>Trigger = DATA_COUNT (count) + flat DATA_ITEM list (no END marker): append + bump count.
+        /// Robust when the list is EMPTY (e.g. every NPC was deleted from a custom map) — builds a fresh
+        /// DATA_ITEM from the file's name table instead of throwing (which used to block adding any new NPC).</summary>
         private static void AddTriggerItem(T2bFile f, int npcId, int funcId)
         {
-            var last = f.Entries.Last(e => e.Name == "DATA_ITEM");
-            var entry = last.Clone();
+            var last = f.Records("DATA_ITEM").LastOrDefault();
+            T2bEntry entry;
+            if (last != null) { entry = last.Clone(); }
+            else
+            {
+                var nm = f.Names.FirstOrDefault(n => n.Name == "DATA_ITEM");
+                uint crc = nm.Name == "DATA_ITEM" ? nm.Crc : Crc32.Standard(Encoding.UTF8.GetBytes("DATA_ITEM"));
+                entry = new T2bEntry { Name = "DATA_ITEM", Crc = crc };
+                for (int i = 0; i < 7; i++) entry.Values.Add(new T2bValue(VT.Integer, 0));
+            }
             SetInts(entry, 11, npcId, 0, 0, 0, 0, funcId); // NPC_TRIGGER_TYPE = 11
             int at = f.Entries.FindLastIndex(e => e.Name == "DATA_ITEM");
+            if (at < 0) at = f.Entries.FindIndex(e => e.Name == "DATA_COUNT");   // no items yet: place after DATA_COUNT
             f.Entries.Insert(at + 1, entry);
             var count = f.Entries.FirstOrDefault(e => e.Name == "DATA_COUNT");
             if (count != null && count.Values.Count > 0 && count.Values[0].Value is int c)

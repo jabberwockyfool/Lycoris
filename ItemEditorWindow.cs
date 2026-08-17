@@ -49,11 +49,14 @@ namespace Lycoris
             del.Click += (s, e) => DeleteItem();
             var save = new Button { Content = "Save the mod", Padding = new Thickness(10, 4, 10, 4), Margin = new Thickness(6, 0, 0, 0) };
             save.Click += (s, e) => Save();
+            var switchBtn = new Button { Content = "⇄ Equip transform…", Padding = new Thickness(10, 4, 10, 4), Margin = new Thickness(6, 0, 0, 0) };
+            switchBtn.Click += (s, e) => new CharaSwitchWindow(this, _db).ShowDialog();
             var toolbar = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(6) };
             toolbar.Children.Add(add);
             toolbar.Children.Add(dup);
             toolbar.Children.Add(del);
             toolbar.Children.Add(save);
+            toolbar.Children.Add(switchBtn);
             _countText.Margin = new Thickness(10, 0, 0, 0);
             UpdateCount();
             toolbar.Children.Add(_countText);
@@ -143,7 +146,19 @@ namespace Lycoris
             var it = _list.SelectedItem as ItemInfo;
             _fields.DataContext = it;
             _fields.IsEnabled = it != null;
-            _iconImg.Source = CropIcon(it);
+            _iconImg.Source = IconImage(it);
+        }
+
+        /// <summary>The item's real 64×64 icon (its individual item_&lt;NNNN&gt;.xi from GlobalIconIndex), falling
+        /// back to the atlas thumbnail cell when there's no individual file.</summary>
+        private BitmapSource IconImage(ItemInfo it)
+        {
+            if (it?.GlobalIconIndex != null)
+            {
+                string f = _db.ItemIconFile(it.GlobalIconIndex.Value);
+                if (f != null) { try { var img = Imgc.Decode(System.IO.File.ReadAllBytes(f)); return ToBitmap(img.Bgra, img.Width, img.Height); } catch { } }
+            }
+            return CropIcon(it);
         }
 
         // ---------- field builders ----------
@@ -228,27 +243,75 @@ namespace Lycoris
         private void ReplaceIcon()
         {
             var it = _list.SelectedItem as ItemInfo;
-            if (it?.IconPosX == null || it.IconPosY == null) return;
-            string atlas = AtlasPath();
-            if (atlas == null) { DarkMessage.Show("item_icon.xi atlas not found.", "Item"); return; }
-            var dlg = new Microsoft.Win32.OpenFileDialog { Filter = "PNG images|*.png", Title = "Item icon — PNG 32×32" };
+            if (it == null) return;
+            if (it.GlobalIconIndex == null)
+            { DarkMessage.Show("This item has no icon number (GlobalIconIndex / field 5).", "Item icon"); return; }
+            var dlg = new Microsoft.Win32.OpenFileDialog { Filter = "PNG images|*.png", Title = "Item icon — PNG 64×64" };
             if (dlg.ShowDialog() != true) return;
             try
             {
-                var img = Imgc.Decode(System.IO.File.ReadAllBytes(atlas));
-                byte[] cell = PngToBgra(dlg.FileName, Cell, Cell);
-                int x = it.IconPosX.Value * Cell, y = it.IconPosY.Value * Cell;
-                if (x + Cell > img.Width || y + Cell > img.Height) { DarkMessage.Show("Position outside the atlas.", "Item"); return; }
-                for (int ry = 0; ry < Cell; ry++)
-                    Array.Copy(cell, ry * Cell * 4, img.Bgra, ((y + ry) * img.Width + x) * 4, Cell * 4);
+                int num = it.GlobalIconIndex.Value;
+                byte[] bgra64 = PngToBgra(dlg.FileName, 64, 64);
 
-                string target = _db.MirrorToMod(atlas);
-                System.IO.File.WriteAllBytes(target, Imgc.EncodeXi(img.Bgra, img.Width, img.Height));
-                _moddedAtlas = target;
-                _iconImg.Source = CropIcon(it);
-                _status.Text = $"Item icon replaced at ({it.IconPosX},{it.IconPosY}).";
+                // The REAL in-game icon is the individual 64×64 item_<NNNN>.xi (ETC1A4). Write that — preserving
+                // its format via an existing item_*.xi as the template.
+                string dir = _db.ItemIconWriteDir;
+                if (dir == null) { DarkMessage.Show("Open a mod folder first — the icon is written into it.", "Item icon"); return; }
+                string tplPath = _db.ItemIconFile(num) ?? _db.ItemIconFile(1);
+                byte[] xi = tplPath != null
+                    ? Imgc.EncodeXiPreserve(System.IO.File.ReadAllBytes(tplPath), bgra64, 64, 64)
+                    : Imgc.EncodeXi(bgra64, 64, 64);
+                System.IO.Directory.CreateDirectory(dir);
+                string target = System.IO.Path.Combine(dir, "item_" + num.ToString("0000") + ".xi");
+                System.IO.File.WriteAllBytes(target, xi);
+
+                // Also refresh the atlas thumbnail cell (32×32 downscale) so the item grid matches, best-effort.
+                string atlasMsg = UpdateAtlasThumb(it, bgra64);
+
+                _iconImg.Source = IconImage(it);
+                _status.Text = $"Icon replaced: item_{num:0000}.xi (64×64).{atlasMsg}";
             }
             catch (Exception ex) { DarkMessage.Show(ex.Message, "Item icon error", MessageBoxButton.OK, MessageBoxImage.Error); }
+        }
+
+        /// <summary>Update the 32×32 atlas thumbnail (downscaled) for the grid view; preserves the atlas format.</summary>
+        private string UpdateAtlasThumb(ItemInfo it, byte[] bgra64)
+        {
+            if (it.IconPosX == null || it.IconPosY == null) return "";
+            string atlas = AtlasPath();
+            if (atlas == null) return "";
+            try
+            {
+                byte[] rawAtlas = System.IO.File.ReadAllBytes(atlas);
+                var img = Imgc.Decode(rawAtlas);
+                int x = it.IconPosX.Value * Cell, y = it.IconPosY.Value * Cell;
+                if (x + Cell > img.Width || y + Cell > img.Height) return "";
+                byte[] cell = Downscale2x(bgra64, 64);   // 64 -> 32
+                for (int ry = 0; ry < Cell; ry++)
+                    Array.Copy(cell, ry * Cell * 4, img.Bgra, ((y + ry) * img.Width + x) * 4, Cell * 4);
+                string target = _db.MirrorToMod(atlas);
+                System.IO.File.WriteAllBytes(target, Imgc.EncodeXiPreserve(rawAtlas, img.Bgra, img.Width, img.Height));
+                _moddedAtlas = target;
+                return " (+ atlas thumb)";
+            }
+            catch { return ""; }
+        }
+
+        /// <summary>Average-downscale a square BGRA buffer by 2× (e.g. 64→32).</summary>
+        private static byte[] Downscale2x(byte[] src, int srcSize)
+        {
+            int dst = srcSize / 2;
+            var outp = new byte[dst * dst * 4];
+            for (int y = 0; y < dst; y++)
+                for (int x = 0; x < dst; x++)
+                    for (int c = 0; c < 4; c++)
+                    {
+                        int sx = x * 2, sy = y * 2;
+                        int sum = src[((sy) * srcSize + sx) * 4 + c] + src[((sy) * srcSize + sx + 1) * 4 + c]
+                                + src[((sy + 1) * srcSize + sx) * 4 + c] + src[((sy + 1) * srcSize + sx + 1) * 4 + c];
+                        outp[(y * dst + x) * 4 + c] = (byte)(sum / 4);
+                    }
+            return outp;
         }
 
         private void UpdateCount() => _countText.Text = $"{_db.Items.Count} items";

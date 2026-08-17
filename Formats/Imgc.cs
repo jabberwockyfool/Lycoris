@@ -185,6 +185,155 @@ namespace Lycoris.Formats
             return s;
         }
 
+        /// <summary>The IMGC image-format id of a .xi (0x0A). 28 = ETC1A4, 1 = RGBA4, 0 = RGBA8, 2 = RGBA5551.</summary>
+        public static byte ImageFormat(byte[] xi) => xi != null && xi.Length > 0x0A ? xi[0x0A] : (byte)0;
+
+        /// <summary>Re-encode a BGRA buffer into a .xi that PRESERVES the original's format+header — so editing a
+        /// slot in an ETC1A4 atlas (the item_icon spritesheet) doesn't change it to RGBA4 (which the game rejects,
+        /// garbling the sheet). ETC1A4 → ETC1A4; anything else falls back to the RGBA4 encoder.</summary>
+        public static byte[] EncodeXiPreserve(byte[] originalXi, byte[] bgra, int width, int height)
+        {
+            if (originalXi != null && originalXi.Length > 0x0A && originalXi[0x0A] == 28)
+                return EncodeEtc1A4Xi(originalXi, bgra, width, height);
+            return EncodeXi(bgra, width, height);
+        }
+
+        // ---------------- ETC1A4 encoder (preserves the original ETC1A4 .xi format) ----------------
+        // Inverse of the decode chain: raster → z-order (ZDest) → sequential 4x4 ETC1A4 blocks (16 bytes each:
+        // 8 alpha + 8 ETC1 colour) → identity tile table. Validated by a decode(encode(x)) round-trip.
+        private static readonly int[] Etc1PixelOrder = { 0, 4, 1, 5, 8, 12, 9, 13, 2, 6, 3, 7, 10, 14, 11, 15 };
+
+        private static byte[] EncodeEtc1A4Xi(byte[] originalXi, byte[] bgra, int width, int height)
+        {
+            if ((width & 7) != 0 || (height & 7) != 0)
+                throw new ArgumentException("Width/height must be multiples of 8.");
+            int widthInTiles = width / 8;
+            int nBlocks = (width / 4) * (height / 4);
+            var linear = new byte[nBlocks * 16];
+
+            int b = 0;
+            for (int by = 0; by < height; by += 4)
+                for (int bx = 0; bx < width; bx += 4)
+                {
+                    var tr = new int[16]; var tg = new int[16]; var tb = new int[16]; var ta = new int[16];
+                    for (int t = 0; t < 16; t++)
+                    {
+                        ZDest(b * 16 + t, widthInTiles, out int x, out int y);
+                        int o = (y * width + x) * 4;
+                        tb[t] = bgra[o]; tg[t] = bgra[o + 1]; tr[t] = bgra[o + 2]; ta[t] = bgra[o + 3];
+                    }
+                    EncodeEtc1A4Block(tr, tg, tb, ta, linear, b * 16);
+                    b++;
+                }
+
+            int tileCount = linear.Length / 64;   // one 8x8 tile (4 blocks) per table entry
+            var tileTable = new byte[tileCount * 2];
+            for (int t = 0; t < tileCount; t++) { tileTable[t * 2] = (byte)(t & 0xFF); tileTable[t * 2 + 1] = (byte)(t >> 8); }
+            byte[] tileSection = NoCompress(tileTable);
+            byte[] pixelSection = NoCompress(linear);
+
+            var outBuf = new byte[0x48 + tileSection.Length + pixelSection.Length];
+            Array.Copy(originalXi, outBuf, 0x48);          // keep the original header (format 28, bitdepth, blocksize)
+            WriteI16(outBuf, 0x10, (short)width);
+            WriteI16(outBuf, 0x12, (short)height);
+            WriteI32(outBuf, 0x1C, 0x48);
+            WriteI32(outBuf, 0x34, tileSection.Length);
+            WriteI32(outBuf, 0x38, tileSection.Length);
+            WriteI32(outBuf, 0x3C, pixelSection.Length);
+            Array.Copy(tileSection, 0, outBuf, 0x48, tileSection.Length);
+            Array.Copy(pixelSection, 0, outBuf, 0x48 + tileSection.Length, pixelSection.Length);
+            return outBuf;
+        }
+
+        // ETC1A4 modifier tables (same as the decoder).
+        private static readonly int[][] EtcMods =
+        {
+            new[] { 2, 8, -2, -8 }, new[] { 5, 17, -5, -17 }, new[] { 9, 29, -9, -29 },
+            new[] { 13, 42, -13, -42 }, new[] { 18, 60, -18, -60 }, new[] { 24, 80, -24, -80 },
+            new[] { 33, 106, -33, -106 }, new[] { 47, 183, -47, -183 }
+        };
+
+        private static void EncodeEtc1A4Block(int[] tr, int[] tg, int[] tb, int[] ta, byte[] outBuf, int off)
+        {
+            // --- alpha: 4-bit per pixel at bit (4 * internalIndex) ---
+            ulong a = 0;
+            for (int t = 0; t < 16; t++)
+            {
+                int idx = Etc1PixelOrder[t];
+                int a4 = (ta[t] + 8) / 17; if (a4 < 0) a4 = 0; if (a4 > 15) a4 = 15;
+                a |= (ulong)a4 << (4 * idx);
+            }
+            for (int k = 0; k < 8; k++) outBuf[off + k] = (byte)(a >> (8 * k));
+
+            // --- colour: individual mode (diff=0, flip=0). Subblock 0 = internalIndex&8==0, else subblock 1. ---
+            int r0 = 0, g0 = 0, b0 = 0, n0 = 0, r1 = 0, g1 = 0, b1 = 0, n1 = 0;
+            for (int t = 0; t < 16; t++)
+            {
+                if ((Etc1PixelOrder[t] & 8) == 0) { r0 += tr[t]; g0 += tg[t]; b0 += tb[t]; n0++; }
+                else { r1 += tr[t]; g1 += tg[t]; b1 += tb[t]; n1++; }
+            }
+            int R0 = Q4(n0 > 0 ? r0 / n0 : 0), G0 = Q4(n0 > 0 ? g0 / n0 : 0), B0 = Q4(n0 > 0 ? b0 / n0 : 0);
+            int R1 = Q4(n1 > 0 ? r1 / n1 : 0), G1 = Q4(n1 > 0 ? g1 / n1 : 0), B1 = Q4(n1 > 0 ? b1 / n1 : 0);
+            int base0R = R0 * 17, base0G = G0 * 17, base0B = B0 * 17;
+            int base1R = R1 * 17, base1G = G1 * 17, base1B = B1 * 17;
+
+            int table0 = BestTable(tr, tg, tb, base0R, base0G, base0B, 0);
+            int table1 = BestTable(tr, tg, tb, base1R, base1G, base1B, 8);
+
+            ushort lsb = 0, msb = 0;
+            for (int t = 0; t < 16; t++)
+            {
+                int idx = Etc1PixelOrder[t];
+                bool sub0 = (idx & 8) == 0;
+                int bR = sub0 ? base0R : base1R, bG = sub0 ? base0G : base1G, bB = sub0 ? base0B : base1B;
+                int[] mod = EtcMods[sub0 ? table0 : table1];
+                int bestS = 0, bestErr = int.MaxValue;
+                for (int s = 0; s < 4; s++)
+                {
+                    int m = mod[s];
+                    int err = Sq(Clamp(bR + m) - tr[t]) + Sq(Clamp(bG + m) - tg[t]) + Sq(Clamp(bB + m) - tb[t]);
+                    if (err < bestErr) { bestErr = err; bestS = s; }
+                }
+                if ((bestS & 1) != 0) lsb |= (ushort)(1 << idx);
+                if ((bestS & 2) != 0) msb |= (ushort)(1 << idx);
+            }
+
+            outBuf[off + 8] = (byte)(lsb & 0xFF); outBuf[off + 9] = (byte)(lsb >> 8);
+            outBuf[off + 10] = (byte)(msb & 0xFF); outBuf[off + 11] = (byte)(msb >> 8);
+            outBuf[off + 12] = (byte)((table0 << 5) | (table1 << 2));   // flags: diff=0, flip=0
+            outBuf[off + 13] = (byte)((B0 << 4) | B1);
+            outBuf[off + 14] = (byte)((G0 << 4) | G1);
+            outBuf[off + 15] = (byte)((R0 << 4) | R1);
+        }
+
+        private static int BestTable(int[] tr, int[] tg, int[] tb, int bR, int bG, int bB, int subFlag)
+        {
+            int best = 0, bestErr = int.MaxValue;
+            for (int table = 0; table < 8; table++)
+            {
+                int[] mod = EtcMods[table];
+                int err = 0;
+                for (int t = 0; t < 16; t++)
+                {
+                    if ((Etc1PixelOrder[t] & 8) != subFlag) continue;
+                    int pe = int.MaxValue;
+                    for (int s = 0; s < 4; s++)
+                    {
+                        int m = mod[s];
+                        int e = Sq(Clamp(bR + m) - tr[t]) + Sq(Clamp(bG + m) - tg[t]) + Sq(Clamp(bB + m) - tb[t]);
+                        if (e < pe) pe = e;
+                    }
+                    err += pe;
+                }
+                if (err < bestErr) { bestErr = err; best = table; }
+            }
+            return best;
+        }
+
+        private static int Q4(int v) { int q = (v + 8) / 17; return q < 0 ? 0 : q > 15 ? 15 : q; }
+        private static int Sq(int v) => v * v;
+        private static int Clamp(int v) => v < 0 ? 0 : v > 255 ? 255 : v;
+
         private static void WriteI16(byte[] d, int o, short v) { d[o] = (byte)v; d[o + 1] = (byte)(v >> 8); }
         private static void WriteI32(byte[] d, int o, int v)
         { d[o] = (byte)v; d[o + 1] = (byte)(v >> 8); d[o + 2] = (byte)(v >> 16); d[o + 3] = (byte)(v >> 24); }

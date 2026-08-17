@@ -62,7 +62,7 @@ namespace Lycoris.Npc
         /// </summary>
         public static Result Apply(NpcModel npc, int npcId, int baseId,
             T2bFile npcTalk, T2bFile trigger, byte[] mapXq,
-            T2bFile textEn, T2bFile textMap, T2bFile flagConfig)
+            T2bFile textEn, T2bFile textMap, T2bFile flagConfig, int dayDoneOverride = 0)
         {
             if (string.IsNullOrWhiteSpace(npc.DailyFightEvent))
                 throw new InvalidOperationException("A daily-fight NPC needs a base event name (evXX_YYY0).");
@@ -71,10 +71,11 @@ namespace Lycoris.Npc
             string ev = npc.DailyFightEvent.Trim();
             r.Events = new[] { ev, StepEvent(ev, 10), StepEvent(ev, 20), StepEvent(ev, 30) };
 
-            // Deterministic, unique ids derived from the NPC name (and the event for the day-done flag, so it
-            // matches the event's sub14025 flag = CRC32(eventName)).
+            // Deterministic, unique ids derived from the NPC name. The day-done flag defaults to CRC32(eventName)
+            // (what Lycoris-generated events set via sub14025); a patch of REUSED events can override it with the
+            // flag those events actually set, so the win/lose + "come tomorrow" gate matches.
             r.FlagSeen = UniqueFlag(flagConfig, Crc(npc.NpcName + "_daily_seen"));
-            r.FlagDayDone = Crc(ev);
+            r.FlagDayDone = dayDoneOverride != 0 ? dayDoneOverride : Crc(ev);
             r.TrigFirst = Crc(npc.NpcName + "_dtrig_first");
             r.TrigRepeat = Crc(npc.NpcName + "_dtrig_repeat");
             // The win/lose triggers are routed by the BATTLE id: the game matches the battle that just ended
@@ -183,6 +184,15 @@ namespace Lycoris.Npc
         }
 
         // ---------- flags ----------
+
+        /// <summary>Build the "once-a-day" ConditionalCond blob (GetOneDayBitFlag(flagId) != true, TALK_CONFIG
+        /// context) for a talk config — same blob the daily maker's config #2 uses. Register the flag with
+        /// <see cref="AddOneDayFlag"/> so GetOneDayBitFlag recognises it.</summary>
+        public static string BuildOneDayConfigCond(int flagId) =>
+            YwCond.RemapBase64(TplOneDayConfigCtx, TplOneDayConfigDonor, flagId);
+
+        /// <summary>Register a once-a-day flag in the GetOneDayBitFlag group (FLAG_INFO_6, BEGIN field[0]==23).</summary>
+        public static void AddOneDayFlag(T2bFile flagConfig, int flagId) => AddFlagIfAbsent(flagConfig, flagId, FlagGroupOneDay);
 
         /// <summary>Register a flag id in flag_config's group whose BEGIN field[0]==groupIndex (0 = permanent
         /// GlobalBitFlag), assigning the next free slot and bumping the group count. No-op if already present.

@@ -32,6 +32,7 @@ namespace Lycoris.Npc
             {
                 sb.Append("\n# --- Lycoris daily-fight extension ---\n");
                 sb.Append("IsDailyFight = true\n");
+                sb.Append($"ReuseExistingEvents = {(n.ReuseExistingEvents ? "true" : "false")}\n");
                 sb.Append($"DailyFightEvent = {BasicString(n.DailyFightEvent)}\n");
                 sb.Append($"DailyBattle = {BasicString(n.DailyBattle)}\n");
                 sb.Append($"DailyModel = {BasicString(n.DailyModel)}\n");
@@ -165,6 +166,7 @@ namespace Lycoris.Npc
                 case "IsYw1": n.IsYw1 = text.Trim().Equals("true", StringComparison.OrdinalIgnoreCase); break;
                 case "NpcType": n.NpcType = text.StartsWith("\"") ? Unquote(text) : text.Trim(); break;
                 case "IsDailyFight": n.IsDailyFight = text.Trim().Equals("true", StringComparison.OrdinalIgnoreCase); break;
+                case "ReuseExistingEvents": n.ReuseExistingEvents = text.Trim().Equals("true", StringComparison.OrdinalIgnoreCase); break;
                 case "DailyFightEvent": n.DailyFightEvent = Unquote(text); break;
                 case "TomorrowText": n.TomorrowText = alreadyLiteral ? text : Unquote(text); break;
                 case "DailyBattle": n.DailyBattle = Unquote(text); break;

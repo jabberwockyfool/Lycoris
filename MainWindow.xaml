@@ -93,6 +93,7 @@
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="Medal" Width="45"/>
                                 <TextBox Text="{Binding Medal}" Width="60"/>
+                                <Button Content="Medallium…" FontSize="10" Padding="6,1" Margin="6,0,0,0" VerticalAlignment="Center" Click="OpenMedallium_Click"/>
                                 <CheckBox Content="Show" IsChecked="{Binding Show}" Margin="12,0,0,0" VerticalAlignment="Center"/>
                             </StackPanel>
                         </StackPanel>

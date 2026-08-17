@@ -351,6 +351,13 @@ namespace Lycoris
             catch { return null; }
         }
 
+        private void OpenMedallium_Click(object sender, RoutedEventArgs e)
+        {
+            if (_db == null || _db.Yokai.Count == 0) { DarkMessage.Show("No yo-kai loaded.", "Medallium"); return; }
+            CommitEdits();
+            new MedalliumWindow(this, _db, Selector.SelectedItem as YokaiInfo) { Owner = this }.ShowDialog();
+        }
+
         private void PickMedal_Click(object sender, RoutedEventArgs e)
         {
             var y = Selector.SelectedItem as YokaiInfo;
@@ -437,7 +444,8 @@ namespace Lycoris
             if (dlg.ShowDialog() != true) return;
             try
             {
-                var atlas = Imgc.Decode(System.IO.File.ReadAllBytes(CurrentAtlasPath()));
+                byte[] rawAtlas = System.IO.File.ReadAllBytes(CurrentAtlasPath());
+                var atlas = Imgc.Decode(rawAtlas);
                 byte[] cell = PngToBgra(dlg.FileName, MedalCell, MedalCell);
                 int x = y.MedalPosX.Value * MedalCell, y0 = y.MedalPosY.Value * MedalCell;
                 if (x + MedalCell > atlas.Width || y0 + MedalCell > atlas.Height)
@@ -445,10 +453,10 @@ namespace Lycoris
                 for (int ry = 0; ry < MedalCell; ry++)
                     Array.Copy(cell, ry * MedalCell * 4, atlas.Bgra, ((y0 + ry) * atlas.Width + x) * 4, MedalCell * 4);
 
-                // Write the whole atlas (all vanilla medals + this new cell) to a mod-owned face_icon.xi
-                // at the same face_icon path the working per-yo-kai icons use, so the game reads it.
+                // Write the whole atlas (all vanilla medals + this new cell), PRESERVING its original format
+                // (ETC1A4 atlases must not be re-encoded as RGBA4 — that garbles the whole sheet in-game).
                 string target = _db.ModFaceAtlasWriteTarget;
-                System.IO.File.WriteAllBytes(target, Imgc.EncodeXi(atlas.Bgra, atlas.Width, atlas.Height));
+                System.IO.File.WriteAllBytes(target, Imgc.EncodeXiPreserve(rawAtlas, atlas.Bgra, atlas.Width, atlas.Height));
                 _moddedAtlasPath = target;
                 MedalAtlasImage.Source = CropAtlasMedal(y);
                 StatusText.Text = $"Medal inserted into the atlas at ({y.MedalPosX},{y.MedalPosY}) → {target}";

@@ -110,7 +110,7 @@ namespace Lycoris
             _search.TextChanged += (s, e) => _view?.Refresh();
             DockPanel.SetDock(_search, Dock.Top);
             _list.DisplayMemberPath = "DisplayName";
-            _list.SelectionChanged += (s, e) => { _fields.DataContext = _list.SelectedItem; _fields.IsEnabled = _list.SelectedItem != null; };
+            _list.SelectionChanged += (s, e) => { _fields.DataContext = _list.SelectedItem; _fields.IsEnabled = _list.SelectedItem != null; UpdateDailyGreying(); };
             left.Children.Add(_search);
             left.Children.Add(_list);
             DockPanel.SetDock(left, Dock.Left);
@@ -166,24 +166,52 @@ namespace Lycoris
                 TextWrapping = TextWrapping.Wrap, Foreground = Theme.FgMuted, Margin = new Thickness(0, 10, 0, 2)
             });
             _fields.Children.Add(CheckRow("Daily-fight NPC", "IsDailyFight"));
+            _fields.Children.Add(ReuseEventsRow());
             _fields.Children.Add(TextRow("Base event (evXX_YYY0)", "DailyFightEvent", 160));
             _fields.Children.Add(BattleRow());
             _fields.Children.Add(PickModelRow("NPC model (yo-kai)", "DailyModel", "The yo-kai you fight — auto turn-target, auto BaseID, always a bustup."));
-            _fields.Children.Add(BustupsRow());
-            _fields.Children.Add(CheckRow("Differentiate Katie/Nate (gender)", "DifferentiateGender"));
-            _fields.Children.Add(PickModelRow("Girl bustup (Katie/Hailey)", "GirlBustup", null));
-            _fields.Children.Add(PickModelRow("Boy bustup (Nate)", "BoyBustup", null));
-            _fields.Children.Add(DescRow("Intro — first time (♀)", "IntroText"));
-            _fields.Children.Add(DescRow("Intro (♂ — if gender on)", "IntroTextMale"));
-            _fields.Children.Add(DescRow("Accept — before battle", "AcceptText"));
-            _fields.Children.Add(DescRow("Decline", "DeclineText"));
-            _fields.Children.Add(DescRow("Repeat fight (♀)", "RepeatText"));
-            _fields.Children.Add(DescRow("Repeat fight (♂)", "RepeatTextMale"));
-            _fields.Children.Add(DescRow("Victory (♀)", "VictoryText"));
-            _fields.Children.Add(DescRow("Victory (♂)", "VictoryTextMale"));
-            _fields.Children.Add(DescRow("Loss (♀)", "LossText"));
-            _fields.Children.Add(DescRow("Loss (♂)", "LossTextMale"));
+            // Rows below only feed EVENT GENERATION — greyed out when "Reuse existing events" is on.
+            AddGen(BustupsRow());
+            AddGen(CheckRow("Differentiate Katie/Nate (gender)", "DifferentiateGender"));
+            AddGen(PickModelRow("Girl bustup (Katie/Hailey)", "GirlBustup", null));
+            AddGen(PickModelRow("Boy bustup (Nate)", "BoyBustup", null));
+            AddGen(DescRow("Intro — first time (♀)", "IntroText"));
+            AddGen(DescRow("Intro (♂ — if gender on)", "IntroTextMale"));
+            AddGen(DescRow("Accept — before battle", "AcceptText"));
+            AddGen(DescRow("Decline", "DeclineText"));
+            AddGen(DescRow("Repeat fight (♀)", "RepeatText"));
+            AddGen(DescRow("Repeat fight (♂)", "RepeatTextMale"));
+            AddGen(DescRow("Victory (♀)", "VictoryText"));
+            AddGen(DescRow("Victory (♂)", "VictoryTextMale"));
+            AddGen(DescRow("Loss (♀)", "LossText"));
+            AddGen(DescRow("Loss (♂)", "LossTextMale"));
             _fields.Children.Add(DescRow("\"Come back tomorrow\" (npc_talk)", "TomorrowText"));
+        }
+
+        // Rows that only matter when GENERATING the daily events (greyed when reusing existing ones).
+        private readonly System.Collections.Generic.List<FrameworkElement> _genOnlyRows = new System.Collections.Generic.List<FrameworkElement>();
+
+        private void AddGen(FrameworkElement row) { _genOnlyRows.Add(row); _fields.Children.Add(row); }
+
+        /// <summary>The "Reuse existing events" checkbox — bound + a hook to grey the generation-only rows.</summary>
+        private FrameworkElement ReuseEventsRow()
+        {
+            var sp = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 2, 0, 2) };
+            sp.Children.Add(Label("Reuse existing events"));
+            var chk = new CheckBox { VerticalAlignment = VerticalAlignment.Center };
+            chk.SetBinding(CheckBox.IsCheckedProperty, new Binding("ReuseExistingEvents") { UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged });
+            chk.Checked += (s, e) => UpdateDailyGreying();
+            chk.Unchecked += (s, e) => UpdateDailyGreying();
+            sp.Children.Add(chk);
+            sp.Children.Add(new TextBlock { Text = "  wire only, don't regenerate the 4 events", Foreground = Theme.FgMuted, VerticalAlignment = VerticalAlignment.Center });
+            return sp;
+        }
+
+        /// <summary>Grey the event-generation-only fields when the selected NPC reuses existing events.</summary>
+        private void UpdateDailyGreying()
+        {
+            bool reuse = Selected?.ReuseExistingEvents ?? false;
+            foreach (var r in _genOnlyRows) r.IsEnabled = !reuse;
         }
 
         private static UIElement Label(string text) =>
@@ -521,9 +549,17 @@ namespace Lycoris
                 var r = NpcCompiler.Compile(n, mapFolder, outRoot, mergeMapDir, daily);
                 _status.Text = $"NPC compiled — ID {r.NpcIdHex}." + (r.MergedDir != null ? " Merged into the mod." : "");
 
-                // Daily-fight: also generate the 4 events the NPC's triggers call (xq + config + dialogue).
+                // Daily-fight: also generate the 4 events the NPC's triggers call (xq + config + dialogue) —
+                // unless "Reuse existing events" is on, in which case the 4 events already exist and we only wired
+                // the NPC's talk/triggers to them (by name, so nothing else to do).
                 string eventMsg = "";
-                if (n.IsDailyFight)
+                if (n.IsDailyFight && n.ReuseExistingEvents)
+                {
+                    string ev0 = n.DailyFightEvent.Trim();
+                    eventMsg = $"\n\n♻ Reused existing events: {ev0}, {NpcDailyFight.StepEvent(ev0, 10)}, " +
+                               $"{NpcDailyFight.StepEvent(ev0, 20)}, {NpcDailyFight.StepEvent(ev0, 30)} (not regenerated).";
+                }
+                else if (n.IsDailyFight)
                 {
                     try { eventMsg = "\n\n✔ " + GenerateDailyEvents(n); }
                     catch (Exception ex) { eventMsg = "\n\n⚠ The NPC wiring was written, but the events were NOT generated:\n" + ex.Message; }

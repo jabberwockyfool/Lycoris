@@ -277,6 +277,14 @@ namespace Lycoris.Yokai
         public string ModItemAtlasFile =>
             _itemIconDirs.Where(IsUnderMod).Select(d => Path.Combine(d, "item_icon.xi")).FirstOrDefault(File.Exists);
 
+        /// <summary>The individual 64×64 item icon file (item_&lt;NNNN&gt;.xi, the GlobalIconIndex) — mod first, else
+        /// reference — or null.</summary>
+        public string ItemIconFile(int num) =>
+            _itemIconDirs.Select(d => Path.Combine(d, "item_" + num.ToString("0000") + ".xi")).FirstOrDefault(File.Exists);
+
+        /// <summary>Where a replaced/added item_&lt;NNNN&gt;.xi is written in the mod (…/include/data/menu/item_icon).</summary>
+        public string ItemIconWriteDir => IconWriteDir("item_icon", _itemIconDirs);
+
         /// <summary>
         /// Where a modified copy of <paramref name="resolvedPath"/> should be written inside the mod.
         /// If the file already lives in the mod, it is overwritten; if it was resolved from the reference
@@ -1423,6 +1431,7 @@ namespace Lycoris.Yokai
                         ItemId = e.GetInt(Schema.Item_IdIndex) ?? 0,
                         NounTextID = e.GetInt(Schema.Item_NameHashIndex) ?? 0,
                         DescTextID = e.GetInt(Schema.Item_DescHashIndex) ?? 0,
+                        GlobalIconIndex = e.GetInt(Schema.Item_GlobalIconIndex),
                         InventorySort = e.GetInt(Schema.Item_InventorySortIndex),
                         ItemType = e.GetInt(Schema.Item_TypeIndex),
                         CarryCap = e.GetInt(Schema.Item_CarryCapIndex),

@@ -57,6 +57,7 @@ namespace Lycoris.Npc
         public string MapDir;
         public string PckPath;   // [MapId].pck (for OnTalk XQ), or null
         public T2bFile NpcSet; public string NpcSetPath;
+        public T2bFile NpcTalk; public string NpcTalkPath;   // <MapId>_npc_talk_0.01 (TALK_INFO/CONFIG/PAGE), or null
         public readonly Dictionary<int, (T2bFile file, string path)> Talk = new Dictionary<int, (T2bFile, string)>(); // chapter 1..11
         public List<ExistingNpc> Npcs = new List<ExistingNpc>();
     }
@@ -68,6 +69,9 @@ namespace Lycoris.Npc
         private const int Appear_Name = 0, Appear_Cond = 3;
         private const int NpcTriggerType = 11, Trig_Type = 0, Trig_NpcId = 1, Trig_Func = 6;
         private const int Talk_NpcId = 0;
+        // npc_talk_0.01 record layout (see yw3-npc-dailyfight): TALK_INFO = [npcId, cfgStart, cfgLen];
+        // TALK_CONFIG field[8] = ConditionalCond, field[9] = TrigCond (a RunTrigger blob → trigger id).
+        private const int TalkInfo_Npc = 0, TalkInfo_CfgStart = 1, TalkInfo_CfgLen = 2, TalkCfg_Trig = 9;
 
         /// <summary>Load a map's NPCs from its npc_set (+ base_talk chapters + trigger for XQ funcId).</summary>
         public static MapNpcs Load(string mapDir, string mapId)
@@ -95,8 +99,12 @@ namespace Lycoris.Npc
                 catch { /* a broken chapter-talk file just means that chapter's toggles are unknown */ }
             }
 
-            // XQ triggers (npcId -> funcId), from [MapId].pck if present
+            // XQ triggers, from [MapId].pck if present.
+            //  • funcByNpc     — a type-11 trigger links an NPC directly (field[1] = npcId): Lycoris/simple NPCs.
+            //  • funcByTrigId  — any DATA_ITEM by field[1] (a RunTrigger id), used to resolve VANILLA/talk NPCs
+            //                    whose talk is wired through npc_talk (TALK_CONFIG.TrigCond → this id → funcId).
             var funcByNpc = new Dictionary<int, int>();
+            var funcByTrigId = new Dictionary<int, int>();
             string pckPath = Path.Combine(mapDir, mapId + ".pck");
             m.PckPath = File.Exists(pckPath) ? pckPath : null;
             if (File.Exists(pckPath))
@@ -106,10 +114,39 @@ namespace Lycoris.Npc
                     var pck = Xpck.Read(File.ReadAllBytes(pckPath));
                     var trig = pck.FirstOrDefault(x => x.Name.IndexOf("_trigger", StringComparison.OrdinalIgnoreCase) >= 0 && x.Name.IndexOf("quest", StringComparison.OrdinalIgnoreCase) < 0);
                     if (trig != null)
-                        foreach (var e in T2bReader.Read(trig.Data).Records("DATA_ITEM").Where(e => (e.GetInt(Trig_Type) ?? 0) == NpcTriggerType))
-                        { int id = e.GetInt(Trig_NpcId) ?? 0; if (!funcByNpc.ContainsKey(id)) funcByNpc[id] = e.GetInt(Trig_Func) ?? -1; }
+                        foreach (var e in T2bReader.Read(trig.Data).Records("DATA_ITEM"))
+                        {
+                            int id = e.GetInt(Trig_NpcId) ?? 0, func = e.GetInt(Trig_Func) ?? -1;
+                            if (!funcByTrigId.ContainsKey(id)) funcByTrigId[id] = func;
+                            if ((e.GetInt(Trig_Type) ?? 0) == NpcTriggerType && !funcByNpc.ContainsKey(id)) funcByNpc[id] = func;
+                        }
                 }
                 catch { /* pck unreadable — no XQ info */ }
+            }
+
+            // npc_talk_0.01: needed to resolve vanilla talk NPCs' funcId (and to edit their talk configs).
+            string talkCfgPath = Directory.EnumerateFiles(mapDir, mapId + "_npc_talk_0.01*")
+                .FirstOrDefault(x => x.IndexOf("_text", StringComparison.OrdinalIgnoreCase) < 0);
+            if (talkCfgPath != null) { try { m.NpcTalk = T2bReader.ReadFile(talkCfgPath); m.NpcTalkPath = talkCfgPath; } catch { } }
+
+            // Vanilla talk chain: TALK_INFO(npcId → cfgStart,len) → each TALK_CONFIG.TrigCond (RunTrigger blob,
+            // id at offset 19) → funcByTrigId → the RunCmd_Map funcId.
+            var talkFuncByNpc = new Dictionary<int, int>();
+            if (m.NpcTalk != null)
+            {
+                var configs = m.NpcTalk.Records("TALK_CONFIG").ToList();
+                foreach (var info in m.NpcTalk.Records("TALK_INFO"))
+                {
+                    int nid = info.GetInt(TalkInfo_Npc) ?? 0, start = info.GetInt(TalkInfo_CfgStart) ?? 0, len = info.GetInt(TalkInfo_CfgLen) ?? 0;
+                    for (int k = start; k < start + len && k >= 0 && k < configs.Count; k++)
+                    {
+                        var vals = configs[k].Values;
+                        string blob = vals.Count > TalkCfg_Trig && vals[TalkCfg_Trig].Type == VT.String ? vals[TalkCfg_Trig].Value as string : null;
+                        if (string.IsNullOrEmpty(blob)) continue;
+                        int? tid = YwCond.ReadParamId(blob, 19);
+                        if (tid.HasValue && funcByTrigId.TryGetValue(tid.Value, out int fn) && fn >= 0 && !talkFuncByNpc.ContainsKey(nid)) { talkFuncByNpc[nid] = fn; break; }
+                    }
+                }
             }
 
             foreach (var appear in m.NpcSet.Records("NPC_APPEAR"))
@@ -121,6 +158,7 @@ namespace Lycoris.Npc
                 for (int ch = 1; ch <= 11; ch++)
                     npc.Chapters[ch] = m.Talk.TryGetValue(ch, out var t) && t.file.Records("BASE_TALK_INFO").Any(e => (e.GetInt(Talk_NpcId) ?? 0) == npcId);
                 if (funcByNpc.TryGetValue(npcId, out int fid)) npc.FuncId = fid;
+                else if (talkFuncByNpc.TryGetValue(npcId, out int tfid)) npc.FuncId = tfid;   // vanilla talk NPC
                 npc.IsDirty = npc.OnTalkDirty = npc.ChaptersDirty = false;
                 m.Npcs.Add(npc);
             }
@@ -239,8 +277,102 @@ namespace Lycoris.Npc
                 catch { /* pck unreadable — trigger left as-is */ }
             }
 
+            // npc_talk_0.01: drop this NPC's TALK_INFO so a talk NPC stops talking after deletion. The game looks
+            // up TALK_INFO by npcId, so removing just the TALK_INFO (+ decrementing its count) is safe — the now
+            // unreferenced TALK_CONFIG/TALK_PAGE it pointed at are left in place (harmless, like an orphaned
+            // npcbin); removing them would require re-indexing every other TALK_INFO's ConfigStartPos.
+            if (m.NpcTalk != null && m.NpcTalkPath != null)
+            {
+                var infos = m.NpcTalk.Records("TALK_INFO").Where(e => (e.GetInt(TalkInfo_Npc) ?? 0) == npcId).ToList();
+                if (infos.Count > 0)
+                {
+                    foreach (var e in infos) m.NpcTalk.Entries.Remove(e);
+                    Bump(m.NpcTalk, "TALK_INFO_BEGIN", -infos.Count);
+                    string o = mirror(m.NpcTalkPath);
+                    Directory.CreateDirectory(Path.GetDirectoryName(o));
+                    if (!written.Contains(o)) { T2bWriter.WriteFile(m.NpcTalk, o); written.Add(o); }
+                }
+            }
+
             m.Npcs.Remove(npc);
             return written;
+        }
+
+        /// <summary>Remove an NPC's TALK_INFO from npc_talk (safe — TALK_INFO is looked up by npcId, so no
+        /// reindexing of the configs/pages it pointed at is needed; those become harmless orphans). Returns the
+        /// number removed. Used by delete and by the daily-fight patch (which then appends fresh talk wiring).</summary>
+        public static int RemoveTalkInfo(T2bFile npcTalk, int npcId)
+        {
+            if (npcTalk == null) return 0;
+            var infos = npcTalk.Records("TALK_INFO").Where(e => (e.GetInt(TalkInfo_Npc) ?? 0) == npcId).ToList();
+            foreach (var e in infos) npcTalk.Entries.Remove(e);
+            if (infos.Count > 0) Bump(npcTalk, "TALK_INFO_BEGIN", -infos.Count);
+            return infos.Count;
+        }
+
+        /// <summary>The RunTrigger ids referenced by an NPC's talk configs (TALK_CONFIG.TrigCond, id at offset 19)
+        /// — i.e. the trigger DATA_ITEMs that belong to this NPC's old talk wiring. Used by the daily patch to
+        /// remove the old (broken) triggers before appending fresh ones, so nothing double-fires.</summary>
+        public static HashSet<int> TalkTriggerIds(T2bFile npcTalk, int npcId)
+        {
+            var ids = new HashSet<int>();
+            var info = npcTalk?.Records("TALK_INFO").FirstOrDefault(e => (e.GetInt(TalkInfo_Npc) ?? 0) == npcId);
+            if (info == null) return ids;
+            int start = info.GetInt(TalkInfo_CfgStart) ?? 0, len = info.GetInt(TalkInfo_CfgLen) ?? 0;
+            var configs = npcTalk.Records("TALK_CONFIG").ToList();
+            for (int k = start; k < start + len && k >= 0 && k < configs.Count; k++)
+            {
+                var v = configs[k].Values;
+                string blob = v.Count > TalkCfg_Trig && v[TalkCfg_Trig].Type == VT.String ? v[TalkCfg_Trig].Value as string : null;
+                if (string.IsNullOrEmpty(blob)) continue;
+                int? id = YwCond.ReadParamId(blob, 19);
+                if (id.HasValue) ids.Add(id.Value);
+            }
+            return ids;
+        }
+
+        /// <summary>Remove trigger DATA_ITEMs that belong to an NPC's OLD daily wiring: any whose field[1] is one of
+        /// <paramref name="trigIds"/> (old talk triggers), plus win/lose (type 80/81) items matching
+        /// <paramref name="battleId"/> (they route by battle id, not by a config — so an old pair on the same
+        /// battle would double-fire alongside the new one). Decrements DATA_COUNT.</summary>
+        public static void RemoveTriggerItems(T2bFile trigger, HashSet<int> trigIds, int battleId)
+        {
+            if (trigger == null) return;
+            var rm = trigger.Records("DATA_ITEM").Where(e =>
+            {
+                int type = e.GetInt(Trig_Type) ?? 0, f1 = e.GetInt(Trig_NpcId) ?? 0;
+                return (trigIds != null && trigIds.Contains(f1)) || ((type == 80 || type == 81) && battleId != 0 && f1 == battleId);
+            }).ToList();
+            if (rm.Count == 0) return;
+            foreach (var e in rm) trigger.Entries.Remove(e);
+            var count = trigger.Entries.FirstOrDefault(x => x.Name == "DATA_COUNT");
+            if (count != null && count.Values.Count > 0 && count.Values[0].Value is int c) count.Values[0].Value = c - rm.Count;
+        }
+
+        /// <summary>Issue-1 retrofit: gate an NPC's talk to once-a-day. Sets a GetOneDayBitFlag(flagId)
+        /// ConditionalCond on the NPC's talk config(s) that don't already carry a String cond (so an existing
+        /// GetGlobalBitFlag isn't clobbered); if all already have one, the first config is used. Returns the
+        /// number of configs changed. The caller registers the flag (FLAG_INFO_6) and writes the files.</summary>
+        public static int SetOnceADayCond(MapNpcs m, ExistingNpc npc, int flagId)
+        {
+            if (m?.NpcTalk == null) throw new InvalidOperationException("This map has no npc_talk_0.01 file.");
+            var info = m.NpcTalk.Records("TALK_INFO").FirstOrDefault(e => (e.GetInt(TalkInfo_Npc) ?? 0) == npc.NpcId)
+                       ?? throw new InvalidOperationException("This NPC has no TALK_INFO (npc_talk) entry to gate.");
+            int start = info.GetInt(TalkInfo_CfgStart) ?? 0, len = info.GetInt(TalkInfo_CfgLen) ?? 0;
+            var configs = m.NpcTalk.Records("TALK_CONFIG").ToList();
+            string cond = NpcDailyFight.BuildOneDayConfigCond(flagId);
+
+            const int TalkCfg_Cond = 8;
+            var targets = new List<T2bEntry>();
+            for (int k = start; k < start + len && k >= 0 && k < configs.Count; k++)
+            {
+                var v = configs[k].Values;
+                if (v.Count > TalkCfg_Cond && v[TalkCfg_Cond].Type != VT.String) targets.Add(configs[k]); // empty cond slot
+            }
+            if (targets.Count == 0 && start >= 0 && start < configs.Count) targets.Add(configs[start]);   // all occupied → first
+            foreach (var cfg in targets)
+                if (cfg.Values.Count > TalkCfg_Cond) { cfg.Values[TalkCfg_Cond].Type = VT.String; cfg.Values[TalkCfg_Cond].Value = cond; }
+            return targets.Count;
         }
 
         private static void AddTalk(T2bFile talk, int npcId)

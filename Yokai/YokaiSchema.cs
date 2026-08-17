@@ -170,6 +170,7 @@ namespace Lycoris.Yokai
         // Common field indices (identical across the record types above; validated against real data).
         public int Item_IdIndex = 0;
         public int Item_NameHashIndex = 1;       // NounTextID -> item_text NOUN
+        public int Item_GlobalIconIndex = 5;     // the individual 64x64 icon file number -> item_<NNNN>.xi
         public int Item_InventorySortIndex = 2;
         public int Item_TypeIndex = 3;
         public int Item_CarryCapIndex = 6;

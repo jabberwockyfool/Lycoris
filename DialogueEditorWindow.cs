@@ -62,6 +62,7 @@ namespace Lycoris
 
             var toolbar = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(6) };
             toolbar.Children.Add(Btn("Save mod", Save, 0));
+            toolbar.Children.Add(Btn("🔎 Find text", FindText));
             DockPanel.SetDock(toolbar, Dock.Top);
 
             // left: event list
@@ -190,6 +191,82 @@ namespace Lycoris
             var b = new Button { Content = text, Padding = new Thickness(9, 4, 9, 4), Margin = new Thickness(leftMargin, 0, 0, 0) };
             b.Click += (s, e) => onClick();
             return b;
+        }
+
+        private Window _findWin;
+
+        /// <summary>Search the ACTUAL dialogue text (not just event names) across every source, list the matching
+        /// lines, and let the user jump straight to one (opens its event + selects the line). Case-insensitive.</summary>
+        private void FindText()
+        {
+            if (_job != null) { FindInTranslation(); return; }   // translation mode: filter the current list
+            string q = MultilinePrompt.Ask(this, "Find text",
+                "Text to search across every dialogue source (events + map NPC texts). Case-insensitive.", "");
+            if (string.IsNullOrWhiteSpace(q)) return;
+            q = q.Trim();
+
+            _status.Text = $"Searching for \"{q}\"…";
+            var hits = new List<FindHit>();
+            foreach (var t in DialoguePaths.AllTargets(_db))
+            {
+                if (t?.TextPath == null) continue;
+                DialogueFile df;
+                try { df = Dialogue.Load(t.EventName ?? "", t.TextPath, t.WashaPath, _db); } catch { continue; }
+                foreach (var r in df.Rows)
+                    if (!string.IsNullOrEmpty(r.Text) && r.Text.IndexOf(q, StringComparison.OrdinalIgnoreCase) >= 0)
+                        hits.Add(new FindHit { Target = t, KeyId = r.KeyId, Page = r.Page, Variant = r.Variant, Label = t.Label + "   ·   " + r.Preview });
+            }
+            if (hits.Count == 0) { _status.Text = $"No line contains \"{q}\"."; DarkMessage.Show($"No dialogue line contains \"{q}\".", "Find text"); return; }
+            _status.Text = $"{hits.Count} line(s) contain \"{q}\".";
+            ShowFindResults(q, hits);
+        }
+
+        /// <summary>Translation mode has no event browser — just filter the line list to matches.</summary>
+        private void FindInTranslation()
+        {
+            string q = MultilinePrompt.Ask(this, "Find text", "Text to find in the lines to translate (original or your text). Case-insensitive.", "");
+            if (q == null) return;
+            q = q.Trim();
+            var all = (_lines.ItemsSource as IEnumerable<DialogueLineRow>)?.ToList();
+            if (all == null) return;
+            var hit = all.FirstOrDefault(r =>
+                (r.Original != null && r.Original.IndexOf(q, StringComparison.OrdinalIgnoreCase) >= 0) ||
+                (r.Text != null && r.Text.IndexOf(q, StringComparison.OrdinalIgnoreCase) >= 0));
+            if (hit == null) { _status.Text = $"No line contains \"{q}\"."; return; }
+            _lines.SelectedItem = hit; _lines.ScrollIntoView(hit);
+        }
+
+        private void ShowFindResults(string query, List<FindHit> hits)
+        {
+            _findWin?.Close();
+            var list = new ListBox { ItemsSource = hits, DisplayMemberPath = "Label", Background = Theme.FieldBg, Foreground = Theme.Fg };
+            list.MouseDoubleClick += (s, e) => OpenHit(list.SelectedItem as FindHit);
+            var open = Btn("Go to line", () => OpenHit(list.SelectedItem as FindHit), 0);
+            var bar = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 6, 0, 0) };
+            bar.Children.Add(open);
+            DockPanel.SetDock(bar, Dock.Bottom);
+            var head = new TextBlock { Text = $"{hits.Count} match(es) for \"{query}\" — double-click to jump.", Foreground = Theme.FgMuted, Margin = new Thickness(0, 0, 0, 6) };
+            DockPanel.SetDock(head, Dock.Top);
+            var root = new DockPanel { Margin = new Thickness(10) };
+            root.Children.Add(head);
+            root.Children.Add(bar);
+            root.Children.Add(list);
+            _findWin = new Window
+            {
+                Owner = this, Title = "Find text — " + query, Width = 560, Height = 460,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner, Content = root,
+            };
+            _findWin.Closed += (s, e) => { if (_findWin != null && ReferenceEquals(_findWin, s)) _findWin = null; };
+            _findWin.Show();
+        }
+
+        private void OpenHit(FindHit h)
+        {
+            if (h == null) return;
+            LoadTarget(h.Target);
+            var row = _dlg?.Rows.FirstOrDefault(r => r.KeyId == h.KeyId && r.Page == h.Page && r.Variant == h.Variant);
+            if (row != null) { _lines.SelectedItem = row; _lines.ScrollIntoView(row); }
+            Activate();
         }
 
         private void RefreshEvents()
@@ -525,6 +602,14 @@ namespace Lycoris
             if (s.Length == 0) return 0;
             return unchecked((int)Crc32.Standard(Encoding.UTF8.GetBytes(s)));
         }
+    }
+
+    /// <summary>One "Find text" match: which dialogue source + how to re-locate the line after loading it.</summary>
+    internal sealed class FindHit
+    {
+        public DialogueTarget Target;
+        public int KeyId, Page, Variant;
+        public string Label { get; set; }    // a PROPERTY (DisplayMemberPath binds to properties, not fields)
     }
 
     /// <summary>One string to translate: the live cfg.bin value + its original text.</summary>

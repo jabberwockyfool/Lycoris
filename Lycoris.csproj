@@ -81,6 +81,12 @@
     <Compile Include="Yokai\AttackProfile.cs" />
     <Compile Include="Yokai\YokaiModels.cs" />
     <Compile Include="Yokai\ItemInfo.cs" />
+    <Compile Include="Yokai\CharaSwitch.cs" />
+    <Compile Include="Yokai\ModScaffold.cs" />
+    <Compile Include="Yokai\YokaiPort.cs" />
+    <Compile Include="PortWindow.cs" />
+    <Compile Include="MedalliumWindow.cs" />
+    <Compile Include="CharaSwitchWindow.cs" />
     <Compile Include="Yokai\BossPort.cs" />
     <Compile Include="Yokai\SkillInfo.cs" />
     <Compile Include="Yokai\CombineModels.cs" />

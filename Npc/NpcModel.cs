@@ -23,6 +23,7 @@ namespace Lycoris.Npc
 
         // --- daily-fight mode (an NPC that triggers a once-a-day battle: 4 talk events) ---
         private bool _isDailyFight;
+        private bool _reuseExistingEvents;               // wire the NPC to 4 events that ALREADY exist (don't regenerate)
         private string _dailyFightEvent = "";           // base event name (evXX_YYY0); +10/+20/+30 derived
         private string _tomorrowText = "I'll play with you next time,\nso just be patient until then!";
         private string _dailyBattle = "";               // battle id for load_battle_ev (first + repeat events)
@@ -62,6 +63,11 @@ namespace Lycoris.Npc
 
         /// <summary>Base event name (evXX_YYY0) created in the Event editor; +10/+20/+30 give the repeat/win/lose events.</summary>
         public string DailyFightEvent { get => _dailyFightEvent; set => Set(ref _dailyFightEvent, value); }
+
+        /// <summary>When true, the 4 events (base/+10/+20/+30) ALREADY exist — only wire the NPC's talk/triggers to
+        /// them; don't regenerate the .xq / event_set_config / dialogue. The base event name must match the existing
+        /// events (the daily flag = CRC32(base name)).</summary>
+        public bool ReuseExistingEvents { get => _reuseExistingEvents; set => Set(ref _reuseExistingEvents, value); }
 
         /// <summary>The overworld "come back tomorrow" line the NPC says once the daily fight is done.</summary>
         public string TomorrowText { get => _tomorrowText; set => Set(ref _tomorrowText, value); }
@@ -112,7 +118,8 @@ namespace Lycoris.Npc
             _npcName = _npcName, _baseId = _baseId, _npcX = _npcX, _npcY = _npcY, _npcZ = _npcZ,
             _npcRotation = _npcRotation, _chapterCode = _chapterCode, _mapId = _mapId, _onTalk = _onTalk,
             _appearCond = _appearCond, _isYw1 = _isYw1, _npcType = _npcType,
-            _isDailyFight = _isDailyFight, _dailyFightEvent = _dailyFightEvent, _tomorrowText = _tomorrowText,
+            _isDailyFight = _isDailyFight, _reuseExistingEvents = _reuseExistingEvents,
+            _dailyFightEvent = _dailyFightEvent, _tomorrowText = _tomorrowText,
             _dailyBattle = _dailyBattle, _dailyBustups = _dailyBustups, _differentiateGender = _differentiateGender,
             _girlBustup = _girlBustup, _boyBustup = _boyBustup, _dailyModel = _dailyModel,
             _introText = _introText, _acceptText = _acceptText, _declineText = _declineText,

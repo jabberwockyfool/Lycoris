@@ -36,10 +36,10 @@ namespace Lycoris
         private readonly Button _battleBtn;
         private readonly Button _saveBtn;
         private readonly Button _checkBtn;
-        private readonly Button _mergeBtn;
         private readonly Button _minfBtn;
         private readonly Button _modelBtn;
         private readonly Button _transBtn;
+        private readonly Button _portBtn;
 
         private MainWindow _yokaiWindow;
         private ItemEditorWindow _itemWindow;
@@ -115,17 +115,17 @@ namespace Lycoris
             _battleBtn = EditorButton("Battle Editor", OpenBattleEditor);
             _saveBtn = EditorButton("Save Editor", OpenSaveEditor);
             _checkBtn = EditorButton("Check integrity", OpenIntegrity);
-            _mergeBtn = EditorButton("Mod Merger", OpenModMerger);   // standalone: works without a loaded project
             _minfBtn = EditorButton("Minf Editor (.xc)", OpenMinfEditor);   // standalone: opens a .xc directly
-            _modelBtn = EditorButton("Model Editor (.bin→.xc)", OpenModelEditor);   // standalone: ports a model .bin
+            _modelBtn = EditorButton("Nyaport", OpenModelEditor);   // standalone: ports a model .bin (GFModel → .xc)
             _transBtn = EditorButton("Translation Helper", OpenTranslationHelper);   // standalone: diff vanilla vs mod text
+            _portBtn = EditorButton("Port yo-kai…", OpenPort);   // port a yo-kai from another mod into this one
 
             AddSection(root, "Characters", _yokaiBtn, _itemBtn, _skillBtn, _combineBtn, _bossBtn);
             AddSection(root, "World", _npcBtn, _mapBtn, _shopBtn, _warpBtn, _eventBtn, _dialogueBtn, _battleBtn);
-            AddSection(root, "Save & Tools", _saveBtn, _checkBtn, _mergeBtn, _minfBtn, _modelBtn, _transBtn);
+            AddSection(root, "Save & Tools", _saveBtn, _checkBtn, _portBtn, _minfBtn, _modelBtn, _transBtn);
 
             foreach (var b in new[] { _yokaiBtn, _itemBtn, _skillBtn, _combineBtn, _bossBtn, _npcBtn, _mapBtn, _shopBtn, _warpBtn,
-                                      _eventBtn, _dialogueBtn, _battleBtn, _saveBtn, _checkBtn })
+                                      _eventBtn, _dialogueBtn, _battleBtn, _saveBtn, _checkBtn, _portBtn })
                 b.IsEnabled = false;
 
             _status.Margin = new Thickness(1, 20, 0, 0);
@@ -226,7 +226,17 @@ namespace Lycoris
                 System.IO.Directory.CreateDirectory(folder);
                 Ywml.Write(folder, name, "", "v0.0.0");   // create the YWML manifest so the name persists
                 LoadModFolder(name, folder, _referenceFolder);
-                _status.Text = $"New mod “{name}” created. Edits are written into {folder}. Choose an editor.";
+
+                if (dlg.PreCopyConfigs)
+                {
+                    var copied = Yokai.ModScaffold.PreCopyBaseConfigs(_db);
+                    _status.Text = $"New mod “{name}” created with {copied.Count} base config file(s) pre-copied. Choose an editor.";
+                    if (copied.Count > 0)
+                        DarkMessage.Show($"Pre-copied {copied.Count} base config file(s) into the mod:\n\n" +
+                            string.Join("\n", copied), "New mod", MessageBoxButton.OK, MessageBoxImage.Information);
+                }
+                else
+                    _status.Text = $"New mod “{name}” created. Edits are written into {folder}. Choose an editor.";
             }
             catch (Exception ex)
             {
@@ -274,6 +284,7 @@ namespace Lycoris
                 _battleBtn.IsEnabled = _db.Yokai.Count > 0;
                 _saveBtn.IsEnabled = _db.Yokai.Count > 0;
                 _checkBtn.IsEnabled = _db.ParamFile != null;
+                _portBtn.IsEnabled = _db.ModFolder != null;   // needs a target mod to port into
 
                 _currentModFolder = folder;
                 Title = $"Lycoris — {name}";
@@ -431,9 +442,12 @@ namespace Lycoris
             new IntegrityWindow(this, _db) { Owner = this }.Show();
         }
 
-        private void OpenModMerger()
+        private void OpenPort()
         {
-            new ModMergerWindow(this, _referenceFolder) { Owner = this }.Show();
+            if (_db?.ModFolder == null) { DarkMessage.Show("Load a target mod first.", "Port yo-kai"); return; }
+            string name = Ywml.FindName(_db.ModFolder) ?? System.IO.Path.GetFileName(_db.ModFolder.TrimEnd('\\', '/'));
+            string reference = _db.ReferenceFolder ?? _referenceFolder;
+            new PortWindow(this, _db, () => LoadModFolder(name, _db.ModFolder, reference, quiet: true)) { Owner = this }.ShowDialog();
         }
 
         private void OpenMinfEditor()
@@ -457,15 +471,17 @@ namespace Lycoris
     {
         private readonly TextBox _name = new TextBox { Text = "MyMod" };
         private readonly TextBox _loc = new TextBox { IsReadOnly = true };
+        private readonly CheckBox _preCopy = new CheckBox { Content = "Pre-copy the base config files (so every editor works standalone)", Foreground = Theme.Fg, Margin = new Thickness(0, 10, 0, 0) };
 
         public string ModName => _name.Text?.Trim();
         public string Location => _loc.Text?.Trim();
+        public bool PreCopyConfigs => _preCopy.IsChecked == true;
 
         public NewModDialog(Window owner)
         {
             Owner = owner;
             Title = "New mod";
-            Width = 460; Height = 230;
+            Width = 460; Height = 300;
             WindowStartupLocation = WindowStartupLocation.CenterOwner;
             ResizeMode = ResizeMode.NoResize;
             _loc.Text = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
@@ -491,6 +507,7 @@ namespace Lycoris
                 Text = "The folder location\\name is created; vanilla data is read from the reference and your edits are written into it.",
                 Foreground = Theme.FgMuted, Opacity = 0.7, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 8, 0, 0)
             });
+            grid.Children.Add(_preCopy);
 
             var ok = new Button { Content = "Create", IsDefault = true, Width = 90, Margin = new Thickness(0, 12, 6, 0) };
             ok.Click += (s, e) =>

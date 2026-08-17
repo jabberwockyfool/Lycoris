@@ -14,6 +14,7 @@ namespace Lycoris.Yokai
         public int ItemId { get; set; }
         public int NounTextID { get; set; }
         public int DescTextID { get; set; }
+        public int? GlobalIconIndex { get; set; }   // the individual 64x64 icon file number -> item_<NNNN>.xi
         public string RecordType { get; set; }
 
         private string _name, _description;

@@ -273,11 +273,11 @@ def build_bones(model):
 def submesh_bone_palette(model, mesh, sm):
     """Names for the submesh's local bone palette (index -> skeleton bone name)."""
     names = []
-    for k in range(sm.bone_indices_count):
+    for k in range(min(sm.bone_indices_count, len(sm.bone_indices))):
         gi = sm.bone_indices[k]
-        names.append(model.skeleton[gi].name if gi < len(model.skeleton) else "Origin")
-    if not names:  # rigid single-bind fallback -> root
-        names = [model.skeleton[0].name]
+        names.append(model.skeleton[gi].name if 0 <= gi < len(model.skeleton) else "Origin")
+    if not names:  # rigid single-bind fallback -> root (or "Origin" if the model has no skeleton)
+        names = [model.skeleton[0].name] if model.skeleton else ["Origin"]
     return names
 
 
@@ -309,6 +309,21 @@ def build_prm(xmpr, model, mesh, sm, mesh_name, material_name, texspace, mode,
     verts = sm.vertices
     palette = submesh_bone_palette(model, mesh, sm)
 
+    # Resolve a vertex bone index to a palette slot. In-range indices map straight through (unchanged for
+    # models that already worked). An OUT-OF-RANGE index (a submesh whose local palette is short/absent, so the
+    # vertices carry direct global skeleton indices) is appended to the palette as the matching skeleton bone —
+    # this is what caused xmpr.used_bones' "list index out of range".
+    _bpos = {}
+    def resolve_bone(raw):
+        if 0 <= raw < len(palette):
+            return raw
+        if raw in _bpos:
+            return _bpos[raw]
+        nm = model.skeleton[raw].name if (0 <= raw < len(model.skeleton)) else (palette[0] if palette else "Origin")
+        _bpos[raw] = len(palette)
+        palette.append(nm)
+        return _bpos[raw]
+
     remap = {}
     order = []
     tris = []
@@ -336,7 +351,7 @@ def build_prm(xmpr, model, mesh, sm, mesh_name, material_name, texspace, mode,
         w = {}
         for j in range(4):
             if v.weights[j] > 0:
-                w[v.indices[j]] = v.weights[j]
+                w[resolve_bone(v.indices[j])] = v.weights[j]
         if not w:
             w = {0: 1.0}
         weights[new_i] = w

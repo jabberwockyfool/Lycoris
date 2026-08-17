@@ -21,6 +21,12 @@ namespace Lycoris
         private readonly TextBlock _status = new TextBlock { Foreground = Theme.FgMuted, Margin = new Thickness(4) };
         private readonly TextBlock _count = new TextBlock();
 
+        // Type-to-filter "Item" picker (managed by delegate, not a two-way SelectedValue binding, so filtering
+        // — which transiently drops the selected item from the view — never nulls the line's ItemId).
+        private ComboBox _itemCombo;
+        private System.Windows.Data.ListCollectionView _itemView;
+        private bool _itemSync;
+
         public ShopEditorWindow(Window owner, YokaiDatabase db)
         {
             _db = db;
@@ -58,7 +64,7 @@ namespace Lycoris
             DockPanel.SetDock(itemBar, Dock.Top);
             _itemList.DisplayMemberPath = "DisplayName";
             _itemList.Margin = new Thickness(6, 0, 6, 6);
-            _itemList.SelectionChanged += (s, e) => { _detail.DataContext = _itemList.SelectedItem; _detail.IsEnabled = _itemList.SelectedItem != null; };
+            _itemList.SelectionChanged += (s, e) => { _detail.DataContext = _itemList.SelectedItem; _detail.IsEnabled = _itemList.SelectedItem != null; BindItemCombo(); };
             var middle = new DockPanel { Width = 272 };
             middle.Children.Add(itemBar);
             middle.Children.Add(_itemList);
@@ -94,7 +100,7 @@ namespace Lycoris
 
         private void BuildDetail()
         {
-            _detail.Children.Add(ComboRow("Item", "ItemId", "ItemOptions"));
+            _detail.Children.Add(ItemComboRow());
             _detail.Children.Add(TextRow("Price (empty = default)", "PriceText", 120));
             _detail.Children.Add(NumRow("Max limited stock", "MaxStock"));
             _detail.Children.Add(CheckRow("Has limited stock", "HasLimitedStock"));
@@ -105,6 +111,61 @@ namespace Lycoris
 
         private static UIElement Label(string text) =>
             new TextBlock { Text = text, Width = 150, VerticalAlignment = VerticalAlignment.Center, Foreground = Theme.FgMuted };
+
+        /// <summary>The "Item" picker as a type-to-filter combo over the full item catalog (search by typing).</summary>
+        private FrameworkElement ItemComboRow()
+        {
+            var sp = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 3, 0, 3) };
+            sp.Children.Add(Label("Item"));
+            _itemCombo = new ComboBox
+            {
+                Width = 300, IsEditable = true, IsTextSearchEnabled = false, StaysOpenOnEdit = true,
+                SelectedValuePath = "Key",   // no DisplayMemberPath: EnumEntry.ToString() == Name (matches SearchableCombo)
+            };
+            TextSearch.SetTextPath(_itemCombo, "Name");
+            _itemView = new System.Windows.Data.ListCollectionView(_db.ItemOptions);
+            _itemCombo.ItemsSource = _itemView;
+            _itemCombo.SelectionChanged += ItemCombo_SelectionChanged;
+            _itemCombo.AddHandler(TextBoxBase.TextChangedEvent, new TextChangedEventHandler(ItemCombo_TextChanged));
+            _itemCombo.DropDownClosed += (s, e) => ItemComboResetFilter();
+            sp.Children.Add(_itemCombo);
+            return sp;
+        }
+
+        private void BindItemCombo()
+        {
+            if (_itemCombo == null) return;
+            _itemSync = true;
+            _itemView.Filter = null;
+            _itemCombo.SelectedValue = (_detail.DataContext as ShopItem)?.ItemId;
+            _itemSync = false;
+        }
+
+        private void ItemCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (_itemSync) return;
+            if (e.AddedItems.Count > 0 && e.AddedItems[0] is EnumEntry en && _detail.DataContext is ShopItem si)
+                si.ItemId = en.Key;
+        }
+
+        private void ItemCombo_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            if (_itemSync) return;
+            string t = _itemCombo.Text ?? "";
+            _itemView.Filter = string.IsNullOrEmpty(t)
+                ? (Predicate<object>)null
+                : o => ((EnumEntry)o).Name.IndexOf(t, StringComparison.OrdinalIgnoreCase) >= 0;
+            if (!_itemCombo.IsDropDownOpen && t.Length > 0) _itemCombo.IsDropDownOpen = true;
+        }
+
+        private void ItemComboResetFilter()
+        {
+            _itemSync = true;
+            object val = _itemCombo.SelectedValue;
+            _itemView.Filter = null;
+            _itemCombo.SelectedValue = val;
+            _itemSync = false;
+        }
 
         private static FrameworkElement ComboRow(string label, string valuePath, string sourcePath)
         {

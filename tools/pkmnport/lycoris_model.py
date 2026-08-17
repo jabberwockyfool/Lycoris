@@ -146,5 +146,7 @@ if __name__ == "__main__":
     try:
         sys.exit(main())
     except Exception as e:
+        import traceback
         sys.stderr.write("ERR: %s\n" % e)
+        sys.stderr.write(traceback.format_exc())   # full location, so the failing file:line is visible
         sys.exit(1)
