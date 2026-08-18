@@ -24,8 +24,9 @@ namespace Lycoris
         private readonly TextBlock _abilityLbl = new TextBlock { Foreground = Theme.Fg, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 0, 0), TextWrapping = TextWrapping.Wrap };
         private readonly ComboBox _effect = new ComboBox { Width = 220, IsEditable = true };
         private readonly ListBox _existing = new ListBox { Height = 110, Background = Theme.FieldBg, Foreground = Theme.Fg, Margin = new Thickness(0, 4, 0, 0) };
-        private readonly CheckBox _sameKind = new CheckBox { Content = "Also declare SAME-KIND (medallium). ⚠ can auto-transform WITHOUT the item — leave off unless you want that.", Foreground = Theme.Fg, Margin = new Thickness(0, 8, 0, 0), IsChecked = false };
+        private readonly CheckBox _sameKind = new CheckBox { Content = "Declare SAME-KIND in chara_param (needed — the two forms are the same character)", Foreground = Theme.Fg, Margin = new Thickness(0, 8, 0, 0), IsChecked = true };
         private readonly ComboBox _item = new ComboBox { Width = 260, IsEditable = true, IsTextSearchEnabled = true };
+        private readonly TextBox _skillStart = new TextBox { Width = 44, VerticalAlignment = VerticalAlignment.Center, Text = "5" };
         private readonly Button _apply = new Button { Content = "Apply switch", MinWidth = 120, MinHeight = 30 };
         private readonly Button _remove = new Button { Content = "Remove switch", MinWidth = 120, MinHeight = 30, Margin = new Thickness(8, 0, 0, 0) };
         private readonly TextBlock _status = new TextBlock { Foreground = Theme.FgMuted, Margin = new Thickness(0, 10, 0, 0), TextWrapping = TextWrapping.Wrap };
@@ -74,8 +75,10 @@ namespace Lycoris
             System.Windows.Controls.TextSearch.SetTextPath(_item, "Name");
             _item.ItemsSource = _db.ItemOptions;
             itemRow.Children.Add(_item);
-            itemRow.Children.Add(new TextBlock { Text = "  = allow the original yo-kai to equip it", Foreground = Theme.FgMuted, VerticalAlignment = VerticalAlignment.Center });
+            itemRow.Children.Add(new TextBlock { Text = "  skill#", Foreground = Theme.FgMuted, VerticalAlignment = VerticalAlignment.Center });
+            itemRow.Children.Add(_skillStart);
             root.Children.Add(itemRow);
+            root.Children.Add(new TextBlock { Text = "Item = allow the original yo-kai to equip it + grant the switch skill (ITEM_EQUIPMENT_SKILL[skill#], default 5).", Foreground = Theme.FgMuted, TextWrapping = TextWrapping.Wrap });
 
             root.Children.Add(_sameKind);
 
@@ -194,8 +197,9 @@ namespace Lycoris
             {
                 CharaSwitch.AddToAbility(_ability, eff, _from.ParamHash, _to.ParamHash);
                 bool sameAdded = false;
-                if (wantSame && !CharaSwitch.SameKindExists(_db.ParamData, _to.ParamHash, _from.ParamHash))
-                { CharaSwitch.AddSameKind(_db.ParamData, _to.ParamHash, _from.ParamHash); sameAdded = true; }
+                // SAME_KIND: INFO[0] = the ORIGINAL (equip-on) form, DATA[0] = the CUSTOM (transformed) form.
+                if (wantSame && !CharaSwitch.SameKindExists(_db.ParamData, _from.ParamHash))
+                { CharaSwitch.AddSameKind(_db.ParamData, _from.ParamHash, _to.ParamHash); sameAdded = true; }
 
                 string aOut = _db.MirrorToMod(_abilityPath) ?? _abilityPath;
                 T2bWriter.WriteFile(_ability, aOut); _abilityPath = aOut;
@@ -228,7 +232,7 @@ namespace Lycoris
             try
             {
                 bool ab = CharaSwitch.RemoveFromAbility(_ability, eff, _from.ParamHash, _to.ParamHash);
-                bool sk = CharaSwitch.RemoveSameKind(_db.ParamData, _to.ParamHash);
+                bool sk = CharaSwitch.RemoveSameKind(_db.ParamData, _from.ParamHash);   // INFO[0] = original form
 
                 string aOut = _db.MirrorToMod(_abilityPath) ?? _abilityPath;
                 T2bWriter.WriteFile(_ability, aOut); _abilityPath = aOut;
@@ -254,13 +258,22 @@ namespace Lycoris
                 if (_itemCfgPath == null) return "item equip: ⚠ item_config not found";
                 try { _itemCfg = T2bReader.ReadFile(_itemCfgPath); } catch (Exception ex) { return "item equip: ⚠ " + ex.Message; }
             }
-            string err = allow
-                ? CharaSwitch.AllowEquip(_itemCfg, itemId.Value, _from.BaseHash)
-                : CharaSwitch.DisallowEquip(_itemCfg, itemId.Value, _from.BaseHash);
-            if (err != null) return "item equip: ⚠ " + err;
+            int start = int.TryParse(_skillStart.Text.Trim(), out int s) ? s : CharaSwitch.DefaultEquipSkillStart;
+            string err;
+            if (allow)
+            {
+                err = CharaSwitch.AllowEquip(_itemCfg, itemId.Value, _from.BaseHash)
+                      ?? CharaSwitch.AddEquipSkill(_itemCfg, itemId.Value, start, 1);
+            }
+            else
+            {
+                err = CharaSwitch.DisallowEquip(_itemCfg, itemId.Value, _from.BaseHash)
+                      ?? CharaSwitch.DisallowEquipSkill(_itemCfg, itemId.Value);
+            }
+            if (err != null) return "item: ⚠ " + err;
             string iOut = _db.MirrorToMod(_itemCfgPath) ?? _itemCfgPath;
             T2bWriter.WriteFile(_itemCfg, iOut); _itemCfgPath = iOut;
-            return $"item equip: {(allow ? "allowed" : "removed")} ({System.IO.Path.GetFileName(iOut)})";
+            return $"item: {(allow ? "equip-cond + switch skill added" : "removed")} ({System.IO.Path.GetFileName(iOut)})";
         }
 
         private YokaiInfo Pick()

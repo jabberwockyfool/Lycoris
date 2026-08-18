@@ -112,12 +112,13 @@ namespace Lycoris.Yokai
             { fx.Values[Fx_Count].Type = VT.Integer; fx.Values[Fx_Count].Value = c + 1; }
         }
 
-        /// <summary>Declare the two forms as the SAME character in chara_param (INFO[0]=To, DATA[0]=From).</summary>
-        public static void AddSameKind(T2bFile param, int to, int from)
+        /// <summary>Declare the two forms as the SAME character in chara_param: INFO[0]=<paramref name="infoId"/>
+        /// (the ORIGINAL / equip-on form), nested DATA[0]=<paramref name="dataId"/> (the CUSTOM / transformed form).</summary>
+        public static void AddSameKind(T2bFile param, int infoId, int dataId)
         {
-            var info = Clone(param, Same); SetI(info, 0, to);
+            var info = Clone(param, Same); SetI(info, 0, infoId);
             var dbeg = Clone(param, SameDataBeg); SetI(dbeg, 0, 1);
-            var data = Clone(param, SameData); SetI(data, 0, from);
+            var data = Clone(param, SameData); SetI(data, 0, dataId);
             var dend = Clone(param, SameDataEnd);
 
             int endIdx = param.Entries.FindIndex(x => x.Name == SameEnd);
@@ -128,10 +129,9 @@ namespace Lycoris.Yokai
             if (begIdx >= 0) Bump(param, begIdx);
         }
 
-        public static bool SameKindExists(T2bFile param, int to, int from)
+        public static bool SameKindExists(T2bFile param, int infoId)
         {
-            var infos = param.Records(Same).ToList();
-            return infos.Any(i => GI(i, 0) == to);   // a group already headed by this custom form
+            return param.Records(Same).Any(i => GI(i, 0) == infoId);   // a group already headed by this form
         }
 
         // ---- removal (undo a switch) ----
@@ -151,10 +151,10 @@ namespace Lycoris.Yokai
             return true;
         }
 
-        /// <summary>Remove the CHARA_SAME_KIND_INFO group headed by <paramref name="to"/> (its INFO + nested DATA list).</summary>
-        public static bool RemoveSameKind(T2bFile param, int to)
+        /// <summary>Remove the CHARA_SAME_KIND_INFO group headed by <paramref name="infoId"/> (its INFO + nested DATA list).</summary>
+        public static bool RemoveSameKind(T2bFile param, int infoId)
         {
-            var info = param.Records(Same).FirstOrDefault(i => GI(i, 0) == to);
+            var info = param.Records(Same).FirstOrDefault(i => GI(i, 0) == infoId);
             if (info == null) return false;
             int idx = param.Entries.IndexOf(info);
             int endIdx = -1;
@@ -234,6 +234,49 @@ namespace Lycoris.Yokai
             SetI(refEntry, Ref_Count, count - 1);
             foreach (var r in item.Records(RefCondChara)) if (!ReferenceEquals(r, refEntry) && GI(r, Ref_Start) > at) SetI(r, Ref_Start, GI(r, Ref_Start) - 1);
             BumpByName(item, CondCharaBeg, 0, -1);
+            return null;
+        }
+
+        // ---- item equip SKILL (make the item GRANT the switch skill) ----
+        // The switch item needs an ITEM_EQUIPMENT_REF_EQUIPMENT_SKILL right AFTER its ITEM_EQUIPMENT record
+        // (positional link; the ref is an uncounted sub-record of ITEM_EQUIPMENT_LIST). [0]=StartPos (index into
+        // ITEM_EQUIPMENT_SKILL, e.g. 5 = the character-switch skill 0x9A5F207E), [1]=Length (1).
+        private const string RefEquipSkill = "ITEM_EQUIPMENT_REF_EQUIPMENT_SKILL";
+        public const int DefaultEquipSkillStart = 5;   // ITEM_EQUIPMENT_SKILL[5] = the vanilla switch skill
+
+        /// <summary>Give an item the switch skill: insert a REF_EQUIPMENT_SKILL[start,len] right after its
+        /// ITEM_EQUIPMENT. No-op (updates in place) if one already follows. Returns a message on failure, null on ok.</summary>
+        public static string AddEquipSkill(T2bFile item, int itemId, int start, int len)
+        {
+            var eq = item.Records(ItemEquip).FirstOrDefault(e => GI(e, 0) == itemId);
+            if (eq == null) return $"Item 0x{unchecked((uint)itemId):X8} is not an ITEM_EQUIPMENT.";
+            int ei = item.Entries.IndexOf(eq);
+            if (ei + 1 < item.Entries.Count && item.Entries[ei + 1].Name == RefEquipSkill)
+            { SetI(item.Entries[ei + 1], 0, start); SetI(item.Entries[ei + 1], 1, len); return null; }
+
+            var tpl = item.Records(RefEquipSkill).FirstOrDefault();
+            T2bEntry rec;
+            if (tpl != null) { rec = tpl.Clone(); SetI(rec, 0, start); SetI(rec, 1, len); }
+            else
+            {
+                var nm = item.Names.FirstOrDefault(n => n.Name == RefEquipSkill);
+                if (nm.Name != RefEquipSkill) return "item_config has no ITEM_EQUIPMENT_REF_EQUIPMENT_SKILL to use as a template.";
+                rec = new T2bEntry { Name = RefEquipSkill, Crc = nm.Crc };
+                rec.Values.Add(new T2bValue(VT.Integer, start));
+                rec.Values.Add(new T2bValue(VT.Integer, len));
+            }
+            item.Entries.Insert(ei + 1, rec);   // uncounted sub-record → do NOT bump ITEM_EQUIPMENT_LIST_BEG
+            return null;
+        }
+
+        /// <summary>Remove an item's granted skill (the REF_EQUIPMENT_SKILL right after its ITEM_EQUIPMENT).</summary>
+        public static string DisallowEquipSkill(T2bFile item, int itemId)
+        {
+            var eq = item.Records(ItemEquip).FirstOrDefault(e => GI(e, 0) == itemId);
+            if (eq == null) return null;
+            int ei = item.Entries.IndexOf(eq);
+            if (ei + 1 < item.Entries.Count && item.Entries[ei + 1].Name == RefEquipSkill)
+                item.Entries.RemoveAt(ei + 1);
             return null;
         }
 

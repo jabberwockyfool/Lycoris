@@ -149,13 +149,23 @@ namespace Lycoris
             _iconImg.Source = IconImage(it);
         }
 
-        /// <summary>The item's real 64×64 icon (its individual item_&lt;NNNN&gt;.xi from GlobalIconIndex), falling
-        /// back to the atlas thumbnail cell when there's no individual file.</summary>
+        // The item_icon.xi atlas is 32 cells wide (1024 / 32px). The individual 64×64 icon file number is derived
+        // from the atlas grid position: item_<32*IconPosY + IconPosX + 1>.xi (validated by matching every atlas
+        // cell to its individual file — NOT field 5, and NOT the YW1 "16 per row" formula).
+        private const int AtlasCols = 32;
+
+        /// <summary>The item's individual 64×64 icon file number = 32*IconPosY + IconPosX + 1, or null.</summary>
+        private static int? IconNumber(ItemInfo it) =>
+            it?.IconPosX != null && it.IconPosY != null ? (int?)(it.IconPosY.Value * AtlasCols + it.IconPosX.Value + 1) : null;
+
+        /// <summary>The item's real 64×64 icon (its individual item_&lt;NNNN&gt;.xi at the atlas grid position),
+        /// falling back to the atlas thumbnail cell when there's no individual file.</summary>
         private BitmapSource IconImage(ItemInfo it)
         {
-            if (it?.GlobalIconIndex != null)
+            int? num = IconNumber(it);
+            if (num.HasValue)
             {
-                string f = _db.ItemIconFile(it.GlobalIconIndex.Value);
+                string f = _db.ItemIconFile(num.Value);
                 if (f != null) { try { var img = Imgc.Decode(System.IO.File.ReadAllBytes(f)); return ToBitmap(img.Bgra, img.Width, img.Height); } catch { } }
             }
             return CropIcon(it);
@@ -244,13 +254,14 @@ namespace Lycoris
         {
             var it = _list.SelectedItem as ItemInfo;
             if (it == null) return;
-            if (it.GlobalIconIndex == null)
-            { DarkMessage.Show("This item has no icon number (GlobalIconIndex / field 5).", "Item icon"); return; }
+            int? iconNum = IconNumber(it);
+            if (iconNum == null)
+            { DarkMessage.Show("Set this item's Icon X / Icon Y first (the icon file is item_<32*Y+X+1>.xi).", "Item icon"); return; }
             var dlg = new Microsoft.Win32.OpenFileDialog { Filter = "PNG images|*.png", Title = "Item icon — PNG 64×64" };
             if (dlg.ShowDialog() != true) return;
             try
             {
-                int num = it.GlobalIconIndex.Value;
+                int num = iconNum.Value;
                 byte[] bgra64 = PngToBgra(dlg.FileName, 64, 64);
 
                 // The REAL in-game icon is the individual 64×64 item_<NNNN>.xi (ETC1A4). Write that — preserving
