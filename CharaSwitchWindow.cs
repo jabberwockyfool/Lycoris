@@ -178,12 +178,7 @@ namespace Lycoris
             int eff = ParseHex(_effect.Text);
             if (eff == 0) { _status.Text = "Enter a valid switch effect id (e.g. 0xC58E24C1)."; return; }
 
-            if (CharaSwitch.SwitchExists(_ability, eff, _from.ParamHash, _to.ParamHash))
-            {
-                _status.Text = "That exact FROM→TO switch already exists in chara_ability — nothing to add.";
-                return;
-            }
-
+            bool abilityExists = CharaSwitch.SwitchExists(_ability, eff, _from.ParamHash, _to.ParamHash);
             bool wantSame = _sameKind.IsChecked == true;
             int? itemId = _item.SelectedValue as int?;
             if (DarkMessage.Show(
@@ -195,22 +190,25 @@ namespace Lycoris
 
             try
             {
-                CharaSwitch.AddToAbility(_ability, eff, _from.ParamHash, _to.ParamHash);
+                // Only add the EFF_DATA mapping if it's not already there — but ALWAYS continue with same-kind + item
+                // (so re-running to add the item part works even when the ability mapping already exists).
+                if (!abilityExists) CharaSwitch.AddToAbility(_ability, eff, _from.ParamHash, _to.ParamHash);
                 bool sameAdded = false;
-                // SAME_KIND: INFO[0] = the ORIGINAL (equip-on) form, DATA[0] = the CUSTOM (transformed) form.
+                // SAME_KIND matches EFF_DATA exactly: INFO[0] = the BASE/equip-on form (From, = EFF_DATA[7]),
+                // DATA[0] = the transformed/custom form (To, = EFF_DATA[8]). Verified in-game (base = INFO/[7]).
                 if (wantSame && !CharaSwitch.SameKindExists(_db.ParamData, _from.ParamHash))
                 { CharaSwitch.AddSameKind(_db.ParamData, _from.ParamHash, _to.ParamHash); sameAdded = true; }
 
-                string aOut = _db.MirrorToMod(_abilityPath) ?? _abilityPath;
-                T2bWriter.WriteFile(_ability, aOut); _abilityPath = aOut;
-                if (wantSame) { string pOut = _db.MirrorToMod(_db.ParamFile) ?? _db.ParamFile; T2bWriter.WriteFile(_db.ParamData, pOut); }
-                string itemMsg = ApplyItem(itemId, allow: true);
+                string aOut = _abilityPath;
+                if (!abilityExists) { aOut = _db.MirrorToMod(_abilityPath) ?? _abilityPath; T2bWriter.WriteFile(_ability, aOut); _abilityPath = aOut; }
+                if (sameAdded) { string pOut = _db.MirrorToMod(_db.ParamFile) ?? _db.ParamFile; T2bWriter.WriteFile(_db.ParamData, pOut); }
+                string itemMsg = ApplyItem(itemId, allow: true, eff);
 
                 _status.Text = $"Done. {Desc(_from)} → {Desc(_to)} on 0x{unchecked((uint)eff):X8}.";
                 DarkMessage.Show(
-                    $"Switch registered:\nEquip → {Desc(_from)} becomes {Desc(_to)}\n\n" +
-                    $"chara_ability: {System.IO.Path.GetFileName(aOut)}\n" +
-                    $"same-kind (medallium): {(sameAdded ? "added" : "not added")}\n{itemMsg}",
+                    $"Switch {(abilityExists ? "updated" : "registered")}:\nEquip → {Desc(_from)} becomes {Desc(_to)}\n\n" +
+                    $"chara_ability mapping: {(abilityExists ? "already present" : "added")}\n" +
+                    $"same-kind: {(sameAdded ? "added" : (wantSame ? "already present" : "skipped"))}\n{itemMsg}",
                     "Equip Transform", MessageBoxButton.OK, MessageBoxImage.Information);
                 RefreshExisting();
             }
@@ -232,12 +230,12 @@ namespace Lycoris
             try
             {
                 bool ab = CharaSwitch.RemoveFromAbility(_ability, eff, _from.ParamHash, _to.ParamHash);
-                bool sk = CharaSwitch.RemoveSameKind(_db.ParamData, _from.ParamHash);   // INFO[0] = original form
+                bool sk = CharaSwitch.RemoveSameKind(_db.ParamData, _from.ParamHash);   // INFO[0] = base/equip-on form (From)
 
                 string aOut = _db.MirrorToMod(_abilityPath) ?? _abilityPath;
                 T2bWriter.WriteFile(_ability, aOut); _abilityPath = aOut;
                 if (sk) { string pOut = _db.MirrorToMod(_db.ParamFile) ?? _db.ParamFile; T2bWriter.WriteFile(_db.ParamData, pOut); }
-                string itemMsg = ApplyItem(itemId, allow: false);
+                string itemMsg = ApplyItem(itemId, allow: false, eff);
 
                 _status.Text = $"Removed. ability: {(ab ? "yes" : "not found")}, same-kind: {(sk ? "yes" : "none")}.";
                 DarkMessage.Show($"Switch removed.\nchara_ability mapping: {(ab ? "removed" : "not found")}\n" +
@@ -247,23 +245,37 @@ namespace Lycoris
             catch (Exception ex) { DarkMessage.Show(ex.Message, "Remove switch", MessageBoxButton.OK, MessageBoxImage.Error); _status.Text = "Failed: " + ex.Message; }
         }
 
-        /// <summary>Allow or disallow the ORIGINAL yo-kai to equip the chosen switch item (ITEM_EQUIP_COND_CHARA).
-        /// Returns a one-line status for the result dialog.</summary>
-        private string ApplyItem(int? itemId, bool allow)
+        /// <summary>Make (or unmake) the chosen item a switch item: allow the original yo-kai to equip it
+        /// (ITEM_EQUIP_COND_CHARA) AND grant it the switch skill (REF_EQUIPMENT_SKILL → the ability that owns the
+        /// effect). The skill index is auto-resolved from the effect (never a hard-coded 5). Returns a status line.</summary>
+        private string ApplyItem(int? itemId, bool allow, int eff)
         {
-            if (!itemId.HasValue) return "item equip: (no item chosen)";
+            if (!itemId.HasValue) return "item: (no item chosen)";
             if (_itemCfg == null)
             {
                 _itemCfgPath = CharaSwitch.FindItemConfig(_db);
-                if (_itemCfgPath == null) return "item equip: ⚠ item_config not found";
-                try { _itemCfg = T2bReader.ReadFile(_itemCfgPath); } catch (Exception ex) { return "item equip: ⚠ " + ex.Message; }
+                if (_itemCfgPath == null) return "item: ⚠ item_config not found";
+                try { _itemCfg = T2bReader.ReadFile(_itemCfgPath); } catch (Exception ex) { return "item: ⚠ " + ex.Message; }
             }
-            int start = int.TryParse(_skillStart.Text.Trim(), out int s) ? s : CharaSwitch.DefaultEquipSkillStart;
-            string err;
+            string err; string detail = "";
             if (allow)
             {
-                err = CharaSwitch.AllowEquip(_itemCfg, itemId.Value, _from.BaseHash)
-                      ?? CharaSwitch.AddEquipSkill(_itemCfg, itemId.Value, start, 1);
+                err = CharaSwitch.AllowEquip(_itemCfg, itemId.Value, _from.BaseHash);
+                if (err == null)
+                {
+                    // Resolve the ability that owns this effect (0xC58E24C1 → 0x9A5F207E), ensure it's in the item's
+                    // ITEM_EQUIPMENT_SKILL list, and point the item's REF at its real index.
+                    int? abilityId = CharaSwitch.SwitchAbilityId(_ability, eff);
+                    int start;
+                    if (abilityId.HasValue)
+                    {
+                        start = CharaSwitch.EnsureEquipSkillEntry(_itemCfg, abilityId.Value);
+                        detail = $" (skill 0x{unchecked((uint)abilityId.Value):X8} @ index {start})";
+                    }
+                    else start = int.TryParse(_skillStart.Text.Trim(), out int s) ? s : CharaSwitch.DefaultEquipSkillStart;
+                    if (start < 0) return "item: ⚠ could not add the switch skill to ITEM_EQUIPMENT_SKILL";
+                    err = CharaSwitch.AddEquipSkill(_itemCfg, itemId.Value, start, 1);
+                }
             }
             else
             {
@@ -273,7 +285,7 @@ namespace Lycoris
             if (err != null) return "item: ⚠ " + err;
             string iOut = _db.MirrorToMod(_itemCfgPath) ?? _itemCfgPath;
             T2bWriter.WriteFile(_itemCfg, iOut); _itemCfgPath = iOut;
-            return $"item: {(allow ? "equip-cond + switch skill added" : "removed")} ({System.IO.Path.GetFileName(iOut)})";
+            return $"item: {(allow ? "equip-cond + switch skill" + detail : "removed")} ({System.IO.Path.GetFileName(iOut)})";
         }
 
         private YokaiInfo Pick()

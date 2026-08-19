@@ -27,7 +27,9 @@ namespace Lycoris.Yokai
         private const string EffBeg = "CHARA_ABILITY_CONFIG_INFO_EFF_DATA_LIST_BEG";
         private const string EffEnd = "CHARA_ABILITY_CONFIG_INFO_EFF_DATA_LIST_END";
         private const string EffectInfo = "CHARA_ABILITY_EFFECT_INFO";
-        private const int Eff_Id = 0, Eff_Unk6 = 6, Eff_To = 7, Eff_From = 8;
+        // Verified in-game: field[7] = the BASE / equip-on form (shown WITHOUT the item), field[8] = the RESULT
+        // form (shown WITH the item). So Eff_From (original you have) = 7, Eff_To (what it becomes) = 8.
+        private const int Eff_Id = 0, Eff_Unk6 = 6, Eff_From = 7, Eff_To = 8;
         private const int Fx_Id = 0, Fx_Count = 1;
 
         private const string Same = "CHARA_SAME_KIND_INFO";
@@ -242,7 +244,47 @@ namespace Lycoris.Yokai
         // (positional link; the ref is an uncounted sub-record of ITEM_EQUIPMENT_LIST). [0]=StartPos (index into
         // ITEM_EQUIPMENT_SKILL, e.g. 5 = the character-switch skill 0x9A5F207E), [1]=Length (1).
         private const string RefEquipSkill = "ITEM_EQUIPMENT_REF_EQUIPMENT_SKILL";
+        private const string EquipSkill = "ITEM_EQUIPMENT_SKILL";
+        private const string EquipSkillBeg = "ITEM_EQUIPMENT_SKILL_LIST_BEG";
+        private const string EquipSkillEnd = "ITEM_EQUIPMENT_SKILL_LIST_END";
         public const int DefaultEquipSkillStart = 5;   // ITEM_EQUIPMENT_SKILL[5] = the vanilla switch skill
+
+        /// <summary>The ability id that OWNS a switch effect: the CHARA_ABILITY_CONFIG_INFO whose nested EFF_DATA
+        /// carries EffectID <paramref name="eff"/> (e.g. 0xC58E24C1 → 0x9A5F207E). This is the "skill" the switch
+        /// item must grant.</summary>
+        public static int? SwitchAbilityId(T2bFile ability, int eff)
+        {
+            T2bEntry cur = null;
+            foreach (var e in ability.Entries)
+            {
+                if (e.Name == "CHARA_ABILITY_CONFIG_INFO") cur = e;
+                else if (e.Name == EffData && GI(e, Eff_Id) == eff && cur != null) return GI(cur, 0);
+            }
+            return null;
+        }
+
+        /// <summary>Find the ability id in item_config's ITEM_EQUIPMENT_SKILL list, appending it if absent, and
+        /// return its index — the StartPos the item's REF_EQUIPMENT_SKILL must point to (robust: never a hard-coded 5).</summary>
+        public static int EnsureEquipSkillEntry(T2bFile item, int abilityId)
+        {
+            var skills = item.Records(EquipSkill).ToList();
+            for (int i = 0; i < skills.Count; i++) if (GI(skills[i], 0) == abilityId) return i;
+
+            var tpl = skills.FirstOrDefault();
+            T2bEntry rec;
+            if (tpl != null) { rec = tpl.Clone(); SetI(rec, 0, abilityId); }
+            else
+            {
+                var nm = item.Names.FirstOrDefault(n => n.Name == EquipSkill);
+                if (nm.Name != EquipSkill) return -1;
+                rec = new T2bEntry { Name = EquipSkill, Crc = nm.Crc };
+                rec.Values.Add(new T2bValue(VT.Integer, abilityId));
+            }
+            int endIdx = item.Entries.FindIndex(x => x.Name == EquipSkillEnd);
+            if (endIdx < 0) item.Entries.Add(rec); else item.Entries.Insert(endIdx, rec);
+            BumpByName(item, EquipSkillBeg, 0, +1);
+            return skills.Count;
+        }
 
         /// <summary>Give an item the switch skill: insert a REF_EQUIPMENT_SKILL[start,len] right after its
         /// ITEM_EQUIPMENT. No-op (updates in place) if one already follows. Returns a message on failure, null on ok.</summary>
@@ -285,17 +327,18 @@ namespace Lycoris.Yokai
             refEntry = null; start = count = 0; err = null;
             var eq = item.Records(ItemEquip).FirstOrDefault(e => GI(e, 0) == itemId);
             if (eq == null) { err = $"Item 0x{unchecked((uint)itemId):X8} is not an ITEM_EQUIPMENT (only equipment items have equip conditions)."; return false; }
-            if (eq.Values.Count <= Item_CondIndex) { err = "This item has no equip-cond field."; return false; }
+            if (eq.Values.Count <= Item_CondIndex) { err = null; return false; }   // no field → treat as unrestricted
             int condId = GI(eq, Item_CondIndex);
+            if (condId == 0) { err = null; return false; }   // condId 0 = no restriction: anyone can equip → nothing to add (no-op)
             var condEntry = item.Records(Cond).FirstOrDefault(e => GI(e, 0) == condId);
-            if (condEntry == null) { err = $"The item's equip cond ({condId}) was not found."; return false; }
+            if (condEntry == null) { err = null; return false; }   // cond not present → treat as unrestricted (no-op)
             int ci = item.Entries.IndexOf(condEntry);
             for (int i = ci + 1; i < item.Entries.Count; i++)
             {
                 if (item.Entries[i].Name == RefCondChara) { refEntry = item.Entries[i]; break; }
                 if (item.Entries[i].Name == Cond) break;
             }
-            if (refEntry == null) { err = "This item's equip cond has no yo-kai list (it may already allow everyone) — no change needed."; return false; }
+            if (refEntry == null) { err = null; return false; }   // cond has no chara list (type-only, e.g. cond 1) = no-op
             start = GI(refEntry, Ref_Start); count = GI(refEntry, Ref_Count);
             return true;
         }

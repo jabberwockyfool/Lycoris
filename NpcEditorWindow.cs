@@ -721,15 +721,17 @@ namespace Lycoris
             }
             var dlg = new PickYokaiDialog(this, _db) { Owner = this };
             if (dlg.ShowDialog() != true || dlg.Picked == null) return;
-            string model = dlg.Picked.ModelName;
-            if (string.IsNullOrEmpty(model))
-            {
-                DarkMessage.Show("This yo-kai has no model name.", "From a yo-kai");
-                return;
-            }
-            n.BaseId = unchecked((int)Crc32.Standard(Encoding.UTF8.GetBytes(model)));
+            var y = dlg.Picked;
+            // Use the yo-kai's ACTUAL base id from chara_base (BaseHash) — a modder may have set a base id that
+            // is NOT the CRC32 of the model name. Fall back to CRC32(model) only if no base id is recorded.
+            int baseId = y.BaseHash;
+            string how = "chara_base";
+            if (baseId == 0 && !string.IsNullOrEmpty(y.ModelName))
+            { baseId = unchecked((int)Crc32.Standard(Encoding.UTF8.GetBytes(y.ModelName))); how = "CRC32 of \"" + y.ModelName + "\""; }
+            if (baseId == 0) { DarkMessage.Show("This yo-kai has no base id (chara_base) or model name.", "From a yo-kai"); return; }
+            n.BaseId = baseId;
             n.NpcType = "YOKAI";
-            _status.Text = $"BaseId = {n.BaseIdHex} (CRC32 of \"{model}\"), NpcType = YOKAI.";
+            _status.Text = $"BaseId = {n.BaseIdHex} (from {how}), NpcType = YOKAI.";
         }
 
         private static string SafeFileName(string s)
@@ -947,11 +949,16 @@ namespace Lycoris
             if (_exNpc == null || _db.Yokai.Count == 0) return;
             var dlg = new PickYokaiDialog(this, _db) { Owner = this };
             if (dlg.ShowDialog() != true || dlg.Picked == null) return;
-            string model = dlg.Picked.ModelName;
-            if (string.IsNullOrEmpty(model)) { DarkMessage.Show("This yo-kai has no model.", "BaseID"); return; }
-            _exNpc.BaseId = unchecked((int)Crc32.Standard(Encoding.UTF8.GetBytes(model)));
+            var y = dlg.Picked;
+            // Prefer the real base id from chara_base (BaseHash); CRC32(model) is only a fallback.
+            int baseId = y.BaseHash;
+            string how = "chara_base";
+            if (baseId == 0 && !string.IsNullOrEmpty(y.ModelName))
+            { baseId = unchecked((int)Crc32.Standard(Encoding.UTF8.GetBytes(y.ModelName))); how = "CRC32 of \"" + y.ModelName + "\""; }
+            if (baseId == 0) { DarkMessage.Show("This yo-kai has no base id (chara_base) or model.", "BaseID"); return; }
+            _exNpc.BaseId = baseId;
             _exNpc.NpcType = 0; // yokai
-            _status.Text = $"BaseID = {_exNpc.BaseIdHex} (CRC32 of \"{model}\").";
+            _status.Text = $"BaseID = {_exNpc.BaseIdHex} (from {how}).";
         }
 
         private void SaveExisting()

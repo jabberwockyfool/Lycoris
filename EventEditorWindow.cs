@@ -42,6 +42,9 @@ namespace Lycoris
         private readonly TextBlock _scriptHeader = new TextBlock { Foreground = Theme.FgMuted, Margin = new Thickness(0, 0, 0, 6), TextWrapping = TextWrapping.Wrap };
         private readonly TextBlock _scriptStatus = new TextBlock { Foreground = Theme.FgMuted, Margin = new Thickness(0, 4, 0, 0), TextWrapping = TextWrapping.Wrap };
         private string _scriptLoadedName;
+        // Where SaveScript writes the loaded script: event scripts → seq/event, battle scripts → seq/battle/encount.
+        private string _scriptRelDir = Path.Combine("seq", "event");
+        private readonly ComboBox _battleCombo = new ComboBox { Width = 240, IsEditable = true, IsTextSearchEnabled = true, Margin = new Thickness(0, 0, 6, 0) };
 
         // Mod romfs base = <mod>/include (or the mod folder itself if it is already the include folder).
         // Under it: seq/ (event scripts) and data/ (res, txt) are siblings.
@@ -233,17 +236,31 @@ namespace Lycoris
         private FrameworkElement BuildScriptTab()
         {
             var panel = new DockPanel { Margin = new Thickness(8) };
-            var bar = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 6) };
-            bar.Children.Add(ToolButton("Load script", LoadScript, 0));
-            bar.Children.Add(ToolButton("Compile & save script", SaveScript));
+            var bar = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 4) };
+            bar.Children.Add(new TextBlock { Text = "Event script:", Foreground = Theme.FgMuted, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) });
+            bar.Children.Add(ToolButton("Load (selected event)", LoadScript, 0));
+            bar.Children.Add(ToolButton("Compile & save", SaveScript));
             DockPanel.SetDock(bar, Dock.Top);
+
+            // Battle scripts (seq/battle/encount/*.xq) — standalone .xq not tied to event_set_config. Same
+            // decompile/edit/recompile flow; the editable combo picks an existing one or types a new name.
+            var bbar = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 6) };
+            bbar.Children.Add(new TextBlock { Text = "Battle script:", Foreground = Theme.FgMuted, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) });
+            bbar.Children.Add(_battleCombo);
+            bbar.Children.Add(ToolButton("Load", LoadBattleScript, 0));
+            bbar.Children.Add(ToolButton("↻", RefreshBattleScripts));
+            bbar.Children.Add(ToolButton("New from template", NewBattleScript));
+            DockPanel.SetDock(bbar, Dock.Top);
+
             DockPanel.SetDock(_scriptHeader, Dock.Top);
             DockPanel.SetDock(_scriptStatus, Dock.Bottom);
-            _scriptHeader.Text = "Select an event, then « Load script ».";
+            _scriptHeader.Text = "Select an event → « Load (selected event) », or pick/type a battle script (seq/battle/encount) below.";
             panel.Children.Add(bar);
+            panel.Children.Add(bbar);
             panel.Children.Add(_scriptHeader);
             panel.Children.Add(_scriptStatus);
             panel.Children.Add(_scriptBox);   // fills the rest
+            RefreshBattleScripts();
             return panel;
         }
 
@@ -274,6 +291,7 @@ namespace Lycoris
                 string src = NpcXq.Decompile(File.ReadAllBytes(path), out _);
                 _scriptBox.Text = EventSet.ToCompilable(src);
                 _scriptLoadedName = ev.Name;
+                _scriptRelDir = Path.Combine("seq", "event");
                 bool fromMod = IncludeBase != null && path.StartsWith(IncludeBase, StringComparison.OrdinalIgnoreCase);
                 _scriptStatus.Text = $"Loaded {ev.Name}.xq from {(fromMod ? "the mod" : "the reference")}. Edit, then « Compile & save ».";
             }
@@ -288,13 +306,78 @@ namespace Lycoris
             try
             {
                 byte[] xq = NpcXq.CompileScript(_scriptBox.Text, out _);
-                string outPath = Path.Combine(IncludeBase, "seq", "event", _scriptLoadedName + ".xq");
+                string outPath = Path.Combine(IncludeBase, _scriptRelDir, _scriptLoadedName + ".xq");
                 Directory.CreateDirectory(Path.GetDirectoryName(outPath));
                 File.WriteAllBytes(outPath, xq);
-                _scriptStatus.Text = $"Compiled & saved {_scriptLoadedName}.xq ({xq.Length} bytes).";
+                _scriptStatus.Text = $"Compiled & saved {_scriptLoadedName}.xq ({xq.Length} bytes) → {_scriptRelDir.Replace('\\', '/')}.";
                 DarkMessage.Show($"Script compiled and saved to the mod:\n{outPath}", "Saved", MessageBoxButton.OK, MessageBoxImage.Information);
+                if (_scriptRelDir.IndexOf("battle", StringComparison.OrdinalIgnoreCase) >= 0) RefreshBattleScripts();
             }
             catch (Exception ex) { DarkMessage.Show(ex.Message, "Compile failed", MessageBoxButton.OK, MessageBoxImage.Error); }
+        }
+
+        // ---- battle scripts (seq/battle/encount/*.xq) ----
+
+        private IEnumerable<string> BattleScriptDirs()
+        {
+            if (IncludeBase != null) yield return Path.Combine(IncludeBase, "seq", "battle", "encount");
+            if (_db != null && _db.ReferenceFolder != null)
+            {
+                yield return Path.Combine(_db.ReferenceFolder, "seq", "battle", "encount");
+                yield return Path.Combine(_db.ReferenceFolder, "include", "seq", "battle", "encount");
+            }
+        }
+
+        private void RefreshBattleScripts()
+        {
+            var names = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var d in BattleScriptDirs())
+                if (!string.IsNullOrEmpty(d) && Directory.Exists(d))
+                    foreach (var f in Directory.GetFiles(d, "*.xq"))
+                        names.Add(Path.GetFileNameWithoutExtension(f));
+            string cur = _battleCombo.Text;
+            _battleCombo.ItemsSource = names.ToList();
+            if (!string.IsNullOrEmpty(cur)) _battleCombo.Text = cur;   // keep a typed-in new name
+        }
+
+        private string FindBattleXq(string name)
+        {
+            foreach (var d in BattleScriptDirs())
+            {
+                if (string.IsNullOrEmpty(d)) continue;
+                string p = Path.Combine(d, name + ".xq");
+                if (File.Exists(p)) return p;
+            }
+            return null;
+        }
+
+        private void LoadBattleScript()
+        {
+            string name = (_battleCombo.Text ?? "").Trim();
+            if (name.Length == 0) { DarkMessage.Show("Pick or type a battle script name first.", "Load battle script"); return; }
+            string path = FindBattleXq(name);
+            if (path == null) { DarkMessage.Show($"No {name}.xq found in seq/battle/encount (mod or reference). Use « New from template » to start one.", "Load battle script"); return; }
+            if (!NpcXq.IsAvailable()) { DarkMessage.Show("xtractquery was not found on PATH — required to decompile the script.", "xtractquery missing", MessageBoxButton.OK, MessageBoxImage.Warning); return; }
+            try
+            {
+                string src = NpcXq.Decompile(File.ReadAllBytes(path), out _);
+                _scriptBox.Text = EventSet.ToCompilable(src);
+                _scriptLoadedName = name;
+                _scriptRelDir = Path.Combine("seq", "battle", "encount");
+                bool fromMod = IncludeBase != null && path.StartsWith(IncludeBase, StringComparison.OrdinalIgnoreCase);
+                _scriptStatus.Text = $"Loaded battle script {name}.xq from {(fromMod ? "the mod" : "the reference")}. Edit, then « Compile & save ».";
+            }
+            catch (Exception ex) { DarkMessage.Show(ex.Message, "Load battle script", MessageBoxButton.OK, MessageBoxImage.Error); }
+        }
+
+        private void NewBattleScript()
+        {
+            string name = (_battleCombo.Text ?? "").Trim();
+            if (name.Length == 0) { DarkMessage.Show("Type a name for the new battle script in the combo first (e.g. ev10_btl0100).", "New battle script"); return; }
+            _scriptBox.Text = EventSet.BuildBlankBattleSource();
+            _scriptLoadedName = name;
+            _scriptRelDir = Path.Combine("seq", "battle", "encount");
+            _scriptStatus.Text = $"New battle script « {name} » from template. Edit, then « Compile & save » → seq/battle/encount/{name}.xq.";
         }
 
         private void CommitFields()
