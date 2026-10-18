@@ -1,0 +1,16 @@
+# Build output
+bin/
+obj/
+.vs/
+*.user
+*.suo
+
+# Python
+__pycache__/
+*.pyc
+
+# Game data extract (copyrighted Level-5 files — keep it local, Lycoris finds it by walking up from the exe)
+cfg/
+
+# Third-party reference code (SPICA)
+tools/_spica_ref/
