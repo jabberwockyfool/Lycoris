@@ -10,7 +10,7 @@ It should only be used for creating a mod or for personal use. Don't use Albatro
 
 **What is a Game Editor?**
 
-Albatross is a Game Editor, you should'n confuse a Save Editor with a Game Editor.  
+Albatross is a Game Editor, you should'nt confuse a Save Editor with a Game Editor.  
 - Save editor: is a tool that reads a save and modifies the data in the save (e.g add yokai in your party, raise the level of your yokai). If you pass your save to someone, the guy will have acces to the change you made on your save.
 - Game Editor: is a tool that reads the game data and can modify some data (e.g yokai tribe, yokai attack, yokai soultumate, ...). If you modify your game, only you can see the modified data, if you pass your save to someone, the guy will haven't acces to your modified data, to have acces to your modified data you have to pass him your game file (not your save)
 
