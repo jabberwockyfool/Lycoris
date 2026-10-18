@@ -40,6 +40,8 @@ namespace Lycoris
         private readonly Button _modelBtn;
         private readonly Button _transBtn;
         private readonly Button _portBtn;
+        private readonly Button _testBtn;
+        private readonly Button _pointsBtn;
 
         private MainWindow _yokaiWindow;
         private ItemEditorWindow _itemWindow;
@@ -119,13 +121,22 @@ namespace Lycoris
             _modelBtn = EditorButton("Nyaport", OpenModelEditor);   // standalone: ports a model .bin (GFModel → .xc)
             _transBtn = EditorButton("Translation Helper", OpenTranslationHelper);   // standalone: diff vanilla vs mod text
             _portBtn = EditorButton("Port yo-kai…", OpenPort);   // port a yo-kai from another mod into this one
+            _testBtn = EditorButton("▶ Test in game", TestInGame);   // runs the saved mod in Zakuro, no export
+            _pointsBtn = EditorButton("Test points…", OpenTestPoints);   // start the test from a saved spot
+            _testBtn.FontWeight = FontWeights.SemiBold;
+            _testBtn.ToolTip = "Run the mod, as it is saved now, in Zakuro or a recompiled YW3. Right-click to choose the game again.";
+            _testBtn.ContextMenu = new ContextMenu();
+            var reset = new MenuItem { Header = "Choose the game and ROM again…" };
+            reset.Click += (s, e) => { GameTest.ResetConfig(); TestInGame(); };
+            _testBtn.ContextMenu.Items.Add(reset);
 
             AddSection(root, "Characters", _yokaiBtn, _itemBtn, _skillBtn, _combineBtn, _bossBtn);
             AddSection(root, "World", _npcBtn, _mapBtn, _shopBtn, _warpBtn, _eventBtn, _dialogueBtn, _battleBtn);
             AddSection(root, "Save & Tools", _saveBtn, _checkBtn, _portBtn, _minfBtn, _modelBtn, _transBtn);
+            AddSection(root, "Test", _testBtn, _pointsBtn);
 
             foreach (var b in new[] { _yokaiBtn, _itemBtn, _skillBtn, _combineBtn, _bossBtn, _npcBtn, _mapBtn, _shopBtn, _warpBtn,
-                                      _eventBtn, _dialogueBtn, _battleBtn, _saveBtn, _checkBtn, _portBtn })
+                                      _eventBtn, _dialogueBtn, _battleBtn, _saveBtn, _checkBtn, _portBtn, _testBtn, _pointsBtn })
                 b.IsEnabled = false;
 
             _status.Margin = new Thickness(1, 20, 0, 0);
@@ -285,6 +296,7 @@ namespace Lycoris
                 _saveBtn.IsEnabled = _db.Yokai.Count > 0;
                 _checkBtn.IsEnabled = _db.ParamFile != null;
                 _portBtn.IsEnabled = _db.ModFolder != null;   // needs a target mod to port into
+                _testBtn.IsEnabled = _pointsBtn.IsEnabled = true;
 
                 _currentModFolder = folder;
                 Title = $"Lycoris — {name}";
@@ -458,6 +470,16 @@ namespace Lycoris
         private void OpenModelEditor()
         {
             new ModelEditorWindow(this) { Owner = this }.Show();
+        }
+
+        private void TestInGame()
+        {
+            if (_currentModFolder != null) GameTest.Launch(this, _currentModFolder);
+        }
+
+        private void OpenTestPoints()
+        {
+            if (_currentModFolder != null) new TestPointsWindow(this, _currentModFolder).ShowDialog();
         }
 
         private void OpenTranslationHelper()

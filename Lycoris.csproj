@@ -126,6 +126,7 @@
     <Compile Include="VoiceAudio.cs" />
     <Compile Include="Yokai\WarpSet.cs" />
     <Compile Include="WarpEditorWindow.cs" />
+    <Compile Include="GameTest.cs" />
     <Compile Include="HomeWindow.cs" />
     <Compile Include="AddYokaiDialog.cs" />
     <Compile Include="AtlasPickerWindow.cs" />
