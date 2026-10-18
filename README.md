@@ -21,3 +21,7 @@ Formats and resolution mechanisms reverse-engineered from:
 - [**NPCMake**](https://github.com/SuperTavor/NPCMake) (SuperTavor) — NPC integrations
 
 For personal and community modding use.
+
+## Notes
+
+Contributions are welcome. Using AI is fine sometimes, but the code must always be reviewed by a human. Code that is entirely vibecoded will be discarded.
